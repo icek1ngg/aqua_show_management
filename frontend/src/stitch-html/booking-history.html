@@ -1,0 +1,447 @@
+<!DOCTYPE html><html class="light" lang="en"><head>
+<meta charset="utf-8">
+<meta content="width=device-width, initial-scale=1.0" name="viewport">
+<title>My Bookings | AquaPulse ASMS</title>
+<script src="https://cdn.tailwindcss.com?plugins=forms,container-queries"></script>
+<link href="https://fonts.googleapis.com/css2?family=Plus+Jakarta+Sans:wght@400;600;700;800&amp;display=swap" rel="stylesheet">
+<link href="https://fonts.googleapis.com/css2?family=Material+Symbols+Outlined:wght,FILL@100..700,0..1&amp;display=swap" rel="stylesheet">
+<style>
+        body { font-family: 'Plus Jakarta Sans', sans-serif; }
+        .material-symbols-outlined {
+            font-variation-settings: 'FILL' 0, 'wght' 400, 'GRAD' 0, 'opsz' 24;
+            vertical-align: middle;
+        }
+        .glass-nav {
+            backdrop-filter: blur(12px);
+            -webkit-backdrop-filter: blur(12px);
+        }
+        .wave-bg {
+            background: linear-gradient(135deg, #00696b 0%, #00ced1 100%);
+            position: relative;
+            overflow: hidden;
+        }
+        .bubble {
+            position: absolute;
+            background: rgba(255, 255, 255, 0.1);
+            border-radius: 50%;
+            pointer-events: none;
+        }
+        /* Custom scrollbar for better look */
+        ::-webkit-scrollbar { width: 8px; }
+        ::-webkit-scrollbar-track { background: #f1f1f1; }
+        ::-webkit-scrollbar-thumb { background: #00696b; border-radius: 10px; }
+    </style>
+<script id="tailwind-config">
+        tailwind.config = {
+            darkMode: "class",
+            theme: {
+                extend: {
+                    "colors": {
+                        "tertiary": "#a43c12",
+                        "on-error-container": "#93000a",
+                        "electric-cyan": "#00FFFF",
+                        "on-tertiary": "#ffffff",
+                        "surface-dim": "#d8dadc",
+                        "secondary-container": "#fcd400",
+                        "on-primary-fixed-variant": "#004f51",
+                        "on-surface": "#191c1e",
+                        "on-error": "#ffffff",
+                        "on-tertiary-container": "#872a00",
+                        "vin-orange": "#FF6900",
+                        "on-tertiary-fixed": "#380c00",
+                        "primary-fixed-dim": "#2ddbde",
+                        "soft-turquoise": "#AFEEEE",
+                        "inverse-surface": "#2d3133",
+                        "secondary": "#705d00",
+                        "surface-tint": "#00696b",
+                        "on-primary-container": "#005354",
+                        "inverse-primary": "#2ddbde",
+                        "surface-variant": "#e0e3e5",
+                        "outline-variant": "#bac9c9",
+                        "tertiary-fixed-dim": "#ffb59c",
+                        "background": "#f7f9fb",
+                        "tertiary-fixed": "#ffdbcf",
+                        "surface-container-lowest": "#ffffff",
+                        "charcoal-text": "#1E293B",
+                        "surface": "#f7f9fb",
+                        "surface-container-high": "#e6e8ea",
+                        "surface-container-highest": "#e0e3e5",
+                        "surface-bright": "#f7f9fb",
+                        "outline": "#6b7a7a",
+                        "secondary-fixed": "#ffe16d",
+                        "on-background": "#191c1e",
+                        "surface-container": "#eceef0",
+                        "primary-container": "#00ced1",
+                        "on-secondary-fixed-variant": "#544600",
+                        "surface-container-low": "#f2f4f6",
+                        "on-secondary-fixed": "#221b00",
+                        "on-surface-variant": "#3b4949",
+                        "on-tertiary-fixed-variant": "#822800",
+                        "on-secondary": "#ffffff",
+                        "inverse-on-surface": "#eff1f3",
+                        "error-container": "#ffdad6",
+                        "deep-aqua": "#008B8B",
+                        "on-primary-fixed": "#002020",
+                        "primary-fixed": "#5af8fb",
+                        "on-primary": "#ffffff",
+                        "error": "#ba1a1a",
+                        "secondary-fixed-dim": "#e9c400",
+                        "tertiary-container": "#ffa282",
+                        "primary": "#00696b",
+                        "on-secondary-container": "#6e5c00"
+                    },
+                    "borderRadius": {
+                        "DEFAULT": "1rem",
+                        "lg": "2rem",
+                        "xl": "3rem",
+                        "full": "9999px"
+                    },
+                    "spacing": {
+                        "container-max": "1280px",
+                        "margin-desktop": "40px",
+                        "margin-mobile": "16px",
+                        "gutter": "24px",
+                        "base": "8px"
+                    },
+                    "fontFamily": {
+                        "headline-md": ["Plus Jakarta Sans"],
+                        "display-lg": ["Plus Jakarta Sans"],
+                        "body-lg": ["Plus Jakarta Sans"],
+                        "headline-lg": ["Plus Jakarta Sans"],
+                        "button": ["Plus Jakarta Sans"],
+                        "label-bold": ["Plus Jakarta Sans"],
+                        "display-lg-mobile": ["Plus Jakarta Sans"],
+                        "body-md": ["Plus Jakarta Sans"]
+                    },
+                    "fontSize": {
+                        "headline-md": ["24px", {"lineHeight": "32px", "fontWeight": "700"}],
+                        "display-lg": ["48px", {"lineHeight": "56px", "letterSpacing": "-0.02em", "fontWeight": "800"}],
+                        "body-lg": ["18px", {"lineHeight": "28px", "fontWeight": "400"}],
+                        "headline-lg": ["32px", {"lineHeight": "40px", "fontWeight": "700"}],
+                        "button": ["16px", {"lineHeight": "20px", "fontWeight": "600"}],
+                        "label-bold": ["14px", {"lineHeight": "20px", "fontWeight": "700"}],
+                        "display-lg-mobile": ["32px", {"lineHeight": "40px", "letterSpacing": "-0.02em", "fontWeight": "800"}],
+                        "body-md": ["16px", {"lineHeight": "24px", "fontWeight": "400"}]
+                    }
+                },
+            },
+        }
+    </script>
+</head>
+<body class="bg-surface text-on-surface min-h-screen flex flex-col">
+<!-- MainLayout Navbar -->
+<nav class="sticky top-0 w-full z-50 bg-surface/80 backdrop-blur-md shadow-sm">
+<div class="flex justify-between items-center h-20 px-margin-desktop max-w-container-max mx-auto">
+<div class="font-display-lg text-headline-md text-primary tracking-tight">AquaPulse</div>
+<div class="hidden md:flex space-x-8">
+<a class="text-on-surface-variant hover:text-primary transition-colors font-button text-button" href="#">Home</a>
+<a class="text-on-surface-variant hover:text-primary transition-colors font-button text-button" href="#">Shows</a>
+<a class="text-on-surface-variant hover:text-primary transition-colors font-button text-button" href="#">Schedules</a>
+<a class="text-primary border-b-2 border-primary pb-1 font-button text-button" href="#">My Bookings</a>
+</div>
+<div class="flex items-center space-x-4">
+<button class="px-6 py-2 rounded-full bg-primary text-white font-button text-button">Book Now</button>
+<div class="flex items-center space-x-2 pl-4">
+<div class="w-10 h-10 rounded-full bg-primary-container flex items-center justify-center text-on-primary-container font-bold overflow-hidden">
+<span class="material-symbols-outlined">account_circle</span>
+</div>
+<span class="font-button text-button hidden lg:block">Profile</span>
+</div>
+</div>
+</div>
+</nav>
+<main class="flex-grow pt-16">
+<!-- Unified PageHeader Banner -->
+<header class="wave-bg pt-16 pb-20 px-margin-desktop overflow-visible">
+<div class="max-w-container-max mx-auto relative z-10">
+<h1 class="font-display-lg text-display-lg text-white mb-2">My Bookings</h1>
+<p class="font-body-lg text-body-lg text-white/90 max-w-2xl">Track your AquaShow reservations, payment status, and upcoming show plans.</p>
+</div>
+<!-- Decorative Elements -->
+<div class="bubble w-32 h-32 -top-10 -right-10"></div>
+<div class="bubble w-20 h-20 bottom-10 right-40 opacity-50"></div>
+<!-- Wave SVG -->
+<div class="absolute bottom-0 left-0 w-full overflow-hidden leading-[0]">
+<svg class="relative block w-full h-12 fill-surface" preserveAspectRatio="none" viewBox="0 0 1200 120">
+<path d="M321.39,56.44c58-10.79,114.16-30.13,172-41.86,82.39-16.72,168.19-17.73,250.45-.39C823.78,31,906.67,72,985.66,92.83c70.05,18.48,146.53,26.09,214.34,3V120H0V0C47.45,21.9,111.45,34.09,165.1,43.35,224.78,53.64,263.38,58.62,321.39,56.44Z"></path>
+</svg>
+</div>
+</header>
+<div class="max-w-container-max mx-auto px-margin-desktop -mt-12 relative z-20 pb-24">
+<!-- Standardized SummaryCards -->
+<section class="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-gutter mb-12">
+<div class="bg-surface-container-lowest p-6 rounded-lg shadow-sm border border-outline-variant/30 flex items-center space-x-4 transition-all hover:shadow-md">
+<div class="w-12 h-12 rounded-full bg-primary-container/20 flex items-center justify-center text-primary">
+<span class="material-symbols-outlined">confirmation_number</span>
+</div>
+<div>
+<p class="font-label-bold text-label-bold text-on-surface-variant">Total Bookings</p>
+<h3 class="font-headline-md text-headline-md">12</h3>
+</div>
+</div>
+<div class="bg-surface-container-lowest p-6 rounded-lg shadow-sm border border-outline-variant/30 flex items-center space-x-4 transition-all hover:shadow-md">
+<div class="w-12 h-12 rounded-full bg-secondary-container/20 flex items-center justify-center text-secondary">
+<span class="material-symbols-outlined">pending_actions</span>
+</div>
+<div>
+<p class="font-label-bold text-label-bold text-on-surface-variant">Pending Payments</p>
+<h3 class="font-headline-md text-headline-md">1</h3>
+</div>
+</div>
+<div class="bg-surface-container-lowest p-6 rounded-lg shadow-sm border border-outline-variant/30 flex items-center space-x-4 transition-all hover:shadow-md">
+<div class="w-12 h-12 rounded-full bg-green-100 flex items-center justify-center text-green-700">
+<span class="material-symbols-outlined">check_circle</span>
+</div>
+<div>
+<p class="font-label-bold text-label-bold text-on-surface-variant">Paid</p>
+<h3 class="font-headline-md text-headline-md">8</h3>
+</div>
+</div>
+<div class="bg-surface-container-lowest p-6 rounded-lg shadow-sm border border-outline-variant/30 flex items-center space-x-4 transition-all hover:shadow-md">
+<div class="w-12 h-12 rounded-full bg-error-container/20 flex items-center justify-center text-error">
+<span class="material-symbols-outlined">cancel</span>
+</div>
+<div>
+<p class="font-label-bold text-label-bold text-on-surface-variant">Expired/Failed</p>
+<h3 class="font-headline-md text-headline-md">3</h3>
+</div>
+</div>
+</section>
+<!-- Unified FilterBar -->
+<section class="bg-surface-container-low p-6 rounded-lg mb-8 shadow-sm">
+<div class="flex flex-col lg:flex-row gap-6 items-end">
+<div class="flex-1 w-full">
+<label class="block font-label-bold text-label-bold text-on-surface-variant mb-2 ml-1">Search Bookings</label>
+<div class="relative">
+<input class="w-full pl-12 pr-4 py-3 rounded-full border border-outline-variant/50 bg-surface-container-lowest focus:ring-2 focus:ring-primary focus:border-primary transition-all" placeholder="Search by show name or booking ID" type="text">
+<span class="material-symbols-outlined absolute left-4 top-1/2 -translate-y-1/2 text-outline">search</span>
+</div>
+</div>
+<div class="w-full lg:w-auto">
+<label class="block font-label-bold text-label-bold text-on-surface-variant mb-2 ml-1">Status</label>
+<div class="flex bg-surface-container-lowest p-1 rounded-full border border-outline-variant/50">
+<button class="px-6 py-2 rounded-full bg-primary text-white font-label-bold text-label-bold shadow-sm transition-all">All</button>
+<button class="px-6 py-2 rounded-full text-on-surface-variant hover:text-primary transition-colors font-label-bold text-label-bold">Pending</button>
+<button class="px-6 py-2 rounded-full text-on-surface-variant hover:text-primary transition-colors font-label-bold text-label-bold">Paid</button>
+<button class="px-6 py-2 rounded-full text-on-surface-variant hover:text-primary transition-colors font-label-bold text-label-bold">Past</button>
+</div>
+</div>
+<div class="w-full lg:w-48">
+<label class="block font-label-bold text-label-bold text-on-surface-variant mb-2 ml-1">Sort By</label>
+<select class="w-full px-4 py-3 rounded-full border border-outline-variant/50 bg-surface-container-lowest focus:ring-2 focus:ring-primary font-label-bold text-label-bold cursor-pointer">
+<option>Newest First</option>
+<option>Oldest First</option>
+<option>Price: High to Low</option>
+</select>
+</div>
+</div>
+</section>
+<!-- Unified BookingHistoryItem List -->
+<div class="space-y-6">
+<!-- Record 1: PENDING_PAYMENT -->
+<div class="group bg-surface-container-lowest p-6 rounded-lg shadow-sm border border-outline-variant/30 flex flex-col md:flex-row gap-6 hover:shadow-md hover:border-primary/30 transition-all">
+<div class="w-full md:w-56 h-36 rounded-lg overflow-hidden shrink-0">
+<img alt="Midnight Aqua Symphony" class="w-full h-full object-cover group-hover:scale-105 transition-transform duration-500" src="https://lh3.googleusercontent.com/aida/ADBb0ujt3y3oHep8ZyS33fWXSwjI8mG8aZHbNUcl0CdGivcGyeT3du82S-KhXF_z4dlPRBUlc4EswabU5EeIcZJqXipWtpjbttrQ0GOkGXD__Ue8EUNvilyj-UDsJCa1cZbn_l6pfjV_lg7TOdizUqPdcum_qmMFI-csEQojqIgtLoSEhUsOXh1HErJxLtr4lvL3loCl2YH0XpPXQu6PYmM-OELKDDyxmjnmTGP8Zxcj3pb5flEfrV4506pYqA">
+</div>
+<div class="flex-1 flex flex-col justify-between">
+<div class="space-y-2">
+<div class="flex flex-wrap justify-between items-start gap-4">
+<div>
+<span class="text-primary font-label-bold text-[12px] uppercase tracking-wider">#AQ-882190</span>
+<h4 class="font-headline-md text-headline-md text-on-surface">Midnight Aqua Symphony</h4>
+</div>
+<div class="flex flex-col items-end">
+<span class="px-4 py-1 rounded-full bg-secondary-container/30 text-secondary font-label-bold text-[12px] flex items-center border border-secondary/20">
+<span class="w-2 h-2 rounded-full bg-secondary mr-2 animate-pulse"></span>
+                                        PENDING PAYMENT
+                                    </span>
+<p class="text-tertiary font-label-bold text-[12px] mt-2">Expires in <span class="countdown">9:44</span></p>
+</div>
+</div>
+<div class="grid grid-cols-2 md:grid-cols-4 gap-4 pt-2">
+<div>
+<p class="text-on-surface-variant text-[11px] font-label-bold uppercase tracking-tight">Date &amp; Time</p>
+<p class="font-body-md text-body-md text-on-surface">Oct 24, 2024 • 20:00</p>
+</div>
+<div>
+<p class="text-on-surface-variant text-[11px] font-label-bold uppercase tracking-tight">Venue</p>
+<p class="font-body-md text-body-md text-on-surface">Main Plaza Pool</p>
+</div>
+<div>
+<p class="text-on-surface-variant text-[11px] font-label-bold uppercase tracking-tight">Tickets</p>
+<p class="font-body-md text-body-md text-on-surface">4 Tickets</p>
+</div>
+<div>
+<p class="text-on-surface-variant text-[11px] font-label-bold uppercase tracking-tight">Total Amount</p>
+<p class="font-label-bold text-headline-md text-primary">$156.00</p>
+</div>
+</div>
+</div>
+<div class="flex justify-end space-x-3 pt-4 border-t border-outline-variant/10 mt-4">
+<button class="px-6 py-2 rounded-full border border-outline-variant text-on-surface-variant font-button text-button hover:bg-surface-container transition-all">View Detail</button>
+<button class="px-8 py-2 rounded-full bg-primary text-white font-button text-button shadow-sm hover:bg-primary/90 hover:scale-[1.02] active:scale-95 transition-all">Continue Payment</button>
+</div>
+</div>
+</div>
+<!-- Record 2: PAID -->
+<div class="group bg-surface-container-lowest p-6 rounded-lg shadow-sm border border-outline-variant/30 flex flex-col md:flex-row gap-6 hover:shadow-md hover:border-primary/30 transition-all">
+<div class="w-full md:w-56 h-36 rounded-lg overflow-hidden shrink-0">
+<img alt="Oceanic Dreams 4D" class="w-full h-full object-cover group-hover:scale-105 transition-transform duration-500" src="https://lh3.googleusercontent.com/aida/ADBb0ujt3y3oHep8ZyS33fWXSwjI8mG8aZHbNUcl0CdGivcGyeT3du82S-KhXF_z4dlPRBUlc4EswabU5EeIcZJqXipWtpjbttrQ0GOkGXD__Ue8EUNvilyj-UDsJCa1cZbn_l6pfjV_lg7TOdizUqPdcum_qmMFI-csEQojqIgtLoSEhUsOXh1HErJxLtr4lvL3loCl2YH0XpPXQu6PYmM-OELKDDyxmjnmTGP8Zxcj3pb5flEfrV4506pYqA">
+</div>
+<div class="flex-1 flex flex-col justify-between">
+<div class="space-y-2">
+<div class="flex flex-wrap justify-between items-start gap-4">
+<div>
+<span class="text-primary font-label-bold text-[12px] uppercase tracking-wider">#AQ-882145</span>
+<h4 class="font-headline-md text-headline-md text-on-surface">Oceanic Dreams 4D</h4>
+</div>
+<div class="flex flex-col items-end">
+<span class="px-4 py-1 rounded-full bg-green-50 text-green-700 font-label-bold text-[12px] flex items-center border border-green-200">
+<span class="material-symbols-outlined text-[16px] mr-1" style="font-variation-settings: 'FILL' 1;">check_circle</span>
+                                        PAID
+                                    </span>
+<div class="mt-2 flex items-center text-primary font-label-bold text-[12px]">
+<span class="material-symbols-outlined text-[16px] mr-1">qr_code_2</span>
+                                        QR Ticket Ready
+                                    </div>
+</div>
+</div>
+<div class="grid grid-cols-2 md:grid-cols-4 gap-4 pt-2">
+<div>
+<p class="text-on-surface-variant text-[11px] font-label-bold uppercase tracking-tight">Date &amp; Time</p>
+<p class="font-body-md text-body-md text-on-surface">Oct 20, 2024 • 18:30</p>
+</div>
+<div>
+<p class="text-on-surface-variant text-[11px] font-label-bold uppercase tracking-tight">Venue</p>
+<p class="font-body-md text-body-md text-on-surface">Grand Amphitheatre</p>
+</div>
+<div>
+<p class="text-on-surface-variant text-[11px] font-label-bold uppercase tracking-tight">Tickets</p>
+<p class="font-body-md text-body-md text-on-surface">2 Tickets</p>
+</div>
+<div>
+<p class="text-on-surface-variant text-[11px] font-label-bold uppercase tracking-tight">Total Amount</p>
+<p class="font-label-bold text-headline-md text-primary">$85.00</p>
+</div>
+</div>
+</div>
+<div class="flex justify-end space-x-3 pt-4 border-t border-outline-variant/10 mt-4">
+<button class="px-6 py-2 rounded-full border border-primary text-primary font-button text-button hover:bg-primary/5 transition-all">View Detail</button>
+<button class="px-8 py-2 rounded-full bg-secondary-container text-on-secondary-container font-button text-button shadow-sm hover:scale-[1.02] active:scale-95 transition-all">Download Receipt</button>
+</div>
+</div>
+</div>
+<!-- Record 3: EXPIRED -->
+<div class="group bg-surface-container-low/50 p-6 rounded-lg border border-outline-variant/30 flex flex-col md:flex-row gap-6 opacity-70 hover:opacity-100 transition-all">
+<div class="w-full md:w-56 h-36 rounded-lg overflow-hidden shrink-0 grayscale group-hover:grayscale-0 transition-all duration-500">
+<img alt="Tropical Waves Gala" class="w-full h-full object-cover" src="https://lh3.googleusercontent.com/aida/ADBb0ujt3y3oHep8ZyS33fWXSwjI8mG8aZHbNUcl0CdGivcGyeT3du82S-KhXF_z4dlPRBUlc4EswabU5EeIcZJqXipWtpjbttrQ0GOkGXD__Ue8EUNvilyj-UDsJCa1cZbn_l6pfjV_lg7TOdizUqPdcum_qmMFI-csEQojqIgtLoSEhUsOXh1HErJxLtr4lvL3loCl2YH0XpPXQu6PYmM-OELKDDyxmjnmTGP8Zxcj3pb5flEfrV4506pYqA">
+</div>
+<div class="flex-1 flex flex-col justify-between">
+<div class="space-y-2">
+<div class="flex flex-wrap justify-between items-start gap-4">
+<div>
+<span class="text-outline font-label-bold text-[12px] uppercase tracking-wider">#AQ-879022</span>
+<h4 class="font-headline-md text-headline-md text-on-surface-variant">Tropical Waves Gala</h4>
+</div>
+<div class="flex flex-col items-end">
+<span class="px-4 py-1 rounded-full bg-surface-dim text-on-surface-variant font-label-bold text-[12px] border border-outline-variant/30">
+                                        EXPIRED
+                                    </span>
+</div>
+</div>
+<div class="grid grid-cols-2 md:grid-cols-4 gap-4 pt-2">
+<div>
+<p class="text-on-surface-variant text-[11px] font-label-bold uppercase tracking-tight">Date &amp; Time</p>
+<p class="font-body-md text-body-md text-on-surface-variant">Oct 12, 2024 • 19:00</p>
+</div>
+<div>
+<p class="text-on-surface-variant text-[11px] font-label-bold uppercase tracking-tight">Venue</p>
+<p class="font-body-md text-body-md text-on-surface-variant">Blue Lagoon Deck</p>
+</div>
+<div>
+<p class="text-on-surface-variant text-[11px] font-label-bold uppercase tracking-tight">Tickets</p>
+<p class="font-body-md text-body-md text-on-surface-variant">5 Tickets</p>
+</div>
+<div>
+<p class="text-on-surface-variant text-[11px] font-label-bold uppercase tracking-tight">Total Amount</p>
+<p class="font-label-bold text-headline-md text-on-surface-variant">$210.00</p>
+</div>
+</div>
+</div>
+<div class="flex justify-end pt-4 border-t border-outline-variant/10 mt-4">
+<button class="px-8 py-2 rounded-full border border-primary text-primary font-button text-button hover:bg-primary/5 transition-all">Book Again</button>
+</div>
+</div>
+</div>
+</div>
+<!-- Unified Pagination -->
+<div class="flex justify-center items-center space-x-2 mt-12">
+<button class="w-10 h-10 rounded-full border border-outline-variant flex items-center justify-center text-on-surface-variant hover:text-primary hover:border-primary transition-all">
+<span class="material-symbols-outlined">chevron_left</span>
+</button>
+<button class="w-10 h-10 rounded-full bg-primary text-white font-label-bold text-label-bold shadow-sm">1</button>
+<button class="w-10 h-10 rounded-full text-on-surface-variant hover:bg-primary/5 font-label-bold text-label-bold transition-all">2</button>
+<button class="w-10 h-10 rounded-full text-on-surface-variant hover:bg-primary/5 font-label-bold text-label-bold transition-all">3</button>
+<button class="w-10 h-10 rounded-full border border-outline-variant flex items-center justify-center text-on-surface-variant hover:text-primary hover:border-primary transition-all">
+<span class="material-symbols-outlined">chevron_right</span>
+</button>
+</div>
+</div>
+</main>
+<!-- MainLayout Footer -->
+<footer class="w-full bg-surface-container-low mt-auto">
+<div class="max-w-[1280px] mx-auto px-margin-desktop py-12 flex flex-col items-center gap-8">
+<div class="font-headline-md text-headline-md font-bold text-primary">AquaPulse</div>
+<div class="flex flex-wrap justify-center gap-6 font-body-md text-body-md text-primary">
+<a class="hover:underline" href="#">Terms of Service</a>
+<a class="hover:underline" href="#">Privacy Policy</a>
+<a class="hover:underline" href="#">Park Rules</a>
+<a class="hover:underline" href="#">Contact Us</a>
+</div>
+<div class="font-body-md text-body-md text-on-surface-variant">
+© 2024 AquaPulse. Making every splash count.
+</div>
+</div>
+</footer>
+<script>
+        // Countdown timer logic for pending payment
+        function updateCountdowns() {
+            const countdowns = document.querySelectorAll('.countdown');
+            countdowns.forEach(el => {
+                let parts = el.innerText.split(':');
+                if (parts.length !== 2) return;
+                let min = parseInt(parts[0]);
+                let sec = parseInt(parts[1]);
+
+                if (sec > 0) {
+                    sec--;
+                } else if (min > 0) {
+                    min--;
+                    sec = 59;
+                }
+
+                el.innerText = `${min}:${sec < 10 ? '0' + sec : sec}`;
+            });
+        }
+        setInterval(updateCountdowns, 1000);
+
+        // UI Interaction for filter buttons
+        const filterButtons = document.querySelectorAll('button[class*="px-6 py-2 rounded-full"]');
+        filterButtons.forEach(btn => {
+            if (btn.closest('.flex.bg-surface-container-lowest')) { // Only targeting the status filter buttons
+                btn.addEventListener('click', () => {
+                    const parent = btn.parentElement;
+                    const siblings = parent.querySelectorAll('button');
+                    siblings.forEach(b => {
+                        b.classList.remove('bg-primary', 'text-white', 'shadow-sm');
+                        b.classList.add('text-on-surface-variant');
+                    });
+                    btn.classList.add('bg-primary', 'text-white', 'shadow-sm');
+                    btn.classList.remove('text-on-surface-variant');
+                });
+            }
+        });
+    </script>
+
+
+</body></html>

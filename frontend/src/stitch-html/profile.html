@@ -1,0 +1,388 @@
+<!DOCTYPE html><html class="scroll-smooth" lang="en"><head>
+<meta charset="utf-8">
+<meta content="width=device-width, initial-scale=1.0" name="viewport">
+<title>User Profile | AquaPulse Entertainment</title>
+<script src="https://cdn.tailwindcss.com?plugins=forms,container-queries"></script>
+<link href="https://fonts.googleapis.com/css2?family=Plus+Jakarta+Sans:wght@400;500;600;700;800&amp;family=Material+Symbols+Outlined:wght,FILL@100..700,0..1&amp;display=swap" rel="stylesheet">
+<!-- Tailwind Configuration -->
+<script id="tailwind-config">
+      tailwind.config = {
+        darkMode: "class",
+        theme: {
+          extend: {
+            "colors": {
+                "tertiary": "#a43c12",
+                "on-error-container": "#93000a",
+                "electric-cyan": "#00FFFF",
+                "on-tertiary": "#ffffff",
+                "surface-dim": "#d8dadc",
+                "secondary-container": "#fcd400",
+                "on-primary-fixed-variant": "#004f51",
+                "on-surface": "#191c1e",
+                "on-error": "#ffffff",
+                "on-tertiary-container": "#872a00",
+                "vin-orange": "#FF6900",
+                "on-tertiary-fixed": "#380c00",
+                "primary-fixed-dim": "#2ddbde",
+                "soft-turquoise": "#AFEEEE",
+                "inverse-surface": "#2d3133",
+                "secondary": "#705d00",
+                "surface-tint": "#00696b",
+                "on-primary-container": "#005354",
+                "inverse-primary": "#2ddbde",
+                "surface-variant": "#e0e3e5",
+                "outline-variant": "#bac9c9",
+                "tertiary-fixed-dim": "#ffb59c",
+                "background": "#f7f9fb",
+                "tertiary-fixed": "#ffdbcf",
+                "surface-container-lowest": "#ffffff",
+                "charcoal-text": "#1E293B",
+                "surface": "#f7f9fb",
+                "surface-container-high": "#e6e8ea",
+                "surface-container-highest": "#e0e3e5",
+                "surface-bright": "#f7f9fb",
+                "outline": "#6b7a7a",
+                "secondary-fixed": "#ffe16d",
+                "on-background": "#191c1e",
+                "surface-container": "#eceef0",
+                "primary-container": "#00ced1",
+                "on-secondary-fixed-variant": "#544600",
+                "surface-container-low": "#f2f4f6",
+                "on-secondary-fixed": "#221b00",
+                "on-surface-variant": "#3b4949",
+                "on-tertiary-fixed-variant": "#822800",
+                "on-secondary": "#ffffff",
+                "inverse-on-surface": "#eff1f3",
+                "error-container": "#ffdad6",
+                "deep-aqua": "#008B8B",
+                "on-primary-fixed": "#002020",
+                "primary-fixed": "#5af8fb",
+                "on-primary": "#ffffff",
+                "error": "#ba1a1a",
+                "secondary-fixed-dim": "#e9c400",
+                "tertiary-container": "#ffa282",
+                "primary": "#00696b",
+                "on-secondary-container": "#6e5c00"
+            },
+            "borderRadius": {
+                "DEFAULT": "1rem",
+                "lg": "2rem",
+                "xl": "3rem",
+                "full": "9999px"
+            },
+            "spacing": {
+                "container-max": "1280px",
+                "margin-desktop": "40px",
+                "margin-mobile": "16px",
+                "gutter": "24px",
+                "base": "8px"
+            },
+            "fontFamily": {
+                "headline-md": ["Plus Jakarta Sans"],
+                "display-lg": ["Plus Jakarta Sans"],
+                "body-lg": ["Plus Jakarta Sans"],
+                "headline-lg": ["Plus Jakarta Sans"],
+                "button": ["Plus Jakarta Sans"],
+                "label-bold": ["Plus Jakarta Sans"],
+                "display-lg-mobile": ["Plus Jakarta Sans"],
+                "body-md": ["Plus Jakarta Sans"]
+            },
+            "fontSize": {
+                "headline-md": ["24px", {"lineHeight": "32px", "fontWeight": "700"}],
+                "display-lg": ["48px", {"lineHeight": "56px", "letterSpacing": "-0.02em", "fontWeight": "800"}],
+                "body-lg": ["18px", {"lineHeight": "28px", "fontWeight": "400"}],
+                "headline-lg": ["32px", {"lineHeight": "40px", "fontWeight": "700"}],
+                "button": ["16px", {"lineHeight": "20px", "fontWeight": "600"}],
+                "label-bold": ["14px", {"lineHeight": "20px", "fontWeight": "700"}],
+                "display-lg-mobile": ["32px", {"lineHeight": "40px", "letterSpacing": "-0.02em", "fontWeight": "800"}],
+                "body-md": ["16px", {"lineHeight": "24px", "fontWeight": "400"}]
+            }
+          }
+        }
+      }
+    </script>
+<style>
+        .material-symbols-outlined {
+            font-variation-settings: 'FILL' 0, 'wght' 400, 'GRAD' 0, 'opsz' 24;
+            vertical-align: middle;
+        }
+        .bubble {
+            position: absolute;
+            background: rgba(255, 255, 255, 0.2);
+            border-radius: 50%;
+            pointer-events: none;
+            animation: float-up 10s infinite linear;
+        }
+        @keyframes float-up {
+            from { transform: translateY(100%) scale(0.5); opacity: 0; }
+            50% { opacity: 0.5; }
+            to { transform: translateY(-100vh) scale(1.2); opacity: 0; }
+        }
+        .wave-container {
+            position: relative;
+            overflow: hidden;
+        }
+        .wave-svg {
+            position: absolute;
+            bottom: 0;
+            left: 0;
+            width: 100%;
+            height: auto;
+        }
+    </style>
+</head>
+<body class="bg-surface font-body-md text-on-surface selection:bg-primary-container selection:text-on-primary-container">
+<!-- Top Navigation Bar -->
+<nav class="bg-surface/80 backdrop-blur-md sticky top-0 w-full z-50 shadow-sm">
+  <div class="flex justify-between items-center h-20 px-margin-mobile md:px-margin-desktop max-w-container-max mx-auto">
+    <div class="flex items-center gap-8">
+      <span class="font-display-lg text-headline-md text-primary tracking-tight font-extrabold">AquaPulse</span>
+      <div class="hidden md:flex gap-6">
+        <a class="text-on-surface-variant hover:text-primary transition-colors font-button text-button" href="#">Home</a>
+        <a class="text-on-surface-variant hover:text-primary transition-colors font-button text-button" href="#">Shows</a>
+        <a class="text-on-surface-variant hover:text-primary transition-colors font-button text-button" href="#">Schedules</a>
+        <a class="text-primary border-b-2 border-primary pb-1 font-button text-button" href="#">My Bookings</a>
+      </div>
+    </div>
+    <div class="flex items-center gap-4">
+      <button class="hidden md:block px-6 py-2 rounded-full border-2 border-primary text-primary font-button text-button hover:bg-primary hover:text-white transition-all">Book Now</button>
+      <div class="h-10 w-10 rounded-full overflow-hidden border-2 border-primary cursor-pointer hover:scale-105 transition-transform shadow-sm">
+        <img alt="User Profile" class="w-full h-full object-cover" src="https://lh3.googleusercontent.com/aida-public/AB6AXuBr1y6jT8rVNkVdiy8aMYObXvdvRyko9uO4Dlz5RNeuhycjQ0DbT_Gii4DoZSNhJ8fzz3fc1uky7EYTIVukTsWQ1lMjOG0NLWSobI9K8tEZhM2tmkt55Hipfh7jRFPvNsV1FKCPz5cLjRmjD0N_d6fD2WXkrrKzSk3CdC7Mb53gVjPueoFIiAJEoiCwB7Dg8JEjusemuC7MWfmkC5xv1zbTMQLL1NoTs4RPgoqG0-QcV07o36TcnAwUbaAvzveKsMYqzBsz_ph3SQ">
+      </div>
+    </div>
+  </div>
+</nav>
+<main class="max-w-container-max mx-auto px-margin-mobile md:px-margin-desktop py-8 md:py-12">
+<!-- Profile Header Banner (Refactored PageHeader) -->
+<header class="wave-container w-full h-[280px] md:h-[320px] rounded-xl bg-gradient-to-br from-primary to-primary-container shadow-lg flex flex-col justify-center px-10 relative overflow-hidden mb-12">
+<!-- Bubbles Effect -->
+<div class="bubble w-4 h-4 left-[10%] bottom-0" style="animation-delay: 1s; left: 28.7306%; animation-duration: 9.11773s;"></div>
+<div class="bubble w-8 h-8 left-[30%] bottom-0" style="animation-delay: 3s; left: 19.2523%; animation-duration: 9.13128s;"></div>
+<div class="bubble w-6 h-6 left-[70%] bottom-0" style="animation-delay: 0s; left: 16.4682%; animation-duration: 8.22309s;"></div>
+<div class="bubble w-10 h-10 left-[85%] bottom-0" style="animation-delay: 5s; left: 30.5792%; animation-duration: 8.4089s;"></div>
+<div class="flex flex-col md:flex-row items-center md:items-end gap-6 relative z-10">
+<div class="relative">
+<div class="h-28 w-28 md:h-36 md:w-36 rounded-xl border-4 border-white shadow-xl overflow-hidden bg-surface-container-lowest">
+<img alt="Profile Avatar" class="w-full h-full object-cover" src="https://lh3.googleusercontent.com/aida-public/AB6AXuDlBL0LAOFq0pJGG9MfCYDo7c0I07OBklNd6GAvPmj4ad2UFkPC4SmabcizbHlOdqDgIoexUTWuRinzKrrqy_Viupr3hqIF7z1GYsfCDKqFEzihUQArCRJ1JHcSc0ovFMfSGzpD3_CJMPDB4ij-4OgxR7QDnknGxLMuP1JyVL8UfZqJ_zrr6b42rkBQc9Jyii9mW_Q7cc6JFwwJZAuKQ8FBqIhHfH4f7KoBB1z9qneb4XIUDJ-OCGFGrHAJtfZWJOGz4gxYJATAww">
+</div>
+<button class="absolute -bottom-2 -right-2 bg-vin-orange text-white p-2 rounded-full shadow-lg hover:scale-110 transition-all border-2 border-white">
+<span class="material-symbols-outlined text-[18px]">edit</span>
+</button>
+</div>
+<div class="text-center md:text-left mb-2">
+<h1 class="text-headline-lg font-headline-lg text-white mb-2">My Profile</h1>
+<p class="text-body-md font-body-md text-white/90 max-w-xl">Manage your AquaShow account, bookings, and ticket information.</p>
+</div>
+</div>
+<!-- Wave Decoration SVG -->
+<svg class="wave-svg" fill="none" viewBox="0 0 1440 120" xmlns="http://www.w3.org/2000/svg">
+<path d="M0 120L48 110C96 100 192 80 288 75C384 70 480 80 576 85C672 90 768 90 864 80C960 70 1056 50 1152 45C1248 40 1344 50 1392 55L1440 60V120H1392C1344 120 1248 120 1152 120C1056 120 960 120 864 120C768 120 672 120 576 120C480 120 384 120 288 120C192 120 96 120 48 120H0Z" fill="white" fill-opacity="0.1"></path>
+<path d="M0 80L48 83.3C96 86.7 192 93.3 288 90C384 86.7 480 73.3 576 70C672 66.7 768 73.3 864 80C960 86.7 1056 93.3 1152 90C1248 86.7 1344 73.3 1392 66.7L1440 60V120H1392C1344 120 1248 120 1152 120C1056 120 960 120 864 120C768 120 672 120 576 120C480 120 384 120 288 120C192 120 96 120 48 120H0Z" fill="white" fill-opacity="0.05"></path>
+</svg>
+</header>
+<!-- Main Content Layout (Grid system aligned with tokens) -->
+<div class="grid grid-cols-1 lg:grid-cols-12 gap-gutter">
+<!-- Left Column: Information & Actions -->
+<div class="lg:col-span-4 space-y-gutter">
+<!-- Personal Information Card (rounded-xl/3xl component style) -->
+<section class="bg-surface-container-lowest p-8 rounded-xl shadow-[0px_4px_20px_rgba(0,206,209,0.08)] border border-surface-container">
+<h2 class="text-headline-md font-headline-md text-on-surface mb-6 flex items-center gap-3">
+<span class="material-symbols-outlined text-primary">account_circle</span>
+                        Account Info
+                    </h2>
+<div class="space-y-6">
+<div>
+<label class="text-label-bold font-label-bold text-on-surface-variant block mb-1">Full Name</label>
+<p class="text-body-md font-body-md text-charcoal-text bg-surface-container-low p-3 rounded-DEFAULT">Alex Julian Rivers</p>
+</div>
+<div>
+<label class="text-label-bold font-label-bold text-on-surface-variant block mb-1">Email</label>
+<div class="flex items-center gap-2 text-body-md font-body-md text-on-surface-variant bg-surface-container-high p-3 rounded-DEFAULT cursor-not-allowed">
+<span class="material-symbols-outlined text-sm">lock</span>
+                                alex.rivers@aquapulse.io
+                            </div>
+</div>
+<div>
+<label class="text-label-bold font-label-bold text-on-surface-variant block mb-1">Phone</label>
+<p class="text-body-md font-body-md text-charcoal-text bg-surface-container-low p-3 rounded-DEFAULT">+1 555-234-8901</p>
+</div>
+<div class="grid grid-cols-2 gap-4">
+<div>
+<label class="text-label-bold font-label-bold text-on-surface-variant block mb-1">Role</label>
+<span class="inline-block px-3 py-1 bg-primary-container/20 text-primary font-label-bold text-label-bold rounded-full">Customer</span>
+</div>
+<div>
+<label class="text-label-bold font-label-bold text-on-surface-variant block mb-1">Status</label>
+<span class="inline-block px-3 py-1 bg-green-100 text-green-700 font-label-bold text-label-bold rounded-full">Active</span>
+</div>
+</div>
+<div>
+<label class="text-label-bold font-label-bold text-on-surface-variant block mb-1">Auth Provider</label>
+<div class="flex items-center gap-2 text-body-md font-body-md text-charcoal-text">
+<img alt="Google" class="w-4 h-4" src="https://lh3.googleusercontent.com/aida-public/AB6AXuDa4XFFj31DPze6yjb4-TdB9xyNbJpMZOK9oCpZ9uUWE_WCzWoaRS-t9Bmgbu1Z9YQaltdbNXDOlcqziasn2xC-4GVk3Ey770z1M3Tv5_zVbjxQtglhXGXK6qW7b2UXAjtZmfPzKIPqwG2wXCmhDtxniIxqty_mCZSkFHZMx2fk3U8d_6s3nivD96mOrhrRrd0-tzCZucCg49ntaHQ0dCKbPYv3Cejw4tcaPH_uMBm2lSYsPLrP8u9Q2yxPqSOdtkHvY9bEOnUUEw">
+                                Google Account
+                            </div>
+</div>
+</div>
+<button class="w-full mt-8 py-3 bg-primary text-white rounded-full font-button text-button shadow-md hover:scale-[1.02] transition-all active:scale-95 flex justify-center items-center gap-2">
+<span class="material-symbols-outlined text-sm">edit_square</span>
+                        Edit Profile
+                    </button>
+</section>
+<!-- Account Quick Actions -->
+<section class="bg-surface-container-lowest p-8 rounded-xl shadow-[0px_4px_20px_rgba(0,206,209,0.08)] border border-surface-container">
+<h3 class="text-label-bold font-label-bold text-on-surface-variant uppercase tracking-wider mb-4">Quick Actions</h3>
+<div class="flex flex-col gap-3">
+<button class="flex items-center gap-3 p-3 rounded-xl hover:bg-primary-container/10 text-primary font-button text-button transition-colors text-left group">
+<span class="material-symbols-outlined p-2 bg-primary-container/20 rounded-full group-hover:scale-110 transition-transform">confirmation_number</span>
+                            Book New Ticket
+                        </button>
+<button class="flex items-center gap-3 p-3 rounded-xl hover:bg-secondary-container/10 text-secondary font-button text-button transition-colors text-left group">
+<span class="material-symbols-outlined p-2 bg-secondary-container/20 rounded-full group-hover:scale-110 transition-transform">event</span>
+                            View Available Shows
+                        </button>
+<hr class="my-2 border-surface-container">
+<button class="flex items-center gap-3 p-3 rounded-xl hover:bg-error/10 text-error font-button text-button transition-colors text-left group">
+<span class="material-symbols-outlined p-2 bg-error/10 rounded-full group-hover:scale-110 transition-transform">logout</span>
+                            Logout
+                        </button>
+</div>
+</section>
+</div>
+<!-- Right Column: Stats & Bookings -->
+<div class="lg:col-span-8 space-y-gutter">
+<!-- Summary Stats Grid -->
+<div class="grid grid-cols-2 md:grid-cols-4 gap-4">
+<div class="bg-surface-container-lowest p-6 rounded-xl shadow-sm border border-surface-container text-center hover:translate-y-[-4px] transition-transform duration-300">
+<p class="text-label-bold font-label-bold text-on-surface-variant mb-1">Total Bookings</p>
+<p class="text-display-lg font-headline-md text-primary">12</p>
+</div>
+<div class="bg-surface-container-lowest p-6 rounded-xl shadow-sm border border-surface-container text-center hover:translate-y-[-4px] transition-transform duration-300">
+<p class="text-label-bold font-label-bold text-on-surface-variant mb-1">Pending</p>
+<p class="text-display-lg font-headline-md text-vin-orange">1</p>
+</div>
+<div class="bg-surface-container-lowest p-6 rounded-xl shadow-sm border border-surface-container text-center hover:translate-y-[-4px] transition-transform duration-300">
+<p class="text-label-bold font-label-bold text-on-surface-variant mb-1">Active</p>
+<p class="text-display-lg font-headline-md text-deep-aqua">3</p>
+</div>
+<div class="bg-surface-container-lowest p-6 rounded-xl shadow-sm border border-surface-container text-center hover:translate-y-[-4px] transition-transform duration-300">
+<p class="text-label-bold font-label-bold text-on-surface-variant mb-1">Completed</p>
+<p class="text-display-lg font-headline-md text-secondary">8</p>
+</div>
+</div>
+<!-- Recent Bookings List -->
+<section class="bg-surface-container-lowest p-8 rounded-xl shadow-[0px_4px_20px_rgba(0,206,209,0.08)] border border-surface-container">
+<div class="flex justify-between items-center mb-8">
+<h2 class="text-headline-md font-headline-md text-on-surface">Recent Bookings</h2>
+<a class="text-primary font-button text-button hover:underline decoration-2 underline-offset-4" href="#">View All</a>
+</div>
+<div class="space-y-4">
+<!-- Booking Row 1 -->
+<div class="group flex flex-col md:flex-row md:items-center justify-between p-6 rounded-xl border border-surface-container hover:border-primary-container hover:bg-primary-container/5 transition-all">
+<div class="flex items-center gap-6 mb-4 md:mb-0">
+<div class="h-16 w-16 rounded-xl overflow-hidden">
+<img alt="Symphony of Lights" class="w-full h-full object-cover" src="https://lh3.googleusercontent.com/aida-public/AB6AXuCujaSo6RV1Zoca54QEd2IVZ0mAIhk-vMjIjrWZ7vuCp0P6wllTuqPk4C8vUmNCkvR3RIODJ1oFmeSH8MZ-G37u1qMR5SGvZxUPPJnMsqk3L4KrtxQarbpM4eTByeZzXqJBfd1vj5K372GpP8Ayu4fBjMoU297quKk5Ks1Zu3OJVF7JnLc7tv52VksRq713j_R4nTLp2eF5SXS-k8LDvGqMXUTAVexCDC4W2CRrf9wRyqfIIqm9G3VrZTqy0eU7D4yRB5CiNTWJug">
+</div>
+<div>
+<h4 class="font-headline-md text-body-lg text-charcoal-text group-hover:text-primary transition-colors">Symphony of Lights</h4>
+<p class="text-body-md text-on-surface-variant flex items-center gap-2">
+<span class="material-symbols-outlined text-sm">calendar_month</span>
+                                        Oct 24, 2024 • 8:00 PM
+                                    </p>
+</div>
+</div>
+<div class="flex items-center justify-between md:justify-end gap-8">
+<div class="text-right">
+<p class="text-label-bold font-label-bold text-on-surface-variant">2 Tickets</p>
+<p class="text-body-md font-bold text-primary">$120.00</p>
+</div>
+<span class="px-4 py-1.5 bg-green-100 text-green-700 font-label-bold text-label-bold rounded-full flex items-center gap-1">
+<span class="material-symbols-outlined text-sm">check_circle</span>
+                                    Paid
+                                </span>
+</div>
+</div>
+<!-- Booking Row 2 -->
+<div class="group flex flex-col md:flex-row md:items-center justify-between p-6 rounded-xl border border-surface-container hover:border-vin-orange/30 hover:bg-vin-orange/5 transition-all">
+<div class="flex items-center gap-6 mb-4 md:mb-0">
+<div class="h-16 w-16 rounded-xl overflow-hidden">
+<img alt="Dolphin Tales" class="w-full h-full object-cover" src="https://lh3.googleusercontent.com/aida-public/AB6AXuCLkcsyUKlIImgmce-9G2dAo8GcDQHC4tMU_HtQpL0TEZHFnZMA593upxVQv7NP_8xUJLFZ9UhPc2TkLmRBIwG4nADjfrcPCCV1OcprAX9PJYRROaEPTJIr9XSSsURgaOernS9YgRdb06XKur09aBAzonxwlnjCul3WOZ_hy89pXKbtzNbQMxBkKc-JLsrTQN5WL9Qd5ekbJS4-Q_1eRRxp5L5pm-iG_pY2SQwZkYFcKXI6Ead_uy9WTRTwJK2BTK1zLuqph8bxCQ">
+</div>
+<div>
+<h4 class="font-headline-md text-body-lg text-charcoal-text group-hover:text-vin-orange transition-colors">Dolphin Tales</h4>
+<p class="text-body-md text-on-surface-variant flex items-center gap-2">
+<span class="material-symbols-outlined text-sm">calendar_month</span>
+                                        Oct 25, 2024 • 11:00 AM
+                                    </p>
+</div>
+</div>
+<div class="flex items-center justify-between md:justify-end gap-8">
+<div class="text-right">
+<p class="text-label-bold font-label-bold text-on-surface-variant">1 Ticket</p>
+<p class="text-body-md font-bold text-vin-orange">$45.00</p>
+</div>
+<span class="px-4 py-1.5 bg-secondary-container/30 text-secondary font-label-bold text-label-bold rounded-full flex items-center gap-1">
+<span class="material-symbols-outlined text-sm">schedule</span>
+                                    Pending Payment
+                                </span>
+</div>
+</div>
+</div>
+</section>
+<!-- Additional Info / Promotion -->
+<div class="bg-gradient-to-r from-secondary-container to-secondary-fixed p-8 rounded-xl shadow-md flex flex-col md:flex-row items-center justify-between gap-6 group overflow-hidden relative">
+<div class="relative z-10">
+<h3 class="text-headline-md font-headline-md text-on-secondary-fixed mb-2">Upgrade to Platinum?</h3>
+<p class="text-body-md font-body-md text-on-secondary-fixed/80 max-w-md">Get unlimited access to all shows, priority seating, and exclusive VIP lounge access for the whole family.</p>
+</div>
+<button class="relative z-10 px-8 py-3 bg-charcoal-text text-white rounded-full font-button text-button shadow-lg hover:scale-105 active:scale-95 transition-all">Learn More</button>
+<!-- Animated background element -->
+<div class="absolute -right-8 -bottom-8 w-40 h-40 bg-white/20 rounded-full blur-3xl group-hover:scale-150 transition-transform duration-700"></div>
+</div>
+</div>
+</div>
+</main>
+<!-- Footer (Refactored Shared Footer) -->
+<footer class="bg-surface-container-low mt-20">
+  <div class="max-w-[1280px] mx-auto px-margin-mobile md:px-margin-desktop py-12 flex flex-col items-center gap-8">
+    <div class="flex flex-col items-center gap-4">
+      <span class="font-headline-md text-headline-md font-bold text-primary">AquaPulse</span>
+      <div class="flex flex-wrap justify-center gap-x-8 gap-y-2">
+        <a class="font-body-md text-body-md text-on-surface-variant hover:text-primary transition-colors" href="#">Terms of Service</a>
+        <a class="font-body-md text-body-md text-on-surface-variant hover:text-primary transition-colors" href="#">Privacy Policy</a>
+        <a class="font-body-md text-body-md text-on-surface-variant hover:text-primary transition-colors" href="#">Park Rules</a>
+        <a class="font-body-md text-body-md text-on-surface-variant hover:text-primary transition-colors" href="#">Contact Us</a>
+      </div>
+    </div>
+    <div class="w-full h-px bg-outline-variant"></div>
+    <div class="flex flex-col md:flex-row justify-between items-center w-full gap-4">
+      <p class="font-body-md text-body-md text-on-surface-variant">© 2024 AquaPulse. Making every splash count.</p>
+      <div class="flex gap-4">
+        <button class="w-10 h-10 rounded-full border border-outline text-on-surface-variant flex items-center justify-center hover:bg-primary-container/10 transition-all">
+          <span class="material-symbols-outlined text-[20px]">public</span>
+        </button>
+        <button class="w-10 h-10 rounded-full border border-outline text-on-surface-variant flex items-center justify-center hover:bg-primary-container/10 transition-all">
+          <span class="material-symbols-outlined text-[20px]">share</span>
+        </button>
+      </div>
+    </div>
+  </div>
+</footer>
+<script>
+        // Simple Micro-interactions for buttons
+        document.querySelectorAll('button').forEach(button => {
+            button.addEventListener('mousedown', () => button.classList.add('scale-95'));
+            button.addEventListener('mouseup', () => button.classList.remove('scale-95'));
+            button.addEventListener('mouseleave', () => button.classList.remove('scale-95'));
+        });
+
+        // Initialize bubbles randomly
+        const bubbles = document.querySelectorAll('.bubble');
+        bubbles.forEach(b => {
+            b.style.left = Math.random() * 100 + '%';
+            b.style.animationDuration = (8 + Math.random() * 5) + 's';
+        });
+    </script>
+
+
+</body></html>

@@ -1,0 +1,375 @@
+<!DOCTYPE html><html class="scroll-smooth" lang="en"><head>
+<meta charset="utf-8">
+<meta content="width=device-width, initial-scale=1.0" name="viewport">
+<title>Create Booking | AquaShow Management System</title>
+<script src="https://cdn.tailwindcss.com?plugins=forms,container-queries"></script>
+<link href="https://fonts.googleapis.com/css2?family=Plus+Jakarta+Sans:wght@400;600;700;800&amp;display=swap" rel="stylesheet">
+<link href="https://fonts.googleapis.com/css2?family=Material+Symbols+Outlined:wght,FILL@100..700,0..1&amp;display=swap" rel="stylesheet">
+<script id="tailwind-config">
+      tailwind.config = {
+        darkMode: "class",
+        theme: {
+          extend: {
+            "colors": {
+                    "tertiary": "#a43c12",
+                    "on-error-container": "#93000a",
+                    "electric-cyan": "#00FFFF",
+                    "on-tertiary": "#ffffff",
+                    "surface-dim": "#d8dadc",
+                    "secondary-container": "#fcd400",
+                    "on-primary-fixed-variant": "#004f51",
+                    "on-surface": "#191c1e",
+                    "on-error": "#ffffff",
+                    "on-tertiary-container": "#872a00",
+                    "vin-orange": "#FF6900",
+                    "on-tertiary-fixed": "#380c00",
+                    "primary-fixed-dim": "#2ddbde",
+                    "soft-turquoise": "#AFEEEE",
+                    "inverse-surface": "#2d3133",
+                    "secondary": "#705d00",
+                    "surface-tint": "#00696b",
+                    "on-primary-container": "#005354",
+                    "inverse-primary": "#2ddbde",
+                    "surface-variant": "#e0e3e5",
+                    "outline-variant": "#bac9c9",
+                    "tertiary-fixed-dim": "#ffb59c",
+                    "background": "#f7f9fb",
+                    "tertiary-fixed": "#ffdbcf",
+                    "surface-container-lowest": "#ffffff",
+                    "charcoal-text": "#1E293B",
+                    "surface": "#f7f9fb",
+                    "surface-container-high": "#e6e8ea",
+                    "surface-container-highest": "#e0e3e5",
+                    "surface-bright": "#f7f9fb",
+                    "outline": "#6b7a7a",
+                    "secondary-fixed": "#ffe16d",
+                    "on-background": "#191c1e",
+                    "surface-container": "#eceef0",
+                    "primary-container": "#00ced1",
+                    "on-secondary-fixed-variant": "#544600",
+                    "surface-container-low": "#f2f4f6",
+                    "on-secondary-fixed": "#221b00",
+                    "on-surface-variant": "#3b4949",
+                    "on-tertiary-fixed-variant": "#822800",
+                    "on-secondary": "#ffffff",
+                    "inverse-on-surface": "#eff1f3",
+                    "error-container": "#ffdad6",
+                    "deep-aqua": "#008B8B",
+                    "on-primary-fixed": "#002020",
+                    "primary-fixed": "#5af8fb",
+                    "on-primary": "#ffffff",
+                    "error": "#ba1a1a",
+                    "secondary-fixed-dim": "#e9c400",
+                    "tertiary-container": "#ffa282",
+                    "primary": "#00696b",
+                    "on-secondary-container": "#6e5c00"
+            },
+            "borderRadius": {
+                    "DEFAULT": "1rem",
+                    "lg": "2rem",
+                    "xl": "3rem",
+                    "full": "9999px"
+            },
+            "spacing": {
+                    "container-max": "1280px",
+                    "margin-desktop": "40px",
+                    "margin-mobile": "16px",
+                    "gutter": "24px",
+                    "base": "8px"
+            },
+            "fontFamily": {
+                    "headline-md": ["Plus Jakarta Sans"],
+                    "display-lg": ["Plus Jakarta Sans"],
+                    "body-lg": ["Plus Jakarta Sans"],
+                    "headline-lg": ["Plus Jakarta Sans"],
+                    "button": ["Plus Jakarta Sans"],
+                    "label-bold": ["Plus Jakarta Sans"],
+                    "display-lg-mobile": ["Plus Jakarta Sans"],
+                    "body-md": ["Plus Jakarta Sans"]
+            },
+            "fontSize": {
+                    "headline-md": ["24px", {"lineHeight": "32px", "fontWeight": "700"}],
+                    "display-lg": ["48px", {"lineHeight": "56px", "letterSpacing": "-0.02em", "fontWeight": "800"}],
+                    "body-lg": ["18px", {"lineHeight": "28px", "fontWeight": "400"}],
+                    "headline-lg": ["32px", {"lineHeight": "40px", "fontWeight": "700"}],
+                    "button": ["16px", {"lineHeight": "20px", "fontWeight": "600"}],
+                    "label-bold": ["14px", {"lineHeight": "20px", "fontWeight": "700"}],
+                    "display-lg-mobile": ["32px", {"lineHeight": "40px", "letterSpacing": "-0.02em", "fontWeight": "800"}],
+                    "body-md": ["16px", {"lineHeight": "24px", "fontWeight": "400"}]
+            }
+          },
+        },
+      }
+    </script>
+<style>
+        .material-symbols-outlined {
+            font-variation-settings: 'FILL' 0, 'wght' 400, 'GRAD' 0, 'opsz' 24;
+            vertical-align: middle;
+        }
+        .underwater-shadow {
+            box-shadow: 0px 12px 32px rgba(0, 105, 107, 0.1);
+        }
+        .glass-nav {
+            backdrop-filter: blur(12px);
+            -webkit-backdrop-filter: blur(12px);
+        }
+        .wave-bg {
+            background: linear-gradient(135deg, #00696b 0%, #00ced1 100%);
+            position: relative;
+            overflow: hidden;
+        }
+        .bubble {
+            position: absolute;
+            background: rgba(255, 255, 255, 0.1);
+            border-radius: 50%;
+            pointer-events: none;
+        }
+        .animate-float {
+            animation: float 6s ease-in-out infinite;
+        }
+        @keyframes float {
+            0%, 100% { transform: translateY(0); }
+            50% { transform: translateY(-20px); }
+        }
+    </style>
+</head>
+<body class="bg-surface font-body-md text-on-surface">
+<!-- TopNavBar -->
+<header class="sticky top-0 w-full z-50 bg-surface/80 backdrop-blur-md shadow-sm">
+  <div class="flex justify-between items-center h-20 px-margin-desktop max-w-container-max mx-auto">
+    <div class="font-display-lg text-headline-md text-primary tracking-tight flex items-center gap-2">
+      <span class="material-symbols-outlined" style="font-variation-settings: 'FILL' 1;">waves</span>
+      AquaPulse
+    </div>
+    <nav class="hidden md:flex items-center gap-8">
+      <a class="font-button text-button text-on-surface-variant hover:text-primary transition-colors" href="#">Home</a>
+      <a class="font-button text-button text-on-surface-variant hover:text-primary transition-colors" href="#">Shows</a>
+      <a class="font-button text-button text-on-surface-variant hover:text-primary transition-colors" href="#">Schedules</a>
+      <a class="font-button text-button text-primary border-b-2 border-primary pb-1" href="#">My Bookings</a>
+    </nav>
+    <div class="flex items-center gap-4">
+      <button class="hidden md:block bg-primary text-on-primary px-6 py-2 rounded-full font-button hover:bg-primary-container hover:text-on-primary-container transition-all">Book Now</button>
+      <div class="w-10 h-10 rounded-full bg-surface-container-highest overflow-hidden border-2 border-primary/20">
+        <img alt="User Profile" class="w-full h-full object-cover" src="https://lh3.googleusercontent.com/aida-public/AB6AXuD8Ktsr2eh2zseRpqmcWc1jQ2IUGLAARYiIysbobKUntDOh1nfDEifzPo42cD1xCI3T5oWurk7H1oKkKP_l2LrvMSTbQqGTFw60SUPYoNNMIv3gfUV3GqpU11JvrHJJDZgeCC_B5r0q8iYCRft-Kxz2bcJz_sWISuXeYsix-dHPCFCu7EefAYCNtuwQt1sSeMzD1LYvsG6zg6WcWlfRAxuW6RJDQt2u2lZ8PPXPaVPdz65gIS2xSH4QbYVkuUlpX6vy3tt5-fusYw">
+      </div>
+      <button class="md:hidden text-on-surface-variant">
+        <span class="material-symbols-outlined">menu</span>
+      </button>
+    </div>
+  </div>
+</header>
+<main class="pt-20">
+<!-- PageHeader -->
+<section class="wave-bg py-12 md:py-20">
+<div class="bubble w-16 h-16 top-10 left-[10%] opacity-20 animate-float"></div>
+<div class="bubble w-24 h-24 bottom-10 right-[15%] opacity-10 animate-float" style="animation-delay: -2s;"></div>
+<div class="max-w-container-max mx-auto px-margin-mobile md:px-margin-desktop relative z-10">
+<h1 class="font-display-lg-mobile md:font-display-lg text-display-lg-mobile md:text-display-lg text-on-primary mb-2">Create Booking</h1>
+<p class="font-body-lg text-body-lg text-soft-turquoise max-w-2xl">Secure your front-row seat to an aquatic masterpiece. Reserve your spot for an unforgettable experience.</p>
+</div>
+<!-- Wave Spacer -->
+<div class="absolute bottom-0 left-0 w-full leading-none">
+<svg class="relative block w-full h-[40px]" preserveAspectRatio="none" viewBox="0 0 1200 120" xmlns="http://www.w3.org/2000/svg">
+<path class="fill-surface" d="M321.39,56.44c58-10.79,114.16-30.13,172-41.86,82.39-16.72,168.19-17.73,250.45-.39C823.78,31,906.67,72,985.66,92.83c70.05,18.48,146.53,26.09,214.34,3V120H0V0C50.31,34.54,121.57,56.09,190.72,64.31,235.15,69.59,279,64.29,321.39,56.44Z"></path>
+</svg>
+</div>
+</section>
+<!-- Booking Content Grid -->
+<div class="max-w-container-max mx-auto px-margin-mobile md:px-margin-desktop py-12">
+<div class="grid grid-cols-1 lg:grid-cols-12 gap-gutter">
+<!-- Left Section -->
+<div class="lg:col-span-8 space-y-gutter">
+<!-- Show Detail Card -->
+<article class="bg-surface-container-lowest rounded-lg overflow-hidden border border-outline-variant/30 underwater-shadow">
+<div class="relative h-64 md:h-96">
+<img alt="Symphony of Lights" class="w-full h-full object-cover" src="https://lh3.googleusercontent.com/aida-public/AB6AXuBQJ-Fo4HDO72JbLax0CiFqctWCGXvU4YEfKNT6BKoii53LhvXYm3tK9deyNpu3SQhQuDwXH4brHWFob4XTMXC0igb1FTIelijgurjSK40wqc_V-h4hB2iXApJSw4tuIL9RRKwcdhGhhcgV9V5pOtwPQGvlVc5CRVwmmWl5xWGLSkDEXdqrpRF327LZc7RzHHIIOK5u5seDmxx49urrFLxksqEEDJ5_xPJn8EULd2-53B3FmPiCpcXrt3oMMoWR8T3lZdXTQe3xXQ">
+<div class="absolute top-4 left-4 flex gap-2">
+<span class="bg-primary/90 text-on-primary px-3 py-1 rounded-full text-label-bold font-label-bold backdrop-blur-md">Water Show</span>
+<span class="bg-secondary-container text-on-secondary-container px-3 py-1 rounded-full text-label-bold font-label-bold backdrop-blur-md flex items-center gap-1">
+<span class="material-symbols-outlined text-[14px]" style="font-variation-settings: 'FILL' 1;">star</span>
+                                    Popular
+                                </span>
+</div>
+</div>
+<div class="p-gutter">
+<h2 class="font-headline-lg text-headline-lg text-on-surface mb-4">Symphony of Lights</h2>
+<p class="font-body-md text-body-md text-on-surface-variant leading-relaxed">
+                                Witness the world's most advanced synchronized water performance.
+                                A breathtaking choreography of 50-foot water jets, 4K laser projections,
+                                and an orchestral soundtrack that will leave you spellbound.
+                            </p>
+</div>
+</article>
+<!-- Schedule Info Grid -->
+<div class="grid grid-cols-1 md:grid-cols-2 gap-4">
+<div class="bg-surface-container-low rounded-lg p-6 flex items-start gap-4 border border-outline-variant/20">
+<div class="bg-primary-container p-3 rounded-full text-on-primary-container">
+<span class="material-symbols-outlined">calendar_today</span>
+</div>
+<div>
+<p class="text-on-surface-variant text-label-bold font-label-bold uppercase tracking-wider mb-1 text-[12px]">Date &amp; Time</p>
+<p class="font-headline-md text-headline-md text-on-surface">Oct 24, 2024</p>
+<p class="text-on-surface-variant font-body-md">08:00 PM - 09:30 PM</p>
+</div>
+</div>
+<div class="bg-surface-container-low rounded-lg p-6 flex items-start gap-4 border border-outline-variant/20">
+<div class="bg-primary-container p-3 rounded-full text-on-primary-container">
+<span class="material-symbols-outlined">location_on</span>
+</div>
+<div>
+<p class="text-on-surface-variant text-label-bold font-label-bold uppercase tracking-wider mb-1 text-[12px]">Venue</p>
+<p class="font-headline-md text-headline-md text-on-surface">Aqua Plaza</p>
+<div class="flex items-center gap-2 mt-1">
+<span class="w-2 h-2 rounded-full bg-primary animate-pulse"></span>
+<span class="text-primary font-label-bold text-sm">Available Now</span>
+</div>
+</div>
+</div>
+</div>
+<!-- Ticket Selection Card -->
+<div class="bg-surface-container-lowest rounded-lg p-gutter border border-outline-variant/30 underwater-shadow">
+<div class="flex flex-col md:flex-row justify-between items-center gap-6">
+<div>
+<h3 class="font-headline-md text-headline-md text-on-surface mb-1">General Admission</h3>
+<p class="text-on-surface-variant">Includes standard seating and digital show guide.</p>
+<p class="text-primary font-bold mt-2 text-headline-md">$45.00 <span class="text-body-md font-normal text-on-surface-variant">/ ticket</span></p>
+</div>
+<div class="flex flex-col items-center gap-2">
+<div class="flex items-center bg-surface-container rounded-full p-2 border-2 border-primary-container/30">
+<button class="w-10 h-10 rounded-full flex items-center justify-center bg-surface-container-lowest text-primary hover:bg-primary hover:text-on-primary transition-all shadow-sm" onclick="updateQty(-1)">
+<span class="material-symbols-outlined">remove</span>
+</button>
+<span class="w-12 text-center font-headline-md text-headline-md text-on-surface" id="qty-display">1</span>
+<button class="w-10 h-10 rounded-full flex items-center justify-center bg-surface-container-lowest text-primary hover:bg-primary hover:text-on-primary transition-all shadow-sm" onclick="updateQty(1)">
+<span class="material-symbols-outlined">add</span>
+</button>
+</div>
+<p class="text-on-surface-variant text-xs italic">Max 10 tickets per booking</p>
+</div>
+</div>
+</div>
+</div>
+<!-- Right Section (Sticky Summary) -->
+<aside class="lg:col-span-4">
+<div class="sticky top-28 space-y-6">
+<div class="bg-surface-container-lowest rounded-lg p-gutter border border-outline-variant/30 underwater-shadow relative overflow-hidden">
+<!-- Background Accent -->
+<div class="absolute top-0 right-0 opacity-5 -mr-8 -mt-8 pointer-events-none">
+<span class="material-symbols-outlined text-[140px] text-primary" style="font-variation-settings: 'FILL' 1;">waves</span>
+</div>
+<h3 class="font-headline-md text-headline-md text-on-surface mb-6 relative z-10">Booking Summary</h3>
+<div class="space-y-4 mb-8 relative z-10">
+<div class="flex justify-between items-start">
+<div>
+<p class="font-label-bold text-on-surface">Symphony of Lights</p>
+<p class="text-sm text-on-surface-variant">Oct 24, 08:00 PM</p>
+</div>
+<p class="font-label-bold text-on-surface">$45.00</p>
+</div>
+<div class="flex justify-between items-center py-4 border-y border-outline-variant/30">
+<p class="text-on-surface-variant">Quantity</p>
+<p class="font-label-bold text-on-surface" id="summary-qty">1</p>
+</div>
+<div class="flex justify-between items-center">
+<p class="font-headline-md text-headline-md text-primary">Total Amount</p>
+<p class="font-headline-md text-headline-md text-primary" id="summary-total">$45.00</p>
+</div>
+</div>
+<div class="space-y-4 mb-8 relative z-10">
+<div class="flex gap-3 p-4 bg-primary/5 rounded-lg text-primary text-sm">
+<span class="material-symbols-outlined text-primary text-sm">info</span>
+<p class="">Tickets are held for 15 minutes until payment is confirmed.</p>
+</div>
+<div class="flex gap-2 text-on-surface-variant text-sm px-1 items-center">
+<span class="material-symbols-outlined text-primary-container text-lg" style="font-variation-settings: 'FILL' 1;">verified</span>
+<p class="">Secure checkout powered by AquaPay</p>
+</div>
+</div>
+<div class="space-y-4 relative z-10">
+<button class="w-full bg-primary text-on-primary py-4 rounded-full font-button text-lg hover:bg-primary-container hover:text-on-primary-container transition-all shadow-lg shadow-primary/10" onclick="handleConfirm()">
+                                    Confirm Booking
+                                </button>
+<a class="block text-center text-primary font-button hover:underline text-sm" href="#">Back to Schedules</a>
+</div>
+</div>
+<!-- Success Alert -->
+<div class="hidden bg-secondary-container rounded-lg p-6 border-2 border-secondary animate-bounce" id="success-alert">
+<div class="flex items-start gap-4">
+<div class="bg-secondary text-on-secondary p-2 rounded-full">
+<span class="material-symbols-outlined">check_circle</span>
+</div>
+<div>
+<p class="font-label-bold text-on-secondary-container">PENDING_PAYMENT</p>
+<p class="text-sm text-on-secondary-container/80">Redirecting to payment gateway...</p>
+</div>
+</div>
+</div>
+</div>
+</aside>
+</div>
+</div>
+</main>
+<!-- Footer -->
+<footer class="bg-surface-container-low w-full">
+  <div class="max-w-[1280px] mx-auto px-margin-desktop py-12 flex flex-col items-center gap-8">
+    <div class="font-headline-md text-headline-md font-bold text-primary flex items-center gap-2">
+      <span class="material-symbols-outlined" style="font-variation-settings: 'FILL' 1;">waves</span>
+      AquaPulse
+    </div>
+    <div class="flex flex-wrap justify-center gap-x-8 gap-y-4">
+      <a class="font-body-md text-body-md text-on-surface-variant hover:text-primary transition-colors" href="#">Terms of Service</a>
+      <a class="font-body-md text-body-md text-on-surface-variant hover:text-primary transition-colors" href="#">Privacy Policy</a>
+      <a class="font-body-md text-body-md text-on-surface-variant hover:text-primary transition-colors" href="#">Park Rules</a>
+      <a class="font-body-md text-body-md text-on-surface-variant hover:text-primary transition-colors" href="#">Contact Us</a>
+    </div>
+    <p class="font-body-md text-body-md text-on-surface-variant text-center">© 2024 AquaPulse. Making every splash count.</p>
+  </div>
+</footer>
+<script>
+        let currentQty = 1;
+        const pricePerTicket = 45.00;
+        const qtyDisplay = document.getElementById('qty-display');
+        const summaryQty = document.getElementById('summary-qty');
+        const summaryTotal = document.getElementById('summary-total');
+        const successAlert = document.getElementById('success-alert');
+
+        function updateQty(delta) {
+            const newQty = currentQty + delta;
+            if (newQty >= 1 && newQty <= 10) {
+                currentQty = newQty;
+                qtyDisplay.innerText = currentQty;
+                summaryQty.innerText = currentQty;
+                const total = (currentQty * pricePerTicket).toFixed(2);
+                summaryTotal.innerText = `$${total}`;
+
+                // Micro-interaction
+                summaryTotal.classList.add('scale-105', 'text-secondary');
+                setTimeout(() => {
+                    summaryTotal.classList.remove('scale-105', 'text-secondary');
+                }, 200);
+            }
+        }
+
+        function handleConfirm() {
+            const btn = event.currentTarget;
+            const originalText = btn.innerText;
+            btn.innerText = 'Processing...';
+            btn.disabled = true;
+            btn.classList.add('opacity-70', 'cursor-not-allowed');
+
+            setTimeout(() => {
+                successAlert.classList.remove('hidden');
+                successAlert.classList.add('flex');
+                window.scrollTo({
+                    top: document.body.scrollHeight,
+                    behavior: 'smooth'
+                });
+                btn.innerText = originalText;
+                btn.disabled = false;
+                btn.classList.remove('opacity-70', 'cursor-not-allowed');
+            }, 1500);
+        }
+    </script>
+
+
+</body></html>
