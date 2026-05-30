@@ -1,0 +1,377 @@
+<!DOCTYPE html><html class="light" lang="en"><head>
+<meta charset="utf-8">
+<meta content="width=device-width, initial-scale=1.0" name="viewport">
+<title>Booking Detail | AquaShow Management System</title>
+<!-- Tailwind CSS -->
+<script src="https://cdn.tailwindcss.com?plugins=forms,container-queries"></script>
+<!-- Google Fonts: Plus Jakarta Sans -->
+<link href="https://fonts.googleapis.com/css2?family=Plus+Jakarta+Sans:wght@400;500;600;700;800&amp;display=swap" rel="stylesheet">
+<!-- Material Symbols Outlined -->
+<link href="https://fonts.googleapis.com/css2?family=Material+Symbols+Outlined:wght,FILL@100..700,0..1&amp;display=swap" rel="stylesheet">
+<script id="tailwind-config">
+        tailwind.config = {
+            darkMode: "class",
+            theme: {
+                extend: {
+                    "colors": {
+                        "tertiary": "#a43c12",
+                        "on-error-container": "#93000a",
+                        "electric-cyan": "#00FFFF",
+                        "on-tertiary": "#ffffff",
+                        "surface-dim": "#d8dadc",
+                        "secondary-container": "#fcd400",
+                        "on-primary-fixed-variant": "#004f51",
+                        "on-surface": "#191c1e",
+                        "on-error": "#ffffff",
+                        "on-tertiary-container": "#872a00",
+                        "vin-orange": "#FF6900",
+                        "on-tertiary-fixed": "#380c00",
+                        "primary-fixed-dim": "#2ddbde",
+                        "soft-turquoise": "#AFEEEE",
+                        "inverse-surface": "#2d3133",
+                        "secondary": "#705d00",
+                        "surface-tint": "#00696b",
+                        "on-primary-container": "#005354",
+                        "inverse-primary": "#2ddbde",
+                        "surface-variant": "#e0e3e5",
+                        "outline-variant": "#bac9c9",
+                        "tertiary-fixed-dim": "#ffb59c",
+                        "background": "#f7f9fb",
+                        "tertiary-fixed": "#ffdbcf",
+                        "surface-container-lowest": "#ffffff",
+                        "charcoal-text": "#1E293B",
+                        "surface": "#f7f9fb",
+                        "surface-container-high": "#e6e8ea",
+                        "surface-container-highest": "#e0e3e5",
+                        "surface-bright": "#f7f9fb",
+                        "outline": "#6b7a7a",
+                        "secondary-fixed": "#ffe16d",
+                        "on-background": "#191c1e",
+                        "surface-container": "#eceef0",
+                        "primary-container": "#00ced1",
+                        "on-secondary-fixed-variant": "#544600",
+                        "surface-container-low": "#f2f4f6",
+                        "on-secondary-fixed": "#221b00",
+                        "on-surface-variant": "#3b4949",
+                        "on-tertiary-fixed-variant": "#822800",
+                        "on-secondary": "#ffffff",
+                        "inverse-on-surface": "#eff1f3",
+                        "error-container": "#ffdad6",
+                        "deep-aqua": "#008B8B",
+                        "on-primary-fixed": "#002020",
+                        "primary-fixed": "#5af8fb",
+                        "on-primary": "#ffffff",
+                        "error": "#ba1a1a",
+                        "secondary-fixed-dim": "#e9c400",
+                        "tertiary-container": "#ffa282",
+                        "primary": "#00696b",
+                        "on-secondary-container": "#6e5c00"
+                    },
+                    "borderRadius": {
+                        "DEFAULT": "1rem",
+                        "lg": "2rem",
+                        "xl": "3rem",
+                        "full": "9999px"
+                    },
+                    "spacing": {
+                        "container-max": "1280px",
+                        "margin-desktop": "40px",
+                        "margin-mobile": "16px",
+                        "gutter": "24px",
+                        "base": "8px"
+                    },
+                    "fontFamily": {
+                        "headline-md": ["Plus Jakarta Sans"],
+                        "display-lg": ["Plus Jakarta Sans"],
+                        "body-lg": ["Plus Jakarta Sans"],
+                        "headline-lg": ["Plus Jakarta Sans"],
+                        "button": ["Plus Jakarta Sans"],
+                        "label-bold": ["Plus Jakarta Sans"],
+                        "display-lg-mobile": ["Plus Jakarta Sans"],
+                        "body-md": ["Plus Jakarta Sans"]
+                    },
+                    "fontSize": {
+                        "headline-md": ["24px", {"lineHeight": "32px", "fontWeight": "700"}],
+                        "display-lg": ["48px", {"lineHeight": "56px", "letterSpacing": "-0.02em", "fontWeight": "800"}],
+                        "body-lg": ["18px", {"lineHeight": "28px", "fontWeight": "400"}],
+                        "headline-lg": ["32px", {"lineHeight": "40px", "fontWeight": "700"}],
+                        "button": ["16px", {"lineHeight": "20px", "fontWeight": "600"}],
+                        "label-bold": ["14px", {"lineHeight": "20px", "fontWeight": "700"}],
+                        "display-lg-mobile": ["32px", {"lineHeight": "40px", "letterSpacing": "-0.02em", "fontWeight": "800"}],
+                        "body-md": ["16px", {"lineHeight": "24px", "fontWeight": "400"}]
+                    }
+                },
+            },
+        }
+    </script>
+<style>
+        body { font-family: 'Plus Jakarta Sans', sans-serif; }
+        .material-symbols-outlined {
+            font-variation-settings: 'FILL' 0, 'wght' 400, 'GRAD' 0, 'opsz' 24;
+        }
+        .underwater-shadow {
+            box-shadow: 0px 12px 32px rgba(0, 105, 107, 0.08);
+        }
+        .glass-nav {
+            background: rgba(255, 255, 255, 0.85);
+            backdrop-filter: blur(16px);
+        }
+        .wave-container {
+            position: relative;
+            background: linear-gradient(135deg, #00696b 0%, #008B8B 100%);
+            overflow: hidden;
+        }
+        .bubble {
+            position: absolute;
+            background: rgba(255, 255, 255, 0.1);
+            border-radius: 50%;
+            pointer-events: none;
+        }
+    </style>
+</head>
+<body class="bg-background text-on-background min-h-screen flex flex-col">
+<!-- MainLayout Navbar -->
+<nav class="sticky top-0 w-full z-50 bg-surface/80 backdrop-blur-md shadow-sm">
+  <div class="flex justify-between items-center h-20 px-margin-desktop max-w-container-max mx-auto">
+    <div class="flex items-center gap-10">
+      <span class="font-display-lg text-headline-md text-primary tracking-tight">AquaPulse</span>
+      <div class="hidden md:flex gap-8 items-center">
+        <a class="font-button text-button text-on-surface-variant hover:text-primary transition-colors" href="#">Home</a>
+        <a class="font-button text-button text-on-surface-variant hover:text-primary transition-colors" href="#">Shows</a>
+        <a class="font-button text-button text-on-surface-variant hover:text-primary transition-colors" href="#">Schedules</a>
+        <a class="font-button text-button text-primary border-b-2 border-primary pb-1" href="#">My Bookings</a>
+      </div>
+    </div>
+    <div class="flex items-center gap-6">
+      <button class="hidden md:block font-button text-button text-primary">Book Now</button>
+      <div class="h-10 w-10 rounded-full bg-surface-container-highest flex items-center justify-center cursor-pointer overflow-hidden">
+        <span class="material-symbols-outlined text-on-surface">account_circle</span>
+      </div>
+    </div>
+  </div>
+</nav>
+<!-- Main Content -->
+<main class="flex-grow">
+<!-- PageHeader Component -->
+<header class="wave-container py-16 px-gutter relative">
+<div class="max-w-container-max mx-auto relative z-10">
+<h1 class="font-display-lg text-display-lg-mobile text-white mb-3">Booking Detail</h1>
+<p class="font-body-lg text-white/90 max-w-2xl">Review your AquaShow reservation, schedule, payment status, and booking information.</p>
+</div>
+<!-- Decorative Bubbles -->
+<div class="bubble w-32 h-32 -bottom-8 -left-8 opacity-20"></div>
+<div class="bubble w-24 h-24 top-4 right-1/4 opacity-10"></div>
+<!-- Wave SVG -->
+<div class="absolute bottom-0 left-0 w-full overflow-hidden leading-[0]">
+<svg class="relative block w-[calc(100%+1.3px)] h-[40px] fill-background" preserveAspectRatio="none" viewBox="0 0 1200 120">
+<path d="M321.39,56.44c58-10.79,114.16-30.13,172-41.86,82.39-16.72,168.19-17.73,250.45-.39C823.78,31,906.67,72,985.66,92.83c70.05,18.48,146.53,26.09,214.34,3V0H0V27.35A600.21,600.21,0,0,0,321.39,56.44Z"></path>
+</svg>
+</div>
+</header>
+<div class="max-w-container-max mx-auto px-gutter py-margin-desktop" id="booking-container">
+<div class="grid grid-cols-1 lg:grid-cols-12 gap-gutter items-start">
+<!-- Left Column -->
+<div class="lg:col-span-8 space-y-gutter">
+<!-- Booking Header Card -->
+<div class="bg-surface-container-lowest rounded-lg p-8 underwater-shadow border border-outline-variant/30">
+<div class="flex flex-wrap justify-between items-start gap-4 mb-8">
+<div>
+<span class="font-label-bold text-on-surface-variant uppercase tracking-widest text-[11px]">Booking Reference</span>
+<h2 class="font-headline-md text-charcoal-text mt-1">#AQ-882190</h2>
+<div class="flex items-center gap-2 mt-3 text-on-surface-variant">
+<span class="material-symbols-outlined text-sm" data-icon="calendar_today">calendar_today</span>
+<span class="font-label-bold text-xs">Placed on Oct 20, 2024</span>
+</div>
+</div>
+<div class="flex gap-3">
+<span class="bg-primary text-white font-label-bold text-xs px-4 py-1.5 rounded-full uppercase tracking-wider">Paid</span>
+<span class="bg-secondary-container text-on-secondary-container font-label-bold text-xs px-4 py-1.5 rounded-full uppercase tracking-wider">Success</span>
+</div>
+</div>
+<div class="flex items-start gap-4 p-5 bg-surface-container-low rounded-lg border border-primary/10">
+<span class="material-symbols-outlined text-primary mt-0.5" data-icon="verified">verified</span>
+<p class="font-body-md text-on-surface-variant">Your reservation is confirmed! We look forward to seeing you at the show. Please arrive at least 15 minutes before the start time.</p>
+</div>
+</div>
+<!-- Show Info Card -->
+<div class="bg-surface-container-lowest rounded-lg overflow-hidden underwater-shadow border border-outline-variant/30">
+<div class="aspect-video lg:h-80 overflow-hidden relative group">
+<img alt="Midnight Aqua Symphony" class="w-full h-full object-cover transition-transform duration-700 group-hover:scale-105" src="https://lh3.googleusercontent.com/aida/ADBb0ujt3y3oHep8ZyS33fWXSwjI8mG8aZHbNUcl0CdGivcGyeT3du82S-KhXF_z4dlPRBUlc4EswabU5EeIcZJqXipWtpjbttrQ0GOkGXD__Ue8EUNvilyj-UDsJCa1cZbn_l6pfjV_lg7TOdizUqPdcum_qmMFI-csEQojqIgtLoSEhUsOXh1HErJxLtr4lvL3loCl2YH0XpPXQu6PYmM-OELKDDyxmjnmTGP8Zxcj3pb5flEfrV4506pYqA">
+<div class="absolute inset-0 bg-gradient-to-t from-black/60 to-transparent"></div>
+<div class="absolute bottom-6 left-8">
+<span class="bg-vin-orange text-white font-headline-md px-5 py-2 rounded-lg shadow-xl">$39.00</span>
+</div>
+</div>
+<div class="p-8">
+<div class="flex items-center gap-3 mb-4">
+<span class="bg-primary-container text-on-primary-container font-label-bold text-xs px-3 py-1 rounded-full">Water Show</span>
+<span class="bg-surface-container-high text-on-surface-variant font-label-bold text-xs px-3 py-1 rounded-full">45 Minutes</span>
+</div>
+<h3 class="font-headline-lg text-charcoal-text mb-4">Midnight Aqua Symphony</h3>
+<p class="font-body-md text-on-surface-variant mb-8 leading-relaxed max-w-3xl">A breathtaking fusion of choreographed fountains, lasers, and cinematic music. Experience the magic of liquid art under the moonlight.</p>
+<div class="grid grid-cols-1 md:grid-cols-2 gap-gutter border-t border-surface-variant/30 pt-8">
+<div class="flex items-start gap-4">
+<div class="w-10 h-10 rounded-full bg-primary/10 flex items-center justify-center shrink-0">
+<span class="material-symbols-outlined text-primary text-xl" data-icon="location_on">location_on</span>
+</div>
+<div>
+<span class="block font-label-bold text-xs text-on-surface-variant uppercase tracking-wider">Venue</span>
+<span class="font-body-lg font-bold text-charcoal-text">Main Plaza Pool</span>
+</div>
+</div>
+<div class="flex items-start gap-4">
+<div class="w-10 h-10 rounded-full bg-primary/10 flex items-center justify-center shrink-0">
+<span class="material-symbols-outlined text-primary text-xl" data-icon="schedule">schedule</span>
+</div>
+<div>
+<span class="block font-label-bold text-xs text-on-surface-variant uppercase tracking-wider">Schedule</span>
+<span class="font-body-lg font-bold text-charcoal-text">Oct 24, 2024</span>
+<span class="block text-sm text-on-surface-variant mt-0.5">8:00 PM - 8:45 PM</span>
+</div>
+</div>
+</div>
+</div>
+</div>
+<!-- Timeline Component -->
+<div class="bg-surface-container-lowest rounded-lg p-8 underwater-shadow border border-outline-variant/30">
+<h4 class="font-headline-md text-charcoal-text mb-10">Booking Journey</h4>
+<div class="relative flex flex-col md:flex-row justify-between items-start md:items-center gap-8 md:gap-4">
+<!-- Horizontal Progress Line (Desktop) -->
+<div class="hidden md:block absolute top-6 left-[10%] right-[10%] h-0.5 bg-surface-container-highest z-0"></div>
+<!-- Timeline Steps -->
+<div class="flex md:flex-col items-center gap-4 z-10 w-full md:w-1/4">
+<div class="w-12 h-12 rounded-full bg-primary flex items-center justify-center text-white shrink-0 border-4 border-surface-container-lowest">
+<span class="material-symbols-outlined text-xl" data-icon="check">check</span>
+</div>
+<div class="md:text-center">
+<span class="block font-label-bold text-charcoal-text text-sm">Booking Created</span>
+<span class="text-[11px] text-on-surface-variant">Oct 20, 10:30 AM</span>
+</div>
+</div>
+<div class="flex md:flex-col items-center gap-4 z-10 w-full md:w-1/4">
+<div class="w-12 h-12 rounded-full bg-primary flex items-center justify-center text-white shrink-0 border-4 border-surface-container-lowest">
+<span class="material-symbols-outlined text-xl" data-icon="check">check</span>
+</div>
+<div class="md:text-center">
+<span class="block font-label-bold text-charcoal-text text-sm">Waiting for Payment</span>
+<span class="text-[11px] text-on-surface-variant">Oct 20, 10:32 AM</span>
+</div>
+</div>
+<div class="flex md:flex-col items-center gap-4 z-10 w-full md:w-1/4">
+<div class="w-12 h-12 rounded-full bg-primary flex items-center justify-center text-white shrink-0 border-4 border-surface-container-lowest shadow-lg shadow-primary/20">
+<span class="material-symbols-outlined text-xl" data-icon="payments">payments</span>
+</div>
+<div class="md:text-center">
+<span class="block font-label-bold text-charcoal-text text-sm">Payment Completed</span>
+<span class="text-[11px] text-on-surface-variant">Oct 20, 10:35 AM</span>
+</div>
+</div>
+<div class="flex md:flex-col items-center gap-4 z-10 w-full md:w-1/4">
+<div class="w-12 h-12 rounded-full bg-primary-container flex items-center justify-center text-on-primary-container shrink-0 border-4 border-surface-container-lowest">
+<span class="material-symbols-outlined text-xl" data-icon="qr_code_2">qr_code_2</span>
+</div>
+<div class="md:text-center">
+<span class="block font-label-bold text-charcoal-text text-sm">Ticket Ready</span>
+<span class="text-[11px] text-on-surface-variant">Available Now</span>
+</div>
+</div>
+</div>
+</div>
+</div>
+<!-- Right Column (Sidebar) -->
+<div class="lg:col-span-4 space-y-6 lg:sticky lg:top-24">
+<!-- Order Summary Card -->
+<div class="bg-surface-container-lowest rounded-lg p-6 underwater-shadow border border-outline-variant/30">
+<h4 class="font-headline-md text-charcoal-text mb-6">Order Summary</h4>
+<div class="space-y-4">
+<div class="flex justify-between items-center">
+<span class="font-body-md text-on-surface-variant">4x Adult Tickets</span>
+<span class="font-body-md font-bold text-charcoal-text">$156.00</span>
+</div>
+<div class="flex justify-between items-center text-sm">
+<span class="text-on-surface-variant">Subtotal</span>
+<span class="text-charcoal-text">$156.00</span>
+</div>
+<div class="flex justify-between items-center text-sm">
+<span class="text-on-surface-variant">Processing Fee</span>
+<span class="text-primary font-bold">FREE</span>
+</div>
+<div class="pt-6 border-t border-surface-variant/30 mt-6">
+<div class="flex justify-between items-end">
+<span class="font-label-bold text-on-surface-variant uppercase text-xs tracking-wider">Total Paid</span>
+<span class="font-headline-md text-primary">$156.00</span>
+</div>
+</div>
+</div>
+</div>
+<!-- Payment Info Card -->
+<div class="bg-surface-container-lowest rounded-lg p-6 underwater-shadow border border-outline-variant/30">
+<h4 class="font-label-bold text-on-surface-variant uppercase tracking-widest text-[11px] mb-4">Payment Information</h4>
+<div class="space-y-4">
+<div class="flex items-center justify-between">
+<span class="text-xs text-on-surface-variant">Method</span>
+<span class="font-bold text-xs text-charcoal-text">Credit / Debit Card</span>
+</div>
+<div class="flex items-center justify-between">
+<span class="text-xs text-on-surface-variant">Gateway</span>
+<span class="bg-surface-container-high px-2.5 py-0.5 rounded text-[10px] font-bold text-on-surface uppercase tracking-tight">PayOS</span>
+</div>
+<div class="flex items-center justify-between pt-2 border-t border-dashed border-surface-variant">
+<span class="text-xs text-on-surface-variant">Transaction ID</span>
+<span class="text-xs font-mono text-on-surface-variant">TRX-771290-ASMS</span>
+</div>
+</div>
+</div>
+<!-- Sidebar Actions -->
+<div class="flex flex-col gap-3">
+<button class="w-full bg-primary text-white font-button py-4 rounded-full shadow-lg shadow-primary/20 hover:bg-deep-aqua transition-all active:scale-[0.98] flex items-center justify-center gap-2">
+<span class="material-symbols-outlined text-xl" data-icon="arrow_back">arrow_back</span>
+                            Back to My Bookings
+                        </button>
+<button class="w-full bg-white text-primary border-2 border-primary/20 font-button py-4 rounded-full hover:bg-primary/5 hover:border-primary transition-all active:scale-[0.98] flex items-center justify-center gap-2">
+<span class="material-symbols-outlined text-xl" data-icon="explore">explore</span>
+                            Explore More Shows
+                        </button>
+</div>
+</div>
+</div>
+</div>
+</main>
+<!-- Footer Component -->
+<footer class="bg-surface-container-low">
+  <div class="max-w-[1280px] mx-auto px-margin-desktop py-12 flex flex-col items-center gap-8">
+    <div class="flex flex-col items-center gap-4">
+      <span class="font-headline-md text-headline-md font-bold text-primary">AquaPulse</span>
+      <p class="font-body-md text-body-md text-on-surface-variant">© 2024 AquaPulse. Making every splash count.</p>
+    </div>
+    <nav class="flex flex-wrap justify-center gap-x-8 gap-y-2">
+      <a href="#" class="font-body-md text-body-md text-on-surface-variant hover:text-primary transition-colors">Terms of Service</a>
+      <a href="#" class="font-body-md text-body-md text-on-surface-variant hover:text-primary transition-colors">Privacy Policy</a>
+      <a href="#" class="font-body-md text-body-md text-on-surface-variant hover:text-primary transition-colors">Park Rules</a>
+      <a href="#" class="font-body-md text-body-md text-on-surface-variant hover:text-primary transition-colors">Contact Us</a>
+    </nav>
+  </div>
+</footer>
+<script>
+        // Simple state management simulation (preserved)
+        function toggleView(view) {
+            const booking = document.getElementById('booking-container');
+            const skeleton = document.getElementById('skeleton-container');
+            const error = document.getElementById('error-container');
+
+            if(booking) booking.classList.add('hidden');
+            if(skeleton) skeleton.classList.add('hidden');
+            if(error) error.classList.add('hidden');
+
+            if(view === 'booking' && booking) {
+                booking.classList.remove('hidden');
+            } else if(view === 'skeleton' && skeleton) {
+                skeleton.classList.remove('hidden');
+            } else if(view === 'error' && error) {
+                error.classList.remove('hidden');
+            }
+        }
+    </script>
+
+
+</body></html>

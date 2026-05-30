@@ -1,0 +1,329 @@
+<!DOCTYPE html><html class="light" lang="en"><svg class="inline-defs-container" aria-hidden="true" style="position:absolute;width:0;height:0;overflow:hidden"></svg><head>
+<meta charset="utf-8">
+<meta content="width=device-width, initial-scale=1.0" name="viewport">
+<title>Edit Profile | AquaPulse ASMS</title>
+<script src="https://cdn.tailwindcss.com?plugins=forms,container-queries"></script>
+<link href="https://fonts.googleapis.com/css2?family=Plus+Jakarta+Sans:ital,wght@0,200..800;1,200..800&amp;display=swap" rel="stylesheet">
+<link href="https://fonts.googleapis.com/css2?family=Material+Symbols+Outlined:wght,FILL@100..700,0..1&amp;display=swap" rel="stylesheet">
+<style>
+        body {
+            font-family: 'Plus Jakarta Sans', sans-serif;
+            background: radial-gradient(circle at top right, #f7f9fb 0%, #AFEEEE 100%);
+            min-height: 100vh;
+        }
+        .glass-nav {
+            backdrop-filter: blur(12px);
+            -webkit-backdrop-filter: blur(12px);
+        }
+        .wave-bg {
+            position: absolute;
+            width: 100%;
+            height: 100%;
+            top: 0;
+            left: 0;
+            z-index: -1;
+            overflow: hidden;
+        }
+        .bubble {
+            position: absolute;
+            background: rgba(0, 206, 209, 0.1);
+            border-radius: 50%;
+            animation: float 20s infinite ease-in-out;
+        }
+        @keyframes float {
+            0%, 100% { transform: translateY(0) translateX(0); }
+            50% { transform: translateY(-40px) translateX(20px); }
+        }
+    </style>
+<script id="tailwind-config">
+        tailwind.config = {
+            darkMode: "class",
+            theme: {
+                extend: {
+                    "colors": {
+                        "electric-cyan": "#00FFFF",
+                        "on-surface-variant": "#3b4949",
+                        "on-tertiary": "#ffffff",
+                        "on-secondary": "#ffffff",
+                        "on-secondary-container": "#6e5c00",
+                        "secondary": "#705d00",
+                        "on-background": "#191c1e",
+                        "secondary-container": "#fcd400",
+                        "on-primary-fixed-variant": "#004f51",
+                        "surface-container-low": "#f2f4f6",
+                        "outline-variant": "#bac9c9",
+                        "on-primary-fixed": "#002020",
+                        "outline": "#6b7a7a",
+                        "on-tertiary-fixed": "#380c00",
+                        "surface-variant": "#e0e3e5",
+                        "vin-orange": "#FF6900",
+                        "secondary-fixed-dim": "#e9c400",
+                        "inverse-surface": "#2d3133",
+                        "surface-container-highest": "#e0e3e5",
+                        "on-error": "#ffffff",
+                        "on-error-container": "#93000a",
+                        "surface-bright": "#f7f9fb",
+                        "soft-turquoise": "#AFEEEE",
+                        "primary-container": "#00ced1",
+                        "tertiary-container": "#ffa282",
+                        "primary": "#00696b",
+                        "surface-tint": "#00696b",
+                        "error-container": "#ffdad6",
+                        "primary-fixed": "#5af8fb",
+                        "background": "#f7f9fb",
+                        "on-secondary-fixed-variant": "#544600",
+                        "on-tertiary-fixed-variant": "#822800",
+                        "error": "#ba1a1a",
+                        "inverse-primary": "#2ddbde",
+                        "surface-dim": "#d8dadc",
+                        "on-tertiary-container": "#872a00",
+                        "deep-aqua": "#008B8B",
+                        "tertiary-fixed": "#ffdbcf",
+                        "on-surface": "#191c1e",
+                        "on-secondary-fixed": "#221b00",
+                        "on-primary-container": "#005354",
+                        "surface-container-high": "#e6e8ea",
+                        "secondary-fixed": "#ffe16d",
+                        "surface-container-lowest": "#ffffff",
+                        "on-primary": "#ffffff",
+                        "surface-container": "#eceef0",
+                        "surface": "#f7f9fb",
+                        "charcoal-text": "#1E293B",
+                        "tertiary": "#a43c12",
+                        "tertiary-fixed-dim": "#ffb59c",
+                        "primary-fixed-dim": "#2ddbde",
+                        "inverse-on-surface": "#eff1f3"
+                    },
+                    "borderRadius": {
+                        "DEFAULT": "1rem",
+                        "lg": "2rem",
+                        "xl": "3rem",
+                        "full": "9999px"
+                    },
+                    "spacing": {
+                        "base": "8px",
+                        "gutter": "24px",
+                        "margin-desktop": "40px",
+                        "container-max": "1280px",
+                        "margin-mobile": "16px"
+                    },
+                    "fontFamily": {
+                        "headline-lg": ["Plus Jakarta Sans"],
+                        "display-lg": ["Plus Jakarta Sans"],
+                        "headline-md": ["Plus Jakarta Sans"],
+                        "display-lg-mobile": ["Plus Jakarta Sans"],
+                        "label-bold": ["Plus Jakarta Sans"],
+                        "body-md": ["Plus Jakarta Sans"],
+                        "body-lg": ["Plus Jakarta Sans"],
+                        "button": ["Plus Jakarta Sans"]
+                    },
+                    "fontSize": {
+                        "headline-lg": ["32px", {"lineHeight": "40px", "fontWeight": "700"}],
+                        "display-lg": ["48px", {"lineHeight": "56px", "letterSpacing": "-0.02em", "fontWeight": "800"}],
+                        "headline-md": ["24px", {"lineHeight": "32px", "fontWeight": "700"}],
+                        "display-lg-mobile": ["32px", {"lineHeight": "40px", "letterSpacing": "-0.02em", "fontWeight": "800"}],
+                        "label-bold": ["14px", {"lineHeight": "20px", "fontWeight": "700"}],
+                        "body-md": ["16px", {"lineHeight": "24px", "fontWeight": "400"}],
+                        "body-lg": ["18px", {"lineHeight": "28px", "fontWeight": "400"}],
+                        "button": ["16px", {"lineHeight": "20px", "fontWeight": "600"}]
+                    }
+                },
+            },
+        }
+    </script>
+</head>
+<body class="bg-background text-on-surface">
+<!-- Atmospheric Decorations -->
+<div class="wave-bg">
+<div class="bubble w-32 h-32 top-20 left-[10%]" style="animation-delay: 0s;"></div>
+<div class="bubble w-48 h-48 top-60 right-[5%]" style="animation-delay: 2s;"></div>
+<div class="bubble w-16 h-16 bottom-20 left-[20%]" style="animation-delay: 4s;"></div>
+<svg class="absolute bottom-0 w-full opacity-20" fill="none" viewBox="0 0 1440 320" xmlns="http://www.w3.org/2000/svg">
+<path d="M0,160L48,176C96,192,192,224,288,224C384,224,480,192,576,165.3C672,139,768,117,864,128C960,139,1056,181,1152,192C1248,203,1344,181,1392,170.7L1440,160L1440,320L1392,320C1344,320,1248,320,1152,320C1056,320,960,320,864,320C768,320,672,320,576,320C480,320,384,320,288,320C192,320,96,320,48,320L0,320Z" fill="url(#wave-gradient)"></path>
+<defs>
+<linearGradient id="wave-gradient" x1="0%" x2="100%" y1="0%" y2="0%">
+<stop offset="0%" style="stop-color:#00ced1;stop-opacity:1"></stop>
+<stop offset="100%" style="stop-color:#00696b;stop-opacity:1"></stop>
+</linearGradient>
+</defs>
+</svg>
+</div>
+<!-- Top Navigation Shell -->
+<header class="sticky top-0 w-full z-50 bg-surface/80 backdrop-blur-md shadow-sm">
+<nav class="flex justify-between items-center h-20 px-margin-desktop max-w-container-max mx-auto">
+<div class="flex items-center gap-2">
+<span class="material-symbols-outlined text-primary text-3xl" style="font-variation-settings: 'FILL' 1;">waves</span>
+<span class="font-display-lg text-headline-md text-primary tracking-tight">AquaPulse</span>
+</div>
+<div class="hidden md:flex items-center gap-8">
+<a class="font-button text-button text-on-surface-variant hover:text-primary transition-colors" href="#">Home</a>
+<a class="font-button text-button text-on-surface-variant hover:text-primary transition-colors" href="#">Shows</a>
+<a class="font-button text-button text-on-surface-variant hover:text-primary transition-colors" href="#">Schedules</a>
+<a class="font-button text-button text-primary border-b-2 border-primary pb-1" href="#">My Bookings</a>
+</div>
+<div class="flex items-center gap-4">
+<button class="material-symbols-outlined text-on-surface-variant p-2 hover:bg-primary/10 rounded-full transition-colors">notifications</button>
+<img alt="User Profile" class="w-10 h-10 rounded-full border-2 border-primary-fixed shadow-sm" src="https://lh3.googleusercontent.com/aida-public/AB6AXuC09SGIPi42LGge-3cHwvHhGpn7fCu5sBTQnDV3eikDxZk5XZU2q0cYINIGLzHxGqPZlK8_1Wuo8-o3F-tom2RNiCUCVg8_PLHwWvvQQu7v7Kxi0B70Cl3fTC3uSmj2szeQy7S7UTGVXnOVc8y2uJ94dnkis7PMpaJY4PqOhLjkMUhvRyeqanY38drBDJPp23W3B_ZpaerKqqMDeppZrQ-OyHy_9TuJgl35XTiMjGm5_2b8Bv5Y9HD3zUxVlTIa2U9FPi-NdVZDgA">
+</div>
+</nav>
+</header>
+<main class="pt-32 pb-20 px-margin-mobile md:px-margin-desktop max-w-[1280px] mx-auto relative z-10">
+<!-- Edit Profile Form Container -->
+<div class="bg-surface-container-lowest rounded-xl shadow-[0px_20px_48px_rgba(0,0,0,0.05)] overflow-hidden border border-white">
+<!-- Internal Header - Standardized Aqua Gradient -->
+<div class="bg-gradient-to-r from-primary-container via-primary to-deep-aqua p-8 md:p-10 flex flex-col md:flex-row md:items-center justify-between gap-4">
+<div>
+<div class="flex items-center gap-3 mb-2">
+<h1 class="font-headline-lg text-headline-lg text-on-primary">Edit Profile</h1>
+<span class="bg-electric-cyan/20 text-electric-cyan px-3 py-1 rounded-full text-[10px] font-bold uppercase tracking-widest flex items-center gap-1 border border-electric-cyan/30">
+<span class="material-symbols-outlined text-[14px]" style="font-variation-settings: &quot;FILL&quot; 1;">verified</span>
+                            Active Account
+                        </span>
+</div>
+<p class="font-body-md text-body-md text-on-primary/80">Update your personal information for your AquaShow account.</p>
+</div>
+<div class="flex -space-x-2">
+<div class="w-10 h-10 rounded-full border-2 border-white/20 bg-white/10 flex items-center justify-center text-on-primary backdrop-blur-sm">
+<span class="material-symbols-outlined text-sm">settings</span>
+</div>
+<div class="w-10 h-10 rounded-full border-2 border-white/20 bg-white/10 flex items-center justify-center text-on-primary backdrop-blur-sm">
+<span class="material-symbols-outlined text-sm">shield</span>
+</div>
+</div>
+</div>
+<div class="p-8 md:p-12">
+<form class="space-y-12" onsubmit="event.preventDefault();">
+<!-- Avatar Section - Unified Style -->
+<div class="flex flex-col md:flex-row items-center gap-8 pb-10 border-b border-surface-container/50">
+<div class="relative group">
+<div class="w-32 h-32 rounded-full overflow-hidden border-4 border-primary-container shadow-xl ring-4 ring-white">
+<img alt="Profile Picture" class="w-full h-full object-cover bg-surface-container-high" id="avatar-preview" src="https://lh3.googleusercontent.com/aida-public/AB6AXuCAs3NVAK7aoUYuYTZX3AmIWjo37TVxp8y6qJgQ9aCIxerTaTrUNtCZg6IkvjGYTrm8NkWAmMk9EYSAS0zHX-Ybuchms5PmzM8GSFwWEwlI4Yo9RrGTNwDjP0uBNcrI0GEVscCdtCQdMPXEMe6JZqLjxpYxC0m-dniRVU5w8F3YNuK1ONb9aqNtSQ8JjTFMnaKVdluoElQViAQ2wGLue9tKyOx3JFBWEQNJawzk2cibhFjqAkAmwOrkKMOymHdXyYfPgbQ1y6XgQQ">
+</div>
+<button class="absolute bottom-1 right-1 bg-primary text-on-primary p-2 rounded-full shadow-lg hover:scale-110 transition-transform flex items-center justify-center border-2 border-white" type="button">
+<span class="material-symbols-outlined text-sm">photo_camera</span>
+</button>
+</div>
+<div class="text-center md:text-left">
+<button class="px-6 py-2.5 bg-primary-container text-on-primary-container rounded-full font-button text-button hover:bg-primary-container/80 transition-colors mb-3 shadow-sm" type="button">Change Photo</button>
+<p class="font-body-md text-body-md text-on-surface-variant/70">JPG, GIF or PNG. Max size of 800K</p>
+</div>
+</div>
+<!-- Grid Layout for Inputs - Standardized Styling -->
+<div class="grid grid-cols-1 md:grid-cols-2 gap-x-gutter gap-y-10">
+<!-- First Name -->
+<div class="space-y-3">
+<label class="font-label-bold text-[13px] uppercase tracking-wider text-on-surface-variant flex items-center gap-2 ml-1">
+<span class="material-symbols-outlined text-primary text-[18px]">person</span>
+                                First and Middle Name
+                            </label>
+<input class="w-full bg-surface-container-low border-0 rounded-2xl px-6 py-4.5 focus:ring-2 focus:ring-primary/20 focus:bg-white text-body-md placeholder-on-surface-variant/30 transition-all shadow-sm" placeholder="Enter names" type="text" value="Marina Blue">
+</div>
+<!-- Last Name -->
+<div class="space-y-3">
+<label class="font-label-bold text-[13px] uppercase tracking-wider text-on-surface-variant flex items-center gap-2 ml-1">
+<span class="material-symbols-outlined text-primary text-[18px]">badge</span>
+                                Last Name
+                            </label>
+<input class="w-full bg-surface-container-low border-0 rounded-2xl px-6 py-4.5 focus:ring-2 focus:ring-primary/20 focus:bg-white text-body-md transition-all shadow-sm" placeholder="Enter last name" type="text" value="Waters">
+</div>
+<!-- Gender -->
+<div class="space-y-3">
+<label class="font-label-bold text-[13px] uppercase tracking-wider text-on-surface-variant flex items-center gap-2 ml-1">
+<span class="material-symbols-outlined text-primary text-[18px]">diversity_3</span>
+                                Gender
+                            </label>
+<div class="relative">
+<select class="w-full bg-surface-container-low border-0 rounded-2xl px-6 py-4.5 focus:ring-2 focus:ring-primary/20 focus:bg-white text-body-md transition-all appearance-none cursor-pointer shadow-sm">
+<option selected="" value="female">Female</option>
+<option value="male">Male</option>
+<option value="other">Other</option>
+</select>
+<span class="material-symbols-outlined absolute right-6 top-1/2 -translate-y-1/2 pointer-events-none text-on-surface-variant/50">expand_more</span>
+</div>
+</div>
+<!-- Phone -->
+<div class="space-y-3">
+<label class="font-label-bold text-[13px] uppercase tracking-wider text-on-surface-variant flex items-center gap-2 ml-1">
+<span class="material-symbols-outlined text-primary text-[18px]">call</span>
+                                Phone Number
+                            </label>
+<input class="w-full bg-surface-container-low border-0 rounded-2xl px-6 py-4.5 focus:ring-2 focus:ring-primary/20 focus:bg-white text-body-md transition-all shadow-sm" placeholder="+1 (000) 000-0000" type="tel" value="+1 (555) 000-0000">
+</div>
+<!-- Email (Disabled) -->
+<div class="space-y-3 md:col-span-2">
+<label class="font-label-bold text-[13px] uppercase tracking-wider text-on-surface-variant flex items-center gap-2 ml-1">
+<span class="material-symbols-outlined text-on-surface-variant/60 text-[18px]">lock</span>
+                                Email Address
+                            </label>
+<div class="relative">
+<input class="w-full bg-surface-container-high/50 border border-outline-variant/30 rounded-2xl px-6 py-4.5 text-on-surface-variant/60 cursor-not-allowed text-body-md shadow-inner" disabled="" type="email" value="marina.waters@aquapulse.com">
+<span class="absolute right-6 top-1/2 -translate-y-1/2 text-[10px] font-bold uppercase tracking-widest text-on-surface-variant/40 bg-surface-variant/50 px-2 py-1 rounded">ReadOnly</span>
+</div>
+<p class="text-[12px] text-on-surface-variant/60 ml-4 italic">Email cannot be changed from this page. Contact support for assistance.</p>
+</div>
+<!-- Address -->
+<div class="space-y-3 md:col-span-2">
+<label class="font-label-bold text-[13px] uppercase tracking-wider text-on-surface-variant flex items-center gap-2 ml-1">
+<span class="material-symbols-outlined text-primary text-[18px]">location_on</span>
+                                Residential Address
+                            </label>
+<textarea class="w-full bg-surface-container-low border-0 rounded-2xl px-6 py-5 focus:ring-2 focus:ring-primary/20 focus:bg-white text-body-md transition-all resize-none shadow-sm" placeholder="123 Coral Reef Drive, Atlantis City..." rows="3">789 Ocean Breeze Boulevard, Wave City, Aqua District 10101</textarea>
+</div>
+</div>
+<!-- Action Buttons - Standardized Rounded-Full -->
+<div class="flex flex-col md:flex-row items-center justify-between gap-6 pt-12 border-t border-surface-container/50">
+<button class="font-button text-button text-on-surface-variant/60 hover:text-error transition-colors px-4 py-2 order-3 md:order-1" type="button">
+                            Discard Changes
+                        </button>
+<div class="flex flex-col sm:flex-row gap-4 w-full md:w-auto order-1 md:order-2">
+<button class="px-10 py-4 rounded-full border-2 border-outline-variant text-on-surface-variant font-button text-button hover:bg-surface-container-low transition-all active:scale-95 text-center shadow-sm" type="button">
+                                Cancel
+                            </button>
+<button class="px-12 py-4 rounded-full bg-gradient-to-r from-primary to-deep-aqua text-on-primary font-button text-button shadow-[0px_12px_24px_rgba(0,105,107,0.2)] hover:shadow-[0px_16px_32px_rgba(0,105,107,0.3)] transition-all active:scale-95 text-center" type="submit">
+                                Save Changes
+                            </button>
+</div>
+</div>
+</form>
+</div>
+</div>
+</main>
+<!-- Footer Shell - Standardized MainLayout Footer -->
+<footer class="bg-surface-container-low mt-20">
+<div class="max-w-[1280px] mx-auto px-margin-desktop py-12 flex flex-col items-center gap-8">
+<div class="flex items-center gap-2">
+<span class="material-symbols-outlined text-primary text-3xl" style="font-variation-settings: 'FILL' 1;">waves</span>
+<span class="font-headline-md text-headline-md font-bold text-primary">AquaPulse</span>
+</div>
+<div class="flex flex-wrap justify-center gap-x-12 gap-y-4">
+<a class="font-body-md text-body-md text-on-surface-variant hover:text-primary transition-colors" href="#">Terms of Service</a>
+<a class="font-body-md text-body-md text-on-surface-variant hover:text-primary transition-colors" href="#">Privacy Policy</a>
+<a class="font-body-md text-body-md text-on-surface-variant hover:text-primary transition-colors" href="#">Park Rules</a>
+<a class="font-body-md text-body-md text-on-surface-variant hover:text-primary transition-colors" href="#">Contact Us</a>
+</div>
+<p class="font-body-md text-body-md text-on-surface-variant/60 text-center"> 2024 AquaPulse. Making every splash count.</p>
+</div>
+</footer>
+<script>
+        // Micro-interaction for form focus
+        document.querySelectorAll('input, select, textarea').forEach(element => {
+            element.addEventListener('focus', () => {
+                element.parentElement.querySelector('label')?.classList.add('text-primary');
+                element.parentElement.querySelector('label')?.classList.remove('text-on-surface-variant');
+            });
+            element.addEventListener('blur', () => {
+                element.parentElement.querySelector('label')?.classList.remove('text-primary');
+                element.parentElement.querySelector('label')?.classList.add('text-on-surface-variant');
+            });
+        });
+
+        // Simple button active effect
+        document.querySelectorAll('button').forEach(btn => {
+            btn.addEventListener('mousedown', () => btn.classList.add('scale-95'));
+            btn.addEventListener('mouseup', () => btn.classList.remove('scale-95'));
+            btn.addEventListener('mouseleave', () => btn.classList.remove('scale-95'));
+        });
+    </script>
+
+
+</body></html>
