@@ -75,9 +75,10 @@ function NavLinks({ onNavigate }) {
 function LoggedOutActions() {
   return (
     <Link
-      className="rounded-full border border-cyan-200 px-4 py-2 text-sm font-semibold text-cyan-800 transition hover:border-cyan-500 hover:bg-cyan-50"
+      className="flex items-center gap-2 rounded-full border border-cyan-200 px-4 py-2 text-sm font-semibold text-cyan-800 transition hover:border-cyan-500 hover:bg-cyan-50"
       to="/login"
     >
+      <span className="material-symbols-outlined text-base">login</span>
       Sign In
     </Link>
   );
@@ -254,7 +255,12 @@ export default function Navbar() {
                 </>
               ) : !loading ? (
                 <div>
-                  <Link className="rounded-full border border-cyan-100 px-4 py-2 text-center text-sm font-semibold text-slate-700" to="/login" onClick={closeMobileMenu}>
+                  <Link
+                    className="flex items-center justify-center gap-2 rounded-full border border-cyan-100 px-4 py-2 text-center text-sm font-semibold text-slate-700 transition hover:border-cyan-500 hover:bg-cyan-50"
+                    to="/login"
+                    onClick={closeMobileMenu}
+                  >
+                    <span className="material-symbols-outlined text-base">login</span>
                     Sign In
                   </Link>
                 </div>

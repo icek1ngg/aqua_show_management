@@ -184,6 +184,8 @@ export default function RegisterPage() {
   const [fieldErrors, setFieldErrors] = useState({});
   const [phone, setPhone] = useState('');
   const [isSubmitting, setIsSubmitting] = useState(false);
+  const [showPassword, setShowPassword] = useState(false);
+  const [showConfirmPassword, setShowConfirmPassword] = useState(false);
 
   const clearFieldError = (fieldName) => {
     setErrorMessage('');
@@ -250,8 +252,7 @@ export default function RegisterPage() {
         phoneNumber: phone,
         password,
       });
-      setSuccessMessage('Account created successfully. Redirecting to login...');
-      window.setTimeout(() => navigate('/login'), 900);
+      setSuccessMessage('Registration successful. Please check your email to verify your account.');
     } catch (error) {
       setErrorMessage(error.message);
     } finally {
@@ -310,7 +311,24 @@ export default function RegisterPage() {
               <p className="mt-2 text-sm text-slate-600">Enter your details to create an AquaPulse account.</p>
             </header>
 
-            <form className="space-y-6" onSubmit={handleSubmit}>
+            {successMessage ? (
+              <div className="space-y-6 text-center py-4">
+                <div className="rounded-2xl border border-emerald-100 bg-emerald-50/90 p-8 text-sm font-semibold text-emerald-800 shadow-sm backdrop-blur" role="status">
+                  <p className="text-lg font-bold mb-4 text-emerald-950">{successMessage}</p>
+                  <p className="text-slate-600 font-normal mb-8 leading-relaxed">
+                    We've sent a verification link to your email. Click the link to activate your AquaPulse account and sign in.
+                  </p>
+                  <Link
+                    to="/login"
+                    className="inline-flex w-full items-center justify-center gap-2 rounded-full bg-gradient-to-r from-[#ff6900] to-[#c2410c] py-4 font-bold text-white shadow-lg shadow-orange-700/20 transition duration-300 hover:-translate-y-0.5"
+                  >
+                    Go to Sign In
+                    <span className="material-symbols-outlined text-sm">login</span>
+                  </Link>
+                </div>
+              </div>
+            ) : (
+              <form className="space-y-6" onSubmit={handleSubmit}>
               <div className="space-y-2">
                 <label className="ml-1 block text-sm font-bold text-slate-600" htmlFor="register-name">
                   Full Name
@@ -388,14 +406,24 @@ export default function RegisterPage() {
                       lock
                     </span>
                     <input
-                      className="w-full rounded-full border border-transparent bg-cyan-50/70 py-4 pl-12 pr-4 text-slate-900 outline-none transition focus:border-cyan-500 focus:bg-white focus:ring-2 focus:ring-cyan-200"
+                      className="w-full rounded-full border border-transparent bg-cyan-50/70 py-4 pl-12 pr-12 text-slate-900 outline-none transition focus:border-cyan-500 focus:bg-white focus:ring-2 focus:ring-cyan-200"
                       id="register-password"
                       name="password"
                       placeholder="••••••••"
                       required
-                      type="password"
+                      type={showPassword ? 'text' : 'password'}
                       onChange={() => clearFieldError('password')}
                     />
+                    <button
+                      className="absolute right-4 top-1/2 -translate-y-1/2 text-slate-400 transition hover:text-slate-700"
+                      type="button"
+                      onClick={() => setShowPassword((prev) => !prev)}
+                      aria-label={showPassword ? 'Hide password' : 'Show password'}
+                    >
+                      <span className="material-symbols-outlined">
+                        {showPassword ? 'visibility_off' : 'visibility'}
+                      </span>
+                    </button>
                   </div>
                   <FieldError>{fieldErrors.password}</FieldError>
                 </div>
@@ -409,14 +437,24 @@ export default function RegisterPage() {
                       verified_user
                     </span>
                     <input
-                      className="w-full rounded-full border border-transparent bg-cyan-50/70 py-4 pl-12 pr-4 text-slate-900 outline-none transition focus:border-cyan-500 focus:bg-white focus:ring-2 focus:ring-cyan-200"
+                      className="w-full rounded-full border border-transparent bg-cyan-50/70 py-4 pl-12 pr-12 text-slate-900 outline-none transition focus:border-cyan-500 focus:bg-white focus:ring-2 focus:ring-cyan-200"
                       id="register-confirm-password"
                       name="confirmPassword"
                       placeholder="••••••••"
                       required
-                      type="password"
+                      type={showConfirmPassword ? 'text' : 'password'}
                       onChange={() => clearFieldError('confirmPassword')}
                     />
+                    <button
+                      className="absolute right-4 top-1/2 -translate-y-1/2 text-slate-400 transition hover:text-slate-700"
+                      type="button"
+                      onClick={() => setShowConfirmPassword((prev) => !prev)}
+                      aria-label={showConfirmPassword ? 'Hide confirm password' : 'Show confirm password'}
+                    >
+                      <span className="material-symbols-outlined">
+                        {showConfirmPassword ? 'visibility_off' : 'visibility'}
+                      </span>
+                    </button>
                   </div>
                   <FieldError>{fieldErrors.confirmPassword}</FieldError>
                 </div>
@@ -476,6 +514,7 @@ export default function RegisterPage() {
                 <span className="material-symbols-outlined">arrow_forward</span>
               </button>
             </form>
+            )}
 
             <p className="mt-10 text-center text-sm text-slate-600">
               Already have an account?

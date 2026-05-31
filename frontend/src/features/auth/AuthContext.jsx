@@ -209,6 +209,24 @@ export function AuthProvider({ children }) {
     }
   }, []);
 
+  const completeOAuthLogin = useCallback(async (accessToken, expiresIn) => {
+    try {
+      const expiresAt = getTokenExpiresAt(accessToken, null, expiresIn);
+      storeToken({ token: accessToken, rememberMe: false, expiresAt });
+      setToken(accessToken);
+
+      const currentUser = await authService.getCurrentUser();
+      const nextUser = getUserFromResponse(currentUser) || getResponseData(currentUser) || getUserFromToken(accessToken);
+      setUser(nextUser);
+      return nextUser;
+    } catch (error) {
+      clearStoredToken();
+      setToken(null);
+      setUser(null);
+      throw error;
+    }
+  }, []);
+
   const value = useMemo(
     () => ({
       user,
@@ -219,8 +237,9 @@ export function AuthProvider({ children }) {
       register,
       logout,
       refreshCurrentUser,
+      completeOAuthLogin,
     }),
-    [loading, login, logout, refreshCurrentUser, register, token, user],
+    [loading, login, logout, refreshCurrentUser, register, token, user, completeOAuthLogin],
   );
 
   return <AuthContext.Provider value={value}>{children}</AuthContext.Provider>;

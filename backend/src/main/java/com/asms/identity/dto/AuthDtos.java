@@ -100,4 +100,31 @@ public final class AuthDtos {
             String address
     ) {
     }
+
+    public record ResendVerificationRequest(
+            @NotBlank(message = "Email is required")
+            @Email(message = "Email format is invalid")
+            String email
+    ) {
+    }
+
+    public record ForgotPasswordRequest(
+            @NotBlank(message = "Email is required")
+            @Email(message = "Email format is invalid")
+            String email
+    ) {
+    }
+
+    public record ResetPasswordRequest(
+            @NotBlank(message = "Token is required")
+            String token,
+
+            @NotBlank(message = "Password is required")
+            @Size(min = 6, max = 100, message = "Password must be 6 to 100 characters")
+            String newPassword,
+
+            @NotBlank(message = "Confirm password is required")
+            String confirmPassword
+    ) {
+    }
 }

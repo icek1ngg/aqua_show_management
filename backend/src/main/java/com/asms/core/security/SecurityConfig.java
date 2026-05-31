@@ -1,10 +1,14 @@
 package com.asms.core.security;
 
 import com.asms.core.response.ApiResponse;
+import com.asms.identity.security.OAuth2AuthenticationSuccessHandler;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import jakarta.servlet.http.HttpServletResponse;
+import org.springframework.beans.factory.annotation.Value;
 import org.springframework.http.HttpMethod;
 import org.springframework.http.MediaType;
+import org.springframework.security.web.authentication.SimpleUrlAuthenticationFailureHandler;
+import org.springframework.web.util.UriComponentsBuilder;
 
 import java.util.List;
 
@@ -28,10 +32,19 @@ public class SecurityConfig {
 
     private final ObjectMapper objectMapper;
     private final JwtAuthenticationFilter jwtAuthenticationFilter;
+    private final OAuth2AuthenticationSuccessHandler oAuth2AuthenticationSuccessHandler;
+    private final String frontendBaseUrl;
 
-    public SecurityConfig(ObjectMapper objectMapper, JwtAuthenticationFilter jwtAuthenticationFilter) {
+    public SecurityConfig(
+            ObjectMapper objectMapper,
+            JwtAuthenticationFilter jwtAuthenticationFilter,
+            OAuth2AuthenticationSuccessHandler oAuth2AuthenticationSuccessHandler,
+            @Value("${asms.frontend.base-url}") String frontendBaseUrl
+    ) {
         this.objectMapper = objectMapper;
         this.jwtAuthenticationFilter = jwtAuthenticationFilter;
+        this.oAuth2AuthenticationSuccessHandler = oAuth2AuthenticationSuccessHandler;
+        this.frontendBaseUrl = frontendBaseUrl;
     }
 
     @Bean
@@ -39,7 +52,7 @@ public class SecurityConfig {
         return http
                 .csrf(AbstractHttpConfigurer::disable)
                 .cors(cors -> cors.configurationSource(corsConfigurationSource()))
-                .sessionManagement(session -> session.sessionCreationPolicy(SessionCreationPolicy.STATELESS))
+                .sessionManagement(session -> session.sessionCreationPolicy(SessionCreationPolicy.IF_REQUIRED))
                 .exceptionHandling(exceptionHandling -> exceptionHandling
                         .authenticationEntryPoint((request, response, exception) ->
                                 writeErrorResponse(response, HttpServletResponse.SC_UNAUTHORIZED, "Authentication required"))
@@ -48,9 +61,15 @@ public class SecurityConfig {
                 )
                 .authorizeHttpRequests(authorize -> authorize
                         .requestMatchers(HttpMethod.GET, "/api/health").permitAll()
-                        .requestMatchers(HttpMethod.POST, "/api/auth/register", "/api/auth/login").permitAll()
+                        .requestMatchers(HttpMethod.POST, "/api/auth/register", "/api/auth/login", "/api/auth/resend-verification", "/api/auth/forgot-password", "/api/auth/reset-password").permitAll()
+                        .requestMatchers(HttpMethod.GET, "/api/auth/verify-email").permitAll()
+                        .requestMatchers("/oauth2/**", "/login/oauth2/**").permitAll()
                         .requestMatchers("/error").permitAll()
                         .anyRequest().authenticated()
+                )
+                .oauth2Login(oauth2 -> oauth2
+                        .successHandler(oAuth2AuthenticationSuccessHandler)
+                        .failureHandler(new SimpleUrlAuthenticationFailureHandler(oAuth2FailureUrl()))
                 )
                 .addFilterBefore(jwtAuthenticationFilter, UsernamePasswordAuthenticationFilter.class)
                 .build();
@@ -77,5 +96,17 @@ public class SecurityConfig {
         response.setStatus(status);
         response.setContentType(MediaType.APPLICATION_JSON_VALUE);
         objectMapper.writeValue(response.getWriter(), ApiResponse.failure(message));
+    }
+
+    private String oAuth2FailureUrl() {
+        String baseUrl = frontendBaseUrl == null || frontendBaseUrl.isBlank()
+                ? "http://localhost:5173"
+                : frontendBaseUrl;
+        return UriComponentsBuilder
+                .fromUriString(baseUrl.endsWith("/") ? baseUrl.substring(0, baseUrl.length() - 1) : baseUrl)
+                .path("/login")
+                .queryParam("oauthError", "true")
+                .build()
+                .toUriString();
     }
 }

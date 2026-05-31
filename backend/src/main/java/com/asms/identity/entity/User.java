@@ -1,5 +1,6 @@
 package com.asms.identity.entity;
 
+import com.asms.identity.enums.AuthProvider;
 import com.asms.identity.enums.Gender;
 import com.asms.identity.enums.UserRole;
 import com.asms.identity.enums.UserStatus;
@@ -38,8 +39,15 @@ public class User implements UserDetails {
     @Column(length = 30)
     private String phoneNumber;
 
-    @Column(nullable = false)
+    @Column
     private String passwordHash;
+
+    @Column(name = "google_id", unique = true, length = 255)
+    private String googleId;
+
+    @Enumerated(EnumType.STRING)
+    @Column(name = "auth_provider", nullable = false, length = 30)
+    private AuthProvider authProvider;
 
     @Enumerated(EnumType.STRING)
     @Column(length = 20)
@@ -69,6 +77,7 @@ public class User implements UserDetails {
         this.email = email;
         this.phoneNumber = phoneNumber;
         this.passwordHash = passwordHash;
+        this.authProvider = AuthProvider.LOCAL;
         this.role = UserRole.USER;
         this.status = UserStatus.ACTIVE;
     }
@@ -83,6 +92,9 @@ public class User implements UserDetails {
         }
         if (status == null) {
             status = UserStatus.ACTIVE;
+        }
+        if (authProvider == null) {
+            authProvider = AuthProvider.LOCAL;
         }
         if (createdAt == null) {
             createdAt = Instant.now();
@@ -129,6 +141,26 @@ public class User implements UserDetails {
         return passwordHash;
     }
 
+    public void setPasswordHash(String passwordHash) {
+        this.passwordHash = passwordHash;
+    }
+
+    public String getGoogleId() {
+        return googleId;
+    }
+
+    public void setGoogleId(String googleId) {
+        this.googleId = googleId;
+    }
+
+    public AuthProvider getAuthProvider() {
+        return authProvider;
+    }
+
+    public void setAuthProvider(AuthProvider authProvider) {
+        this.authProvider = authProvider;
+    }
+
     public Gender getGender() {
         return gender;
     }
@@ -151,6 +183,10 @@ public class User implements UserDetails {
 
     public UserStatus getStatus() {
         return status;
+    }
+
+    public void setStatus(UserStatus status) {
+        this.status = status;
     }
 
     @Override
