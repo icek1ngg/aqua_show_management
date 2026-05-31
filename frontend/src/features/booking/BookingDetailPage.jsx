@@ -261,6 +261,13 @@ export default function BookingDetailPage() {
             Review your AquaPulse reservation, schedule, payment status, and booking information.
           </p>
         </div>
+
+        <svg className="absolute bottom-0 left-0 h-10 w-full text-cyan-50" preserveAspectRatio="none" viewBox="0 0 1200 120" aria-hidden="true">
+          <path
+            className="fill-current"
+            d="M321.39,56.44c58-10.79,114.16-30.13,172-41.86,82.39-16.72,168.19-17.73,250.45-.39C823.78,31,906.67,72,985.66,92.83c70.05,18.48,146.53,26.09,214.34,3V120H0V0C50.31,34.54,121.57,56.09,190.72,64.31,235.15,69.59,279,64.29,321.39,56.44Z"
+          />
+        </svg>
       </section>
 
       <section className="bg-gradient-to-b from-white via-cyan-50/40 to-white px-4 py-10 sm:px-6 lg:px-8 lg:py-16">
