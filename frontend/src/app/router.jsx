@@ -1,10 +1,12 @@
 import { createBrowserRouter } from 'react-router-dom';
 
 import App from './App.jsx';
+import ForgotPasswordPage from '../features/auth/ForgotPasswordPage.jsx';
 import LoginPage from '../features/auth/LoginPage.jsx';
 import OAuthSuccessPage from '../features/auth/OAuthSuccessPage.jsx';
 import ProtectedRoute from '../features/auth/ProtectedRoute.jsx';
 import RegisterPage from '../features/auth/RegisterPage.jsx';
+import ResetPasswordPage from '../features/auth/ResetPasswordPage.jsx';
 import BookingDetailPage from '../features/booking/BookingDetailPage.jsx';
 import BookingHistoryPage from '../features/booking/BookingHistoryPage.jsx';
 import BookingPendingPage from '../features/booking/BookingPendingPage.jsx';
@@ -30,6 +32,14 @@ export const router = createBrowserRouter([
       {
         path: 'register',
         element: <RegisterPage />,
+      },
+      {
+        path: 'forgot-password',
+        element: <ForgotPasswordPage />,
+      },
+      {
+        path: 'reset-password',
+        element: <ResetPasswordPage />,
       },
       {
         path: 'oauth2/success',

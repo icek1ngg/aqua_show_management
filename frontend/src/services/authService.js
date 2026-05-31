@@ -24,3 +24,13 @@ export async function resendVerification(email) {
   const response = await apiClient.post('/auth/resend-verification', { email });
   return response.data;
 }
+
+export async function forgotPassword(email) {
+  const response = await apiClient.post('/auth/forgot-password', { email });
+  return response.data;
+}
+
+export async function resetPassword({ token, newPassword, confirmPassword }) {
+  const response = await apiClient.post('/auth/reset-password', { token, newPassword, confirmPassword });
+  return response.data;
+}
