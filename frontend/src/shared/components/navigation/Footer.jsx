@@ -1,8 +1,44 @@
+import { Link } from 'react-router-dom';
+
 import Logo from './Logo.jsx';
 
-const quickLinks = ['Home', 'Shows', 'Schedules', 'My Bookings'];
-const supportLinks = ['Support Center', 'Contact Us', 'FAQs', 'Terms & Conditions'];
+const quickLinks = [
+  { label: 'Home', to: '/' },
+  // TODO: Replace with /shows when the Shows page exists.
+  { label: 'Shows', href: '#' },
+  // TODO: Replace with /schedules when the Schedules page exists.
+  { label: 'Schedules', href: '#' },
+  { label: 'My Bookings', to: '/bookings/my' },
+  { label: 'Book Tickets', to: '/bookings/create' },
+];
+const supportLinks = [
+  { label: 'Login', to: '/login' },
+  { label: 'Register', to: '/register' },
+  { label: 'Profile', to: '/profile' },
+  { label: 'Support Center', href: '#' },
+  { label: 'Contact Us', href: '#' },
+  { label: 'FAQs', href: '#' },
+  { label: 'Terms & Conditions', href: '#' },
+];
 const socialIcons = ['public', 'photo_camera', 'play_circle'];
+
+function FooterLink({ link }) {
+  const className = 'transition hover:text-cyan-200';
+
+  if (link.to) {
+    return (
+      <Link className={className} to={link.to}>
+        {link.label}
+      </Link>
+    );
+  }
+
+  return (
+    <a className={className} href={link.href}>
+      {link.label}
+    </a>
+  );
+}
 
 export default function Footer({ compact = false }) {
   return (
@@ -42,10 +78,8 @@ export default function Footer({ compact = false }) {
             <h2 className="mb-5 text-xs font-bold uppercase tracking-[0.24em] text-white">Quick Links</h2>
             <ul className="space-y-3 text-sm text-cyan-100/75">
               {quickLinks.map((link) => (
-                <li key={link}>
-                  <a className="transition hover:text-cyan-200" href="#">
-                    {link}
-                  </a>
+                <li key={link.label}>
+                  <FooterLink link={link} />
                 </li>
               ))}
             </ul>
@@ -55,10 +89,8 @@ export default function Footer({ compact = false }) {
             <h2 className="mb-5 text-xs font-bold uppercase tracking-[0.24em] text-white">Support</h2>
             <ul className="space-y-3 text-sm text-cyan-100/75">
               {supportLinks.map((link) => (
-                <li key={link}>
-                  <a className="transition hover:text-cyan-200" href="#">
-                    {link}
-                  </a>
+                <li key={link.label}>
+                  <FooterLink link={link} />
                 </li>
               ))}
             </ul>

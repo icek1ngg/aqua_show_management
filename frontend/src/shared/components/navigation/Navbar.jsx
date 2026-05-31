@@ -1,12 +1,16 @@
 import { useState } from 'react';
+import { Link, NavLink } from 'react-router-dom';
 
 import Logo from './Logo.jsx';
+import TicketSearchDrawer from './TicketSearchDrawer.jsx';
 
 const navigationLinks = [
-  { label: 'Home', href: '#' },
+  { label: 'Home', to: '/' },
+  // TODO: Replace with /shows when the Shows page exists.
   { label: 'Shows', href: '#' },
+  // TODO: Replace with /schedules when the Schedules page exists.
   { label: 'Schedules', href: '#' },
-  { label: 'My Bookings', href: '#' },
+  { label: 'My Bookings', to: '/bookings/my' },
 ];
 
 const defaultMockUser = {
@@ -19,14 +23,30 @@ function NavLinks({ onNavigate }) {
   return (
     <>
       {navigationLinks.map((link) => (
-        <a
-          className="rounded-full px-3 py-2 text-sm font-semibold text-slate-600 transition hover:bg-cyan-50 hover:text-cyan-800"
-          href={link.href}
-          key={link.label}
-          onClick={onNavigate}
-        >
-          {link.label}
-        </a>
+        link.to ? (
+          <NavLink
+            className={({ isActive }) =>
+              [
+                'rounded-full px-3 py-2 text-sm font-semibold transition hover:bg-cyan-50 hover:text-cyan-800',
+                isActive ? 'bg-cyan-50 text-cyan-800' : 'text-slate-600',
+              ].join(' ')
+            }
+            key={link.label}
+            onClick={onNavigate}
+            to={link.to}
+          >
+            {link.label}
+          </NavLink>
+        ) : (
+          <a
+            className="rounded-full px-3 py-2 text-sm font-semibold text-slate-600 transition hover:bg-cyan-50 hover:text-cyan-800"
+            href={link.href}
+            key={link.label}
+            onClick={onNavigate}
+          >
+            {link.label}
+          </a>
+        )
       ))}
     </>
   );
@@ -35,15 +55,15 @@ function NavLinks({ onNavigate }) {
 function LoggedOutActions() {
   return (
     <>
-      <a className="text-sm font-semibold text-slate-600 transition hover:text-cyan-800" href="#">
+      <Link className="text-sm font-semibold text-slate-600 transition hover:text-cyan-800" to="/login">
         Login
-      </a>
-      <a
+      </Link>
+      <Link
         className="rounded-full border border-cyan-200 px-4 py-2 text-sm font-semibold text-cyan-800 transition hover:border-cyan-500 hover:bg-cyan-50"
-        href="#"
+        to="/register"
       >
         Register
-      </a>
+      </Link>
     </>
   );
 }
@@ -59,9 +79,9 @@ function LoggedInActions({ user }) {
         />
         <span className="text-sm font-semibold text-slate-700">{user.name}</span>
       </div>
-      <a className="hidden text-sm font-semibold text-slate-600 transition hover:text-cyan-800 md:inline" href="#">
+      <Link className="hidden text-sm font-semibold text-slate-600 transition hover:text-cyan-800 md:inline" to="/profile">
         Profile
-      </a>
+      </Link>
       <button className="hidden text-sm font-semibold text-slate-500 transition hover:text-[#ff6900] md:inline" type="button">
         Logout
       </button>
@@ -71,78 +91,90 @@ function LoggedInActions({ user }) {
 
 export default function Navbar({ isLoggedIn = false, user = defaultMockUser }) {
   const [isMobileOpen, setIsMobileOpen] = useState(false);
+  const [isTicketDrawerOpen, setIsTicketDrawerOpen] = useState(false);
 
   const closeMobileMenu = () => setIsMobileOpen(false);
+  const openTicketDrawer = () => {
+    setIsMobileOpen(false);
+    setIsTicketDrawerOpen(true);
+  };
+  const closeTicketDrawer = () => setIsTicketDrawerOpen(false);
 
   return (
-    <header className="sticky top-0 z-50 border-b border-cyan-100/70 bg-white/80 shadow-[0_8px_32px_rgba(14,116,144,0.08)] backdrop-blur-xl">
-      <div className="mx-auto flex h-20 max-w-7xl items-center justify-between px-4 sm:px-6 lg:px-8">
-        <Logo />
+    <>
+      <header className="sticky top-0 z-50 border-b border-cyan-100/70 bg-white/80 shadow-[0_8px_32px_rgba(14,116,144,0.08)] backdrop-blur-xl">
+        <div className="mx-auto flex h-20 max-w-7xl items-center justify-between px-4 sm:px-6 lg:px-8">
+          <Logo />
 
-        <nav className="hidden items-center gap-2 md:flex" aria-label="Primary navigation">
-          <NavLinks />
-        </nav>
-
-        <div className="hidden items-center gap-4 md:flex">
-          {isLoggedIn ? <LoggedInActions user={user} /> : <LoggedOutActions />}
-          <a
-            className="rounded-full bg-gradient-to-r from-cyan-500 via-teal-500 to-cyan-700 px-6 py-3 text-sm font-bold text-white shadow-lg shadow-cyan-700/20 transition hover:-translate-y-0.5 hover:shadow-cyan-700/30 active:translate-y-0"
-            href="#"
-          >
-            Book Now
-          </a>
-        </div>
-
-        <button
-          className="inline-flex h-11 w-11 items-center justify-center rounded-full border border-cyan-100 bg-white/80 text-cyan-800 shadow-sm transition hover:bg-cyan-50 md:hidden"
-          type="button"
-          aria-expanded={isMobileOpen}
-          aria-label="Toggle navigation menu"
-          onClick={() => setIsMobileOpen((current) => !current)}
-        >
-          <span className="material-symbols-outlined">{isMobileOpen ? 'close' : 'menu'}</span>
-        </button>
-      </div>
-
-      {isMobileOpen && (
-        <div className="border-t border-cyan-100 bg-white/95 px-4 py-4 shadow-xl backdrop-blur-xl md:hidden">
-          <nav className="flex flex-col gap-1" aria-label="Mobile navigation">
-            <NavLinks onNavigate={closeMobileMenu} />
+          <nav className="hidden items-center gap-2 md:flex" aria-label="Primary navigation">
+            <NavLinks />
           </nav>
 
-          <div className="mt-4 flex flex-col gap-3 border-t border-cyan-100 pt-4">
-            {isLoggedIn ? (
-              <>
-                <div className="flex items-center gap-3 rounded-2xl bg-cyan-50 p-3">
-                  <img alt={`${user.name} avatar`} className="h-10 w-10 rounded-full object-cover" src={user.avatarUrl} />
-                  <span className="text-sm font-semibold text-slate-700">{user.name}</span>
-                </div>
-                <a className="rounded-full px-3 py-2 text-sm font-semibold text-slate-600 hover:bg-cyan-50" href="#">
-                  Profile
-                </a>
-                <button className="rounded-full px-3 py-2 text-left text-sm font-semibold text-slate-600 hover:bg-cyan-50" type="button">
-                  Logout
-                </button>
-              </>
-            ) : (
-              <div className="grid grid-cols-2 gap-3">
-                <a className="rounded-full border border-cyan-100 px-4 py-2 text-center text-sm font-semibold text-slate-700" href="#">
-                  Login
-                </a>
-                <a className="rounded-full border border-cyan-200 bg-cyan-50 px-4 py-2 text-center text-sm font-semibold text-cyan-800" href="#">
-                  Register
-                </a>
-              </div>
-            )}
-            <a
-              className="rounded-full bg-gradient-to-r from-cyan-500 via-teal-500 to-cyan-700 px-5 py-3 text-center text-sm font-bold text-white shadow-lg shadow-cyan-700/20"
-              href="#"
+          <div className="hidden items-center gap-4 md:flex">
+            {isLoggedIn ? <LoggedInActions user={user} /> : <LoggedOutActions />}
+            <button
+              className="rounded-full bg-gradient-to-r from-cyan-500 via-teal-500 to-cyan-700 px-6 py-3 text-sm font-bold text-white shadow-lg shadow-cyan-700/20 transition hover:-translate-y-0.5 hover:shadow-cyan-700/30 active:translate-y-0"
+              type="button"
+              onClick={openTicketDrawer}
             >
               Book Now
-            </a>
+            </button>
           </div>
+
+          <button
+            className="inline-flex h-11 w-11 items-center justify-center rounded-full border border-cyan-100 bg-white/80 text-cyan-800 shadow-sm transition hover:bg-cyan-50 md:hidden"
+            type="button"
+            aria-expanded={isMobileOpen}
+            aria-label="Toggle navigation menu"
+            onClick={() => setIsMobileOpen((current) => !current)}
+          >
+            <span className="material-symbols-outlined">{isMobileOpen ? 'close' : 'menu'}</span>
+          </button>
         </div>
-      )}
-    </header>
+
+        {isMobileOpen && (
+          <div className="border-t border-cyan-100 bg-white/95 px-4 py-4 shadow-xl backdrop-blur-xl md:hidden">
+            <nav className="flex flex-col gap-1" aria-label="Mobile navigation">
+              <NavLinks onNavigate={closeMobileMenu} />
+            </nav>
+
+            <div className="mt-4 flex flex-col gap-3 border-t border-cyan-100 pt-4">
+              {isLoggedIn ? (
+                <>
+                  <div className="flex items-center gap-3 rounded-2xl bg-cyan-50 p-3">
+                    <img alt={`${user.name} avatar`} className="h-10 w-10 rounded-full object-cover" src={user.avatarUrl} />
+                    <span className="text-sm font-semibold text-slate-700">{user.name}</span>
+                  </div>
+                  <Link className="rounded-full px-3 py-2 text-sm font-semibold text-slate-600 hover:bg-cyan-50" to="/profile" onClick={closeMobileMenu}>
+                    Profile
+                  </Link>
+                  <button className="rounded-full px-3 py-2 text-left text-sm font-semibold text-slate-600 hover:bg-cyan-50" type="button">
+                    Logout
+                  </button>
+                </>
+              ) : (
+                <div className="grid grid-cols-2 gap-3">
+                  <Link className="rounded-full border border-cyan-100 px-4 py-2 text-center text-sm font-semibold text-slate-700" to="/login" onClick={closeMobileMenu}>
+                    Login
+                  </Link>
+                  <Link className="rounded-full border border-cyan-200 bg-cyan-50 px-4 py-2 text-center text-sm font-semibold text-cyan-800" to="/register" onClick={closeMobileMenu}>
+                    Register
+                  </Link>
+                </div>
+              )}
+              <button
+                className="rounded-full bg-gradient-to-r from-cyan-500 via-teal-500 to-cyan-700 px-5 py-3 text-center text-sm font-bold text-white shadow-lg shadow-cyan-700/20"
+                type="button"
+                onClick={openTicketDrawer}
+              >
+                Book Now
+              </button>
+            </div>
+          </div>
+        )}
+      </header>
+
+      <TicketSearchDrawer open={isTicketDrawerOpen} onClose={closeTicketDrawer} />
+    </>
   );
 }
