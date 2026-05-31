@@ -29,9 +29,9 @@ logs/
 *.env.local
 frontend/.env*
 backend/.env*
+backend/.env
 
 # Keep example env files
-!.env.example
 !frontend/.env.example
 !backend/.env.example
 
@@ -80,6 +80,7 @@ backend/application-local.properties
 backend/application-local.yml
 backend/application-dev.properties
 backend/application-dev.yml
+backend/src/main/resources/application-local.yml
 
 # =========================
 # Test / Coverage
