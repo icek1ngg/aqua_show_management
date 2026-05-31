@@ -1,5 +1,155 @@
+import { useState } from 'react';
+import { Link, useLocation, useNavigate } from 'react-router-dom';
+
 import AuthLayout from '../../shared/layouts/AuthLayout.jsx';
 import Logo from '../../shared/components/navigation/Logo.jsx';
+import { validateEmail, validateRequired } from '../../shared/utils/validation.js';
+import { useAuth } from './AuthContext.jsx';
+
+const loginBubbles = [
+  {
+    width: '20px',
+    height: '20px',
+    left: '7%',
+    top: '76%',
+    '--bubble-duration': '4.8s',
+    '--bubble-delay': '-1.2s',
+    '--bubble-drift': '18px',
+    '--bubble-rise': '118px',
+  },
+  {
+    width: '40px',
+    height: '40px',
+    left: '15%',
+    top: '58%',
+    '--bubble-duration': '6.8s',
+    '--bubble-delay': '-3.4s',
+    '--bubble-drift': '-18px',
+    '--bubble-rise': '148px',
+  },
+  {
+    width: '16px',
+    height: '16px',
+    left: '25%',
+    top: '82%',
+    '--bubble-duration': '4.4s',
+    '--bubble-delay': '-2.1s',
+    '--bubble-drift': '26px',
+    '--bubble-rise': '104px',
+  },
+  {
+    width: '48px',
+    height: '48px',
+    left: '37%',
+    top: '67%',
+    '--bubble-duration': '7.4s',
+    '--bubble-delay': '-4.8s',
+    '--bubble-drift': '-24px',
+    '--bubble-rise': '156px',
+  },
+  {
+    width: '24px',
+    height: '24px',
+    left: '50%',
+    top: '74%',
+    '--bubble-duration': '5.2s',
+    '--bubble-delay': '-1.8s',
+    '--bubble-drift': '14px',
+    '--bubble-rise': '126px',
+  },
+  {
+    width: '36px',
+    height: '36px',
+    left: '62%',
+    top: '52%',
+    '--bubble-duration': '6.1s',
+    '--bubble-delay': '-3.9s',
+    '--bubble-drift': '-22px',
+    '--bubble-rise': '138px',
+  },
+  {
+    width: '16px',
+    height: '16px',
+    left: '73%',
+    top: '80%',
+    '--bubble-duration': '4.2s',
+    '--bubble-delay': '-0.8s',
+    '--bubble-drift': '22px',
+    '--bubble-rise': '96px',
+  },
+  {
+    width: '56px',
+    height: '56px',
+    left: '82%',
+    top: '62%',
+    '--bubble-duration': '7.8s',
+    '--bubble-delay': '-5.6s',
+    '--bubble-drift': '-30px',
+    '--bubble-rise': '160px',
+  },
+  {
+    width: '24px',
+    height: '24px',
+    left: '91%',
+    top: '72%',
+    '--bubble-duration': '5.6s',
+    '--bubble-delay': '-2.7s',
+    '--bubble-drift': '-14px',
+    '--bubble-rise': '122px',
+  },
+  {
+    width: '20px',
+    height: '20px',
+    left: '43%',
+    top: '88%',
+    '--bubble-duration': '5s',
+    '--bubble-delay': '-3.1s',
+    '--bubble-drift': '30px',
+    '--bubble-rise': '112px',
+  },
+  {
+    width: '12px',
+    height: '12px',
+    left: '20%',
+    top: '36%',
+    '--bubble-duration': '4s',
+    '--bubble-delay': '-1.6s',
+    '--bubble-drift': '-12px',
+    '--bubble-rise': '88px',
+  },
+  {
+    width: '20px',
+    height: '20px',
+    left: '70%',
+    top: '34%',
+    '--bubble-duration': '5.8s',
+    '--bubble-delay': '-4.2s',
+    '--bubble-drift': '18px',
+    '--bubble-rise': '102px',
+  },
+];
+
+function BubbleLayer({ bubbles }) {
+  return (
+    <div className="pointer-events-none absolute inset-0 z-10 overflow-hidden" aria-hidden="true">
+      {bubbles.map((bubble, index) => (
+        <span
+          key={`${bubble.left}-${bubble.top}-${index}`}
+          className="aquapulse-bubble"
+          style={bubble}
+        />
+      ))}
+    </div>
+  );
+}
+
+function FieldError({ children }) {
+  if (!children) {
+    return null;
+  }
+
+  return <p className="ml-1 text-sm font-semibold text-red-600">{children}</p>;
+}
 
 const loginBubbles = [
   {
@@ -139,8 +289,63 @@ function BubbleLayer({ bubbles }) {
 }
 
 export default function LoginPage() {
-  const handleSubmit = (event) => {
+  const { login } = useAuth();
+  const location = useLocation();
+  const navigate = useNavigate();
+  const [errorMessage, setErrorMessage] = useState('');
+  const [fieldErrors, setFieldErrors] = useState({});
+  const [isSubmitting, setIsSubmitting] = useState(false);
+
+  const clearFieldError = (fieldName) => {
+    setErrorMessage('');
+    setFieldErrors((currentErrors) => {
+      if (!currentErrors[fieldName]) {
+        return currentErrors;
+      }
+
+      const nextErrors = { ...currentErrors };
+      delete nextErrors[fieldName];
+      return nextErrors;
+    });
+  };
+
+  const handleSubmit = async (event) => {
     event.preventDefault();
+
+    const formData = new FormData(event.currentTarget);
+    const credentials = {
+      email: String(formData.get('email') || '').trim(),
+      password: String(formData.get('password') || ''),
+    };
+    const rememberMe = formData.get('rememberMe') === 'on';
+
+    setErrorMessage('');
+    setFieldErrors({});
+
+    const nextErrors = {
+      email: validateEmail(credentials.email),
+      password: validateRequired(credentials.password, 'Password'),
+    };
+    const activeErrors = Object.fromEntries(Object.entries(nextErrors).filter(([, message]) => message));
+    if (Object.keys(activeErrors).length > 0) {
+      setFieldErrors(activeErrors);
+      setErrorMessage(Object.values(activeErrors)[0]);
+      return;
+    }
+
+    setIsSubmitting(true);
+
+    try {
+      await login(credentials, rememberMe);
+      const redirectTarget = location.state?.from
+        ? `${location.state.from.pathname}${location.state.from.search || ''}`
+        : '/';
+      navigate(redirectTarget, { replace: true });
+    } catch (error) {
+      setErrorMessage(error.message);
+    } finally {
+      setIsSubmitting(false);
+    }
   };
 
   return (
@@ -204,10 +409,14 @@ export default function LoginPage() {
                   <input
                     className="w-full rounded-2xl border border-transparent bg-cyan-50/70 py-4 pl-12 pr-4 text-slate-900 outline-none transition focus:border-cyan-500 focus:bg-white focus:ring-2 focus:ring-cyan-200"
                     id="login-email"
+                    name="email"
                     placeholder="name@aquashow.com"
+                    required
                     type="email"
+                    onChange={() => clearFieldError('email')}
                   />
                 </div>
+                <FieldError>{fieldErrors.email}</FieldError>
               </div>
 
               <div className="space-y-2">
@@ -226,8 +435,11 @@ export default function LoginPage() {
                   <input
                     className="w-full rounded-2xl border border-transparent bg-cyan-50/70 py-4 pl-12 pr-12 text-slate-900 outline-none transition focus:border-cyan-500 focus:bg-white focus:ring-2 focus:ring-cyan-200"
                     id="login-password"
+                    name="password"
                     placeholder="••••••••"
+                    required
                     type="password"
+                    onChange={() => clearFieldError('password')}
                   />
                   <button
                     className="absolute right-4 top-1/2 -translate-y-1/2 text-slate-400 transition hover:text-slate-700"
@@ -237,12 +449,14 @@ export default function LoginPage() {
                     <span className="material-symbols-outlined">visibility</span>
                   </button>
                 </div>
+                <FieldError>{fieldErrors.password}</FieldError>
               </div>
 
               <label className="flex cursor-pointer items-center gap-3 px-1 text-sm text-slate-600" htmlFor="remember-login">
                 <input
                   className="peer sr-only"
                   id="remember-login"
+                  name="rememberMe"
                   type="checkbox"
                 />
                 <span
@@ -256,12 +470,19 @@ export default function LoginPage() {
                 <span>Remember me</span>
               </label>
 
+              {errorMessage && (
+                <div className="rounded-2xl border border-red-100 bg-red-50 px-4 py-3 text-sm font-semibold text-red-700" role="alert">
+                  {errorMessage}
+                </div>
+              )}
+
               <div className="space-y-4 pt-2">
                 <button
-                  className="w-full rounded-full bg-gradient-to-r from-[#ff6900] to-[#c2410c] py-4 font-bold text-white shadow-lg shadow-orange-700/20 transition duration-300 hover:-translate-y-0.5 hover:shadow-orange-700/30 active:translate-y-0"
+                  className="w-full rounded-full bg-gradient-to-r from-[#ff6900] to-[#c2410c] py-4 font-bold text-white shadow-lg shadow-orange-700/20 transition duration-300 hover:-translate-y-0.5 hover:shadow-orange-700/30 active:translate-y-0 disabled:cursor-not-allowed disabled:opacity-70"
+                  disabled={isSubmitting}
                   type="submit"
                 >
-                  Sign In
+                  {isSubmitting ? 'Signing in...' : 'Sign In'}
                 </button>
 
                 <div className="flex items-center py-2">
@@ -271,7 +492,8 @@ export default function LoginPage() {
                 </div>
 
                 <button
-                  className="flex w-full items-center justify-center gap-3 rounded-full border border-cyan-100 bg-white py-4 font-bold text-slate-700 transition hover:bg-cyan-50"
+                  className="flex w-full cursor-not-allowed items-center justify-center gap-3 rounded-full border border-cyan-100 bg-white py-4 font-bold text-slate-400 transition"
+                  disabled
                   type="button"
                 >
                   <svg className="h-5 w-5" viewBox="0 0 24 24" aria-hidden="true">
@@ -292,16 +514,16 @@ export default function LoginPage() {
                       fill="#EA4335"
                     />
                   </svg>
-                  Continue with Google
+                  Google OAuth coming soon
                 </button>
               </div>
             </form>
 
             <p className="mt-10 text-center text-sm text-slate-600">
               Do not have an account?
-              <a className="ml-1 font-bold text-cyan-700 underline-offset-4 transition hover:underline" href="#">
+              <Link className="ml-1 font-bold text-cyan-700 underline-offset-4 transition hover:underline" to="/register">
                 Register
-              </a>
+              </Link>
             </p>
           </div>
         </section>

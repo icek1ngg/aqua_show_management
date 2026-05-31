@@ -1,6 +1,7 @@
-import { useState } from 'react';
-import { Link, NavLink } from 'react-router-dom';
+import { useEffect, useRef, useState } from 'react';
+import { Link, NavLink, useNavigate } from 'react-router-dom';
 
+import { useAuth } from '../../../features/auth/AuthContext.jsx';
 import Logo from './Logo.jsx';
 import TicketSearchDrawer from './TicketSearchDrawer.jsx';
 
@@ -15,9 +16,28 @@ const navigationLinks = [
 
 const defaultMockUser = {
   name: 'Marina Waters',
+  email: 'marina.waters@gmail.com',
   avatarUrl:
     'https://lh3.googleusercontent.com/aida-public/AB6AXuBr1y6jT8rVNkVdiy8aMYObXvdvRyko9uO4Dlz5RNeuhycjQ0DbT_Gii4DoZSNhJ8fzz3fc1uky7EYTIVukTsWQ1lMjOG0NLWSobI9K8tEZhM2tmkt55Hipfh7jRFPvNsV1FKCPz5cLjRmjD0N_d6fD2WXkrrKzSk3CdC7Mb53gVjPueoFIiAJEoiCwB7Dg8JEjusemuC7MWfmkC5xv1zbTMQLL1NoTs4RPgoqG0-QcV07o36TcnAwUbaAvzveKsMYqzBsz_ph3SQ',
 };
+
+function UserAvatar({ user, className = 'h-9 w-9' }) {
+  if (user?.avatarUrl) {
+    return (
+      <img
+        alt={`${user.name || 'AquaPulse user'} avatar`}
+        className={`${className} rounded-full border-2 border-cyan-300 object-cover`}
+        src={user.avatarUrl}
+      />
+    );
+  }
+
+  return (
+    <span className={`${className} flex items-center justify-center rounded-full border-2 border-cyan-300 bg-cyan-100 text-sm font-black text-cyan-800`}>
+      {(user?.name || user?.email || 'A').charAt(0).toUpperCase()}
+    </span>
+  );
+}
 
 function NavLinks({ onNavigate }) {
   return (
@@ -54,51 +74,106 @@ function NavLinks({ onNavigate }) {
 
 function LoggedOutActions() {
   return (
-    <>
-      <Link className="text-sm font-semibold text-slate-600 transition hover:text-cyan-800" to="/login">
-        Login
-      </Link>
-      <Link
-        className="rounded-full border border-cyan-200 px-4 py-2 text-sm font-semibold text-cyan-800 transition hover:border-cyan-500 hover:bg-cyan-50"
-        to="/register"
-      >
-        Register
-      </Link>
-    </>
+    <Link
+      className="rounded-full border border-cyan-200 px-4 py-2 text-sm font-semibold text-cyan-800 transition hover:border-cyan-500 hover:bg-cyan-50"
+      to="/login"
+    >
+      Sign In
+    </Link>
   );
 }
 
-function LoggedInActions({ user }) {
+function LoggedInActions({ user, onLogout }) {
+  const displayUser = user || defaultMockUser;
+  const [isDropdownOpen, setIsDropdownOpen] = useState(false);
+  const dropdownRef = useRef(null);
+  const displayEmail = displayUser.email || displayUser.gmail || displayUser.name || defaultMockUser.email;
+
+  useEffect(() => {
+    if (!isDropdownOpen) {
+      return undefined;
+    }
+
+    const handlePointerDown = (event) => {
+      if (dropdownRef.current && !dropdownRef.current.contains(event.target)) {
+        setIsDropdownOpen(false);
+      }
+    };
+
+    document.addEventListener('mousedown', handlePointerDown);
+    return () => document.removeEventListener('mousedown', handlePointerDown);
+  }, [isDropdownOpen]);
+
+  const handleLogoutClick = async () => {
+    setIsDropdownOpen(false);
+    await onLogout();
+  };
+
   return (
-    <div className="flex items-center gap-3">
-      <div className="hidden items-center gap-3 rounded-full bg-white/70 py-1.5 pl-1.5 pr-4 shadow-sm ring-1 ring-cyan-100 lg:flex">
-        <img
-          alt={`${user.name} avatar`}
-          className="h-9 w-9 rounded-full border-2 border-cyan-300 object-cover"
-          src={user.avatarUrl}
-        />
-        <span className="text-sm font-semibold text-slate-700">{user.name}</span>
-      </div>
-      <Link className="hidden text-sm font-semibold text-slate-600 transition hover:text-cyan-800 md:inline" to="/profile">
-        Profile
-      </Link>
-      <button className="hidden text-sm font-semibold text-slate-500 transition hover:text-[#ff6900] md:inline" type="button">
-        Logout
+    <div className="relative" ref={dropdownRef}>
+      <button
+        className="flex items-center gap-3 rounded-full bg-white/70 py-1.5 pl-1.5 pr-3 shadow-sm ring-1 ring-cyan-100 transition hover:bg-cyan-50 hover:ring-cyan-200"
+        type="button"
+        aria-expanded={isDropdownOpen}
+        aria-haspopup="menu"
+        onClick={() => setIsDropdownOpen((current) => !current)}
+      >
+        <UserAvatar user={displayUser} />
+        <span className="hidden max-w-[180px] truncate text-sm font-semibold text-slate-700 lg:inline">{displayEmail}</span>
+        <span className="material-symbols-outlined text-base text-cyan-700">expand_more</span>
       </button>
+
+      {isDropdownOpen && (
+        <div
+          className="absolute right-0 top-full z-50 mt-3 w-56 overflow-hidden rounded-2xl border border-cyan-100 bg-white p-2 shadow-xl shadow-cyan-950/10"
+          role="menu"
+        >
+          <Link
+            className="flex items-center gap-2 rounded-xl px-4 py-3 text-sm font-semibold text-slate-700 transition hover:bg-cyan-50 hover:text-cyan-800"
+            role="menuitem"
+            to="/profile"
+            onClick={() => setIsDropdownOpen(false)}
+          >
+            <span className="material-symbols-outlined text-lg text-cyan-700">person</span>
+            Profile
+          </Link>
+          <button
+            className="flex w-full items-center gap-2 rounded-xl px-4 py-3 text-left text-sm font-semibold text-slate-700 transition hover:bg-red-50 hover:text-red-700"
+            role="menuitem"
+            type="button"
+            onClick={handleLogoutClick}
+          >
+            <span className="material-symbols-outlined text-lg">logout</span>
+            Logout
+          </button>
+        </div>
+      )}
     </div>
   );
 }
 
-export default function Navbar({ isLoggedIn = false, user = defaultMockUser }) {
+export default function Navbar() {
+  const { isAuthenticated, loading, logout, user } = useAuth();
+  const navigate = useNavigate();
   const [isMobileOpen, setIsMobileOpen] = useState(false);
+  const [isMobileUserMenuOpen, setIsMobileUserMenuOpen] = useState(false);
   const [isTicketDrawerOpen, setIsTicketDrawerOpen] = useState(false);
 
-  const closeMobileMenu = () => setIsMobileOpen(false);
+  const closeMobileMenu = () => {
+    setIsMobileOpen(false);
+    setIsMobileUserMenuOpen(false);
+  };
   const openTicketDrawer = () => {
     setIsMobileOpen(false);
     setIsTicketDrawerOpen(true);
   };
   const closeTicketDrawer = () => setIsTicketDrawerOpen(false);
+  const handleLogout = async () => {
+    await logout();
+    setIsMobileOpen(false);
+    setIsMobileUserMenuOpen(false);
+    navigate('/');
+  };
 
   return (
     <>
@@ -111,7 +186,7 @@ export default function Navbar({ isLoggedIn = false, user = defaultMockUser }) {
           </nav>
 
           <div className="hidden items-center gap-4 md:flex">
-            {isLoggedIn ? <LoggedInActions user={user} /> : <LoggedOutActions />}
+            {isAuthenticated ? <LoggedInActions user={user} onLogout={handleLogout} /> : !loading && <LoggedOutActions />}
             <button
               className="rounded-full bg-gradient-to-r from-cyan-500 via-teal-500 to-cyan-700 px-6 py-3 text-sm font-bold text-white shadow-lg shadow-cyan-700/20 transition hover:-translate-y-0.5 hover:shadow-cyan-700/30 active:translate-y-0"
               type="button"
@@ -139,29 +214,51 @@ export default function Navbar({ isLoggedIn = false, user = defaultMockUser }) {
             </nav>
 
             <div className="mt-4 flex flex-col gap-3 border-t border-cyan-100 pt-4">
-              {isLoggedIn ? (
+              {isAuthenticated ? (
                 <>
-                  <div className="flex items-center gap-3 rounded-2xl bg-cyan-50 p-3">
-                    <img alt={`${user.name} avatar`} className="h-10 w-10 rounded-full object-cover" src={user.avatarUrl} />
-                    <span className="text-sm font-semibold text-slate-700">{user.name}</span>
-                  </div>
-                  <Link className="rounded-full px-3 py-2 text-sm font-semibold text-slate-600 hover:bg-cyan-50" to="/profile" onClick={closeMobileMenu}>
-                    Profile
-                  </Link>
-                  <button className="rounded-full px-3 py-2 text-left text-sm font-semibold text-slate-600 hover:bg-cyan-50" type="button">
-                    Logout
+                  <button
+                    className="flex w-full items-center gap-3 rounded-2xl bg-cyan-50 p-3 text-left"
+                    type="button"
+                    aria-expanded={isMobileUserMenuOpen}
+                    aria-haspopup="menu"
+                    onClick={() => setIsMobileUserMenuOpen((current) => !current)}
+                  >
+                    <UserAvatar user={user || defaultMockUser} className="h-10 w-10" />
+                    <span className="min-w-0 flex-1 truncate text-sm font-semibold text-slate-700">
+                      {user?.email || user?.gmail || user?.name || defaultMockUser.email}
+                    </span>
+                    <span className="material-symbols-outlined text-base text-cyan-700">expand_more</span>
                   </button>
+                  {isMobileUserMenuOpen && (
+                    <div className="rounded-2xl border border-cyan-100 bg-white p-2 shadow-lg" role="menu">
+                      <Link
+                        className="flex items-center gap-2 rounded-xl px-3 py-2 text-sm font-semibold text-slate-600 hover:bg-cyan-50"
+                        role="menuitem"
+                        to="/profile"
+                        onClick={closeMobileMenu}
+                      >
+                        <span className="material-symbols-outlined text-lg text-cyan-700">person</span>
+                        Profile
+                      </Link>
+                      <button
+                        className="flex w-full items-center gap-2 rounded-xl px-3 py-2 text-left text-sm font-semibold text-slate-600 hover:bg-red-50 hover:text-red-700"
+                        role="menuitem"
+                        type="button"
+                        onClick={handleLogout}
+                      >
+                        <span className="material-symbols-outlined text-lg">logout</span>
+                        Logout
+                      </button>
+                    </div>
+                  )}
                 </>
-              ) : (
-                <div className="grid grid-cols-2 gap-3">
+              ) : !loading ? (
+                <div>
                   <Link className="rounded-full border border-cyan-100 px-4 py-2 text-center text-sm font-semibold text-slate-700" to="/login" onClick={closeMobileMenu}>
-                    Login
-                  </Link>
-                  <Link className="rounded-full border border-cyan-200 bg-cyan-50 px-4 py-2 text-center text-sm font-semibold text-cyan-800" to="/register" onClick={closeMobileMenu}>
-                    Register
+                    Sign In
                   </Link>
                 </div>
-              )}
+              ) : null}
               <button
                 className="rounded-full bg-gradient-to-r from-cyan-500 via-teal-500 to-cyan-700 px-5 py-3 text-center text-sm font-bold text-white shadow-lg shadow-cyan-700/20"
                 type="button"

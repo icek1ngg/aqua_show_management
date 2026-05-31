@@ -1,17 +1,38 @@
 import { useEffect, useState } from 'react';
 import { useNavigate } from 'react-router-dom';
 
+import {
+  isTodayOrFuture,
+  sanitizeDigits,
+  validateRequired,
+} from '../../utils/validation.js';
+
 const showOptions = ['Symphony of Lights', 'Ocean Dreams', 'Aqua Parade', 'Mermaid Splash'];
 const ticketTypes = ['Standard Entry', 'VIP Entry', 'Family Package'];
+
+function getTodayDateInputValue() {
+  const today = new Date();
+  const timezoneOffset = today.getTimezoneOffset() * 60000;
+  return new Date(today.getTime() - timezoneOffset).toISOString().slice(0, 10);
+}
+
+function FieldError({ children }) {
+  if (!children) {
+    return null;
+  }
+
+  return <p className="ml-1 text-sm font-semibold text-red-600">{children}</p>;
+}
 
 export default function TicketSearchDrawer({ open, onClose }) {
   const navigate = useNavigate();
   const [formValues, setFormValues] = useState({
-    show: showOptions[0],
+    show: '',
     date: '',
-    guests: '2',
-    ticketType: ticketTypes[0],
+    guests: '',
+    ticketType: '',
   });
+  const [fieldErrors, setFieldErrors] = useState({});
 
   useEffect(() => {
     if (!open) {
@@ -32,12 +53,38 @@ export default function TicketSearchDrawer({ open, onClose }) {
     const { name, value } = event.target;
     setFormValues((currentValues) => ({
       ...currentValues,
-      [name]: value,
+      [name]: name === 'guests' ? sanitizeDigits(value, 2) : value,
     }));
+    setFieldErrors((currentErrors) => {
+      if (!currentErrors[name]) {
+        return currentErrors;
+      }
+
+      const nextErrors = { ...currentErrors };
+      delete nextErrors[name];
+      return nextErrors;
+    });
   };
 
   const handleSubmit = (event) => {
     event.preventDefault();
+
+    const guestsNumber = Number(formValues.guests);
+    const nextErrors = {
+      show: validateRequired(formValues.show, 'Show'),
+      date: validateRequired(formValues.date, 'Date') || (isTodayOrFuture(formValues.date) ? '' : 'Date cannot be in the past.'),
+      guests: validateRequired(formValues.guests, 'Guests')
+        || (Number.isInteger(guestsNumber) && guestsNumber >= 1 && guestsNumber <= 10
+          ? ''
+          : 'Guests must be a number from 1 to 10.'),
+      ticketType: validateRequired(formValues.ticketType, 'Ticket type'),
+    };
+
+    const activeErrors = Object.fromEntries(Object.entries(nextErrors).filter(([, message]) => message));
+    if (Object.keys(activeErrors).length > 0) {
+      setFieldErrors(activeErrors);
+      return;
+    }
 
     const params = new URLSearchParams();
     Object.entries(formValues).forEach(([key, value]) => {
@@ -108,6 +155,7 @@ export default function TicketSearchDrawer({ open, onClose }) {
                   value={formValues.show}
                   onChange={handleChange}
                 >
+                  <option value="">Select a show</option>
                   {showOptions.map((show) => (
                     <option key={show} value={show}>
                       {show}
@@ -118,6 +166,7 @@ export default function TicketSearchDrawer({ open, onClose }) {
                   expand_more
                 </span>
               </div>
+              <FieldError>{fieldErrors.show}</FieldError>
             </div>
 
             <div className="space-y-2">
@@ -131,12 +180,14 @@ export default function TicketSearchDrawer({ open, onClose }) {
                 <input
                   className="w-full rounded-2xl border border-cyan-100 bg-cyan-50/70 py-4 pl-12 pr-4 text-sm font-semibold text-slate-800 outline-none transition focus:border-cyan-500 focus:bg-white focus:ring-2 focus:ring-cyan-200"
                   id="ticket-date"
+                  min={getTodayDateInputValue()}
                   name="date"
                   type="date"
                   value={formValues.date}
                   onChange={handleChange}
                 />
               </div>
+              <FieldError>{fieldErrors.date}</FieldError>
             </div>
 
             <div className="grid gap-4 sm:grid-cols-2">
@@ -151,15 +202,18 @@ export default function TicketSearchDrawer({ open, onClose }) {
                   <input
                     className="w-full rounded-2xl border border-cyan-100 bg-cyan-50/70 py-4 pl-12 pr-4 text-sm font-semibold text-slate-800 outline-none transition focus:border-cyan-500 focus:bg-white focus:ring-2 focus:ring-cyan-200"
                     id="ticket-guests"
+                    inputMode="numeric"
                     max="10"
                     min="1"
                     name="guests"
+                    pattern="[0-9]*"
                     placeholder="Number of guests"
-                    type="number"
+                    type="text"
                     value={formValues.guests}
                     onChange={handleChange}
                   />
                 </div>
+                <FieldError>{fieldErrors.guests}</FieldError>
               </div>
 
               <div className="space-y-2">
@@ -174,10 +228,11 @@ export default function TicketSearchDrawer({ open, onClose }) {
                     className="w-full appearance-none rounded-2xl border border-cyan-100 bg-cyan-50/70 py-4 pl-12 pr-10 text-sm font-semibold text-slate-800 outline-none transition focus:border-cyan-500 focus:bg-white focus:ring-2 focus:ring-cyan-200"
                     id="ticket-type"
                     name="ticketType"
-                    value={formValues.ticketType}
-                    onChange={handleChange}
-                  >
-                    {ticketTypes.map((ticketType) => (
+                  value={formValues.ticketType}
+                  onChange={handleChange}
+                >
+                  <option value="">Select type</option>
+                  {ticketTypes.map((ticketType) => (
                       <option key={ticketType} value={ticketType}>
                         {ticketType}
                       </option>
@@ -187,6 +242,7 @@ export default function TicketSearchDrawer({ open, onClose }) {
                     expand_more
                   </span>
                 </div>
+                <FieldError>{fieldErrors.ticketType}</FieldError>
               </div>
             </div>
 

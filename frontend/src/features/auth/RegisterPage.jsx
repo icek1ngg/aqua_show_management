@@ -1,5 +1,180 @@
+import { useState } from 'react';
+import { Link, useNavigate } from 'react-router-dom';
+
 import AuthLayout from '../../shared/layouts/AuthLayout.jsx';
 import Logo from '../../shared/components/navigation/Logo.jsx';
+import {
+  sanitizeDigits,
+  validateEmail,
+  validateName,
+  validatePassword,
+  validatePhone,
+} from '../../shared/utils/validation.js';
+import { useAuth } from './AuthContext.jsx';
+
+const registerBubbles = [
+  {
+    width: '24px',
+    height: '24px',
+    left: '6%',
+    top: '78%',
+    '--bubble-duration': '4.9s',
+    '--bubble-delay': '-1.3s',
+    '--bubble-drift': '16px',
+    '--bubble-rise': '118px',
+  },
+  {
+    width: '48px',
+    height: '48px',
+    left: '14%',
+    top: '60%',
+    '--bubble-duration': '7.5s',
+    '--bubble-delay': '-5.2s',
+    '--bubble-drift': '-24px',
+    '--bubble-rise': '152px',
+  },
+  {
+    width: '16px',
+    height: '16px',
+    left: '24%',
+    top: '86%',
+    '--bubble-duration': '4.1s',
+    '--bubble-delay': '-2.4s',
+    '--bubble-drift': '28px',
+    '--bubble-rise': '98px',
+  },
+  {
+    width: '36px',
+    height: '36px',
+    left: '33%',
+    top: '68%',
+    '--bubble-duration': '6.2s',
+    '--bubble-delay': '-3s',
+    '--bubble-drift': '-14px',
+    '--bubble-rise': '132px',
+  },
+  {
+    width: '56px',
+    height: '56px',
+    left: '45%',
+    top: '52%',
+    '--bubble-duration': '7.9s',
+    '--bubble-delay': '-6s',
+    '--bubble-drift': '22px',
+    '--bubble-rise': '160px',
+  },
+  {
+    width: '20px',
+    height: '20px',
+    left: '56%',
+    top: '80%',
+    '--bubble-duration': '5s',
+    '--bubble-delay': '-1.8s',
+    '--bubble-drift': '-18px',
+    '--bubble-rise': '116px',
+  },
+  {
+    width: '40px',
+    height: '40px',
+    left: '66%',
+    top: '62%',
+    '--bubble-duration': '6.9s',
+    '--bubble-delay': '-4.6s',
+    '--bubble-drift': '20px',
+    '--bubble-rise': '144px',
+  },
+  {
+    width: '16px',
+    height: '16px',
+    left: '77%',
+    top: '84%',
+    '--bubble-duration': '4.3s',
+    '--bubble-delay': '-0.9s',
+    '--bubble-drift': '-12px',
+    '--bubble-rise': '92px',
+  },
+  {
+    width: '44px',
+    height: '44px',
+    left: '86%',
+    top: '70%',
+    '--bubble-duration': '7.2s',
+    '--bubble-delay': '-5.4s',
+    '--bubble-drift': '-30px',
+    '--bubble-rise': '148px',
+  },
+  {
+    width: '24px',
+    height: '24px',
+    left: '93%',
+    top: '76%',
+    '--bubble-duration': '5.4s',
+    '--bubble-delay': '-2.8s',
+    '--bubble-drift': '-18px',
+    '--bubble-rise': '124px',
+  },
+  {
+    width: '20px',
+    height: '20px',
+    left: '40%',
+    top: '88%',
+    '--bubble-duration': '4.7s',
+    '--bubble-delay': '-3.6s',
+    '--bubble-drift': '34px',
+    '--bubble-rise': '108px',
+  },
+  {
+    width: '14px',
+    height: '14px',
+    left: '20%',
+    top: '38%',
+    '--bubble-duration': '4s',
+    '--bubble-delay': '-1.4s',
+    '--bubble-drift': '-14px',
+    '--bubble-rise': '86px',
+  },
+  {
+    width: '24px',
+    height: '24px',
+    left: '72%',
+    top: '34%',
+    '--bubble-duration': '5.7s',
+    '--bubble-delay': '-4.1s',
+    '--bubble-drift': '20px',
+    '--bubble-rise': '104px',
+  },
+];
+
+function BubbleLayer({ bubbles }) {
+  return (
+    <div className="pointer-events-none absolute inset-0 z-10 overflow-hidden" aria-hidden="true">
+      {bubbles.map((bubble, index) => (
+        <span
+          key={`${bubble.left}-${bubble.top}-${index}`}
+          className="aquapulse-bubble"
+          style={bubble}
+        />
+      ))}
+    </div>
+  );
+}
+
+function splitFullName(fullName) {
+  const parts = fullName.trim().split(/\s+/).filter(Boolean);
+
+  return {
+    lastName: parts[0] || '',
+    firstMiddleName: parts.slice(1).join(' '),
+  };
+}
+
+function FieldError({ children }) {
+  if (!children) {
+    return null;
+  }
+
+  return <p className="ml-1 text-sm font-semibold text-red-600">{children}</p>;
+}
 
 const registerBubbles = [
   {
@@ -149,8 +324,86 @@ function BubbleLayer({ bubbles }) {
 }
 
 export default function RegisterPage() {
-  const handleSubmit = (event) => {
+  const { register } = useAuth();
+  const navigate = useNavigate();
+  const [errorMessage, setErrorMessage] = useState('');
+  const [successMessage, setSuccessMessage] = useState('');
+  const [fieldErrors, setFieldErrors] = useState({});
+  const [phone, setPhone] = useState('');
+  const [isSubmitting, setIsSubmitting] = useState(false);
+
+  const clearFieldError = (fieldName) => {
+    setErrorMessage('');
+    setFieldErrors((currentErrors) => {
+      if (!currentErrors[fieldName]) {
+        return currentErrors;
+      }
+
+      const nextErrors = { ...currentErrors };
+      delete nextErrors[fieldName];
+      return nextErrors;
+    });
+  };
+
+  const handlePhoneChange = (event) => {
+    setPhone(sanitizeDigits(event.target.value));
+    clearFieldError('phone');
+    setErrorMessage('');
+  };
+
+  const handleSubmit = async (event) => {
     event.preventDefault();
+
+    const formData = new FormData(event.currentTarget);
+    const fullName = String(formData.get('fullName') || '').trim();
+    const email = String(formData.get('email') || '').trim();
+    const phone = String(formData.get('phone') || '').trim();
+    const password = String(formData.get('password') || '');
+    const confirmPassword = String(formData.get('confirmPassword') || '');
+    const acceptedTerms = formData.get('acceptedTerms') === 'on';
+
+    setErrorMessage('');
+    setSuccessMessage('');
+    setFieldErrors({});
+
+    const nextErrors = {
+      fullName: validateName(fullName, 'Full name', { min: 2 }),
+      email: validateEmail(email),
+      phone: validatePhone(phone),
+      password: validatePassword(password),
+      confirmPassword: password === confirmPassword ? '' : 'Password confirmation does not match.',
+      acceptedTerms: acceptedTerms ? '' : 'Please agree to the Terms and Conditions and Privacy Policy.',
+    };
+
+    const { lastName, firstMiddleName } = splitFullName(fullName);
+    if (!nextErrors.fullName && !firstMiddleName) {
+      nextErrors.fullName = 'Please enter both last name and first or middle name.';
+    }
+
+    const activeErrors = Object.fromEntries(Object.entries(nextErrors).filter(([, message]) => message));
+    if (Object.keys(activeErrors).length > 0) {
+      setFieldErrors(activeErrors);
+      setErrorMessage(Object.values(activeErrors)[0]);
+      return;
+    }
+
+    setIsSubmitting(true);
+
+    try {
+      await register({
+        lastName,
+        firstMiddleName,
+        email,
+        phoneNumber: phone,
+        password,
+      });
+      setSuccessMessage('Account created successfully. Redirecting to login...');
+      window.setTimeout(() => navigate('/login'), 900);
+    } catch (error) {
+      setErrorMessage(error.message);
+    } finally {
+      setIsSubmitting(false);
+    }
   };
 
   return (
@@ -180,17 +433,13 @@ export default function RegisterPage() {
               entertainment.
             </p>
 
-            <div className="mt-8 flex flex-col gap-4">
-              <span className="flex w-fit items-center gap-4 rounded-2xl border border-white/20 bg-white/10 p-4 text-sm font-bold backdrop-blur-md transition hover:scale-[1.02]">
-                <span className="flex h-10 w-10 items-center justify-center rounded-full bg-yellow-300 text-slate-950">
-                  <span className="material-symbols-outlined">star</span>
-                </span>
+            <div className="mt-8 flex flex-wrap gap-4">
+              <span className="flex items-center gap-2 rounded-full border border-white/20 bg-white/10 px-5 py-3 text-sm font-bold backdrop-blur-md">
+                <span className="material-symbols-outlined text-cyan-300">star</span>
                 Access Exclusive Shows
               </span>
-              <span className="flex w-fit items-center gap-4 rounded-2xl border border-white/20 bg-white/10 p-4 text-sm font-bold backdrop-blur-md transition hover:scale-[1.02]">
-                <span className="flex h-10 w-10 items-center justify-center rounded-full bg-cyan-300 text-slate-950">
-                  <span className="material-symbols-outlined">schedule</span>
-                </span>
+              <span className="flex items-center gap-2 rounded-full border border-white/20 bg-white/10 px-5 py-3 text-sm font-bold backdrop-blur-md">
+                <span className="material-symbols-outlined text-cyan-300">schedule</span>
                 Priority Booking
               </span>
             </div>
@@ -220,10 +469,14 @@ export default function RegisterPage() {
                   <input
                     className="w-full rounded-full border border-transparent bg-cyan-50/70 py-4 pl-12 pr-4 text-slate-900 outline-none transition focus:border-cyan-500 focus:bg-white focus:ring-2 focus:ring-cyan-200"
                     id="register-name"
+                    name="fullName"
                     placeholder="John Doe"
+                    required
                     type="text"
+                    onChange={() => clearFieldError('fullName')}
                   />
                 </div>
+                <FieldError>{fieldErrors.fullName}</FieldError>
               </div>
 
               <div className="grid grid-cols-1 gap-4 md:grid-cols-2">
@@ -238,10 +491,14 @@ export default function RegisterPage() {
                     <input
                       className="w-full rounded-full border border-transparent bg-cyan-50/70 py-4 pl-12 pr-4 text-slate-900 outline-none transition focus:border-cyan-500 focus:bg-white focus:ring-2 focus:ring-cyan-200"
                       id="register-email"
+                      name="email"
                       placeholder="john@example.com"
+                      required
                       type="email"
+                      onChange={() => clearFieldError('email')}
                     />
                   </div>
+                  <FieldError>{fieldErrors.email}</FieldError>
                 </div>
 
                 <div className="space-y-2">
@@ -255,10 +512,16 @@ export default function RegisterPage() {
                     <input
                       className="w-full rounded-full border border-transparent bg-cyan-50/70 py-4 pl-12 pr-4 text-slate-900 outline-none transition focus:border-cyan-500 focus:bg-white focus:ring-2 focus:ring-cyan-200"
                       id="register-phone"
+                      inputMode="numeric"
+                      name="phone"
+                      pattern="[0-9]*"
                       placeholder="0123456789"
                       type="tel"
+                      value={phone}
+                      onChange={handlePhoneChange}
                     />
                   </div>
+                  <FieldError>{fieldErrors.phone}</FieldError>
                 </div>
               </div>
 
@@ -274,10 +537,14 @@ export default function RegisterPage() {
                     <input
                       className="w-full rounded-full border border-transparent bg-cyan-50/70 py-4 pl-12 pr-4 text-slate-900 outline-none transition focus:border-cyan-500 focus:bg-white focus:ring-2 focus:ring-cyan-200"
                       id="register-password"
+                      name="password"
                       placeholder="••••••••"
+                      required
                       type="password"
+                      onChange={() => clearFieldError('password')}
                     />
                   </div>
+                  <FieldError>{fieldErrors.password}</FieldError>
                 </div>
 
                 <div className="space-y-2">
@@ -291,15 +558,25 @@ export default function RegisterPage() {
                     <input
                       className="w-full rounded-full border border-transparent bg-cyan-50/70 py-4 pl-12 pr-4 text-slate-900 outline-none transition focus:border-cyan-500 focus:bg-white focus:ring-2 focus:ring-cyan-200"
                       id="register-confirm-password"
+                      name="confirmPassword"
                       placeholder="••••••••"
+                      required
                       type="password"
+                      onChange={() => clearFieldError('confirmPassword')}
                     />
                   </div>
+                  <FieldError>{fieldErrors.confirmPassword}</FieldError>
                 </div>
               </div>
 
               <div className="flex items-start gap-3 rounded-2xl bg-cyan-50/60 p-4 transition hover:bg-cyan-50">
-                <input className="peer sr-only" id="register-terms" type="checkbox" />
+                <input
+                  className="peer sr-only"
+                  id="register-terms"
+                  name="acceptedTerms"
+                  type="checkbox"
+                  onChange={() => clearFieldError('acceptedTerms')}
+                />
                 <label
                   className="mt-0.5 flex h-5 w-5 shrink-0 cursor-pointer items-center justify-center rounded-full border-2 border-cyan-300 bg-white shadow-sm transition peer-checked:border-cyan-600 peer-checked:bg-gradient-to-br peer-checked:from-cyan-400 peer-checked:to-teal-700 peer-checked:[&>svg]:opacity-100 peer-hover:border-cyan-500 peer-hover:bg-cyan-50 peer-focus-visible:ring-4 peer-focus-visible:ring-cyan-200"
                   htmlFor="register-terms"
@@ -323,21 +600,35 @@ export default function RegisterPage() {
                   .
                 </p>
               </div>
+              <FieldError>{fieldErrors.acceptedTerms}</FieldError>
+
+              {errorMessage && (
+                <div className="rounded-2xl border border-red-100 bg-red-50 px-4 py-3 text-sm font-semibold text-red-700" role="alert">
+                  {errorMessage}
+                </div>
+              )}
+
+              {successMessage && (
+                <div className="rounded-2xl border border-emerald-100 bg-emerald-50 px-4 py-3 text-sm font-semibold text-emerald-700" role="status">
+                  {successMessage}
+                </div>
+              )}
 
               <button
-                className="flex w-full items-center justify-center gap-2 rounded-full bg-gradient-to-r from-[#ff6900] to-[#c2410c] py-4 font-bold text-white shadow-lg shadow-orange-700/20 transition duration-300 hover:-translate-y-0.5 hover:shadow-orange-700/30 active:translate-y-0"
+                className="flex w-full items-center justify-center gap-2 rounded-full bg-gradient-to-r from-[#ff6900] to-[#c2410c] py-4 font-bold text-white shadow-lg shadow-orange-700/20 transition duration-300 hover:-translate-y-0.5 hover:shadow-orange-700/30 active:translate-y-0 disabled:cursor-not-allowed disabled:opacity-70"
+                disabled={isSubmitting}
                 type="submit"
               >
-                Create Account
+                {isSubmitting ? 'Creating account...' : 'Create Account'}
                 <span className="material-symbols-outlined">arrow_forward</span>
               </button>
             </form>
 
             <p className="mt-10 text-center text-sm text-slate-600">
               Already have an account?
-              <a className="ml-1 font-bold text-cyan-700 underline-offset-4 transition hover:underline" href="#">
+              <Link className="ml-1 font-bold text-cyan-700 underline-offset-4 transition hover:underline" to="/login">
                 Sign In
-              </a>
+              </Link>
             </p>
           </div>
         </section>

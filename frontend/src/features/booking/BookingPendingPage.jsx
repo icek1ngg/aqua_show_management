@@ -48,14 +48,25 @@ export default function BookingPendingPage() {
   const handleContinue = () => {};
 
   return (
-    <MainLayout navbarProps={{ isLoggedIn: true, user: mockUser }}>
+    <MainLayout navbarProps={{ isLoggedIn: true, user: mockUser }} showNavbar={false}>
       <main className="relative min-h-[calc(100vh-5rem)] overflow-hidden bg-gradient-to-b from-cyan-50 via-white to-cyan-100 py-12 md:py-20">
         <div className="absolute left-[10%] top-20 h-20 w-20 rounded-full bg-cyan-300/20" />
         <div className="absolute right-[15%] top-60 h-32 w-32 rounded-full bg-teal-300/20" />
         <div className="absolute bottom-40 left-[20%] h-16 w-16 rounded-full bg-cyan-400/20" />
         <div className="absolute -right-20 bottom-24 h-64 w-64 rounded-full bg-cyan-200/30 blur-3xl" />
 
-        <div className="relative z-10 mx-auto grid max-w-7xl grid-cols-1 gap-10 px-4 sm:px-6 lg:grid-cols-12 lg:px-8">
+        <div className="absolute right-4 top-4 z-20 flex items-center gap-3 rounded-full bg-white/80 px-4 py-2 shadow-sm ring-1 ring-slate-200 backdrop-blur-md sm:right-6 lg:right-8">
+          <span className="text-sm font-semibold text-slate-600">Order ID: #{mockBooking.id}</span>
+          <button
+            className="flex h-9 w-9 items-center justify-center rounded-full bg-slate-100 text-slate-600 transition hover:bg-cyan-50 hover:text-cyan-700"
+            type="button"
+            aria-label="Order ID help"
+          >
+            <span className="material-symbols-outlined text-lg">help</span>
+          </button>
+        </div>
+
+        <div className="relative z-10 mx-auto grid max-w-7xl grid-cols-1 gap-10 px-4 pt-12 sm:px-6 lg:grid-cols-12 lg:px-8">
           <section className="flex flex-col justify-center space-y-8 lg:col-span-7">
             <div className="flex flex-col items-start space-y-4">
               <div
@@ -157,7 +168,6 @@ export default function BookingPendingPage() {
                 <div className="flex items-start justify-between">
                   <div>
                     <h2 className="text-2xl font-black text-cyan-700">Booking Summary</h2>
-                    <p className="text-sm font-bold text-slate-500">Order #{mockBooking.id}</p>
                   </div>
                   <span className="material-symbols-outlined text-4xl text-cyan-200">confirmation_number</span>
                 </div>
@@ -212,11 +222,12 @@ export default function BookingPendingPage() {
           </aside>
         </div>
 
-        <div className="absolute bottom-0 left-0 w-full rotate-180 leading-[0]">
-          <svg className="h-auto w-full fill-cyan-50" viewBox="0 0 1440 320" aria-hidden="true">
-            <path d="M0,160L48,176C96,192,192,224,288,229.3C384,235,480,213,576,181.3C672,149,768,107,864,112C960,117,1056,171,1152,181.3C1248,192,1344,160,1392,144L1440,128L1440,320H0Z" />
-          </svg>
-        </div>
+        <svg className="absolute bottom-0 left-0 h-10 w-full text-cyan-50" preserveAspectRatio="none" viewBox="0 0 1200 120" aria-hidden="true">
+          <path
+            className="fill-current"
+            d="M321.39,56.44c58-10.79,114.16-30.13,172-41.86,82.39-16.72,168.19-17.73,250.45-.39C823.78,31,906.67,72,985.66,92.83c70.05,18.48,146.53,26.09,214.34,3V120H0V0C50.31,34.54,121.57,56.09,190.72,64.31,235.15,69.59,279,64.29,321.39,56.44Z"
+          />
+        </svg>
       </main>
     </MainLayout>
   );

@@ -2,6 +2,7 @@ import { createBrowserRouter } from 'react-router-dom';
 
 import App from './App.jsx';
 import LoginPage from '../features/auth/LoginPage.jsx';
+import ProtectedRoute from '../features/auth/ProtectedRoute.jsx';
 import RegisterPage from '../features/auth/RegisterPage.jsx';
 import BookingDetailPage from '../features/booking/BookingDetailPage.jsx';
 import BookingHistoryPage from '../features/booking/BookingHistoryPage.jsx';
@@ -31,27 +32,51 @@ export const router = createBrowserRouter([
       },
       {
         path: 'profile',
-        element: <ProfilePage />,
+        element: (
+          <ProtectedRoute>
+            <ProfilePage />
+          </ProtectedRoute>
+        ),
       },
       {
         path: 'profile/edit',
-        element: <EditProfilePage />,
+        element: (
+          <ProtectedRoute>
+            <EditProfilePage />
+          </ProtectedRoute>
+        ),
       },
       {
         path: 'bookings/create',
-        element: <CreateBookingPage />,
+        element: (
+          <ProtectedRoute>
+            <CreateBookingPage />
+          </ProtectedRoute>
+        ),
       },
       {
         path: 'bookings/:id/pending',
-        element: <BookingPendingPage />,
+        element: (
+          <ProtectedRoute>
+            <BookingPendingPage />
+          </ProtectedRoute>
+        ),
       },
       {
         path: 'bookings/my',
-        element: <BookingHistoryPage />,
+        element: (
+          <ProtectedRoute>
+            <BookingHistoryPage />
+          </ProtectedRoute>
+        ),
       },
       {
         path: 'bookings/:id',
-        element: <BookingDetailPage />,
+        element: (
+          <ProtectedRoute>
+            <BookingDetailPage />
+          </ProtectedRoute>
+        ),
       },
       {
         path: 'health',
