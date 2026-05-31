@@ -8,6 +8,7 @@ import com.asms.identity.dto.AuthDtos.RegisterRequest;
 import com.asms.identity.dto.AuthDtos.RegisterResponse;
 import com.asms.identity.dto.AuthDtos.UserProfileResponse;
 import com.asms.identity.entity.User;
+import com.asms.identity.enums.AuthProvider;
 import com.asms.identity.repository.UserRepository;
 import com.asms.identity.security.JwtService;
 import com.asms.identity.service.AuthService;
@@ -21,7 +22,6 @@ public class AuthServiceImpl implements AuthService {
     private final UserRepository userRepository;
     private final PasswordEncoder passwordEncoder;
     private final JwtService jwtService;
-
     public AuthServiceImpl(UserRepository userRepository, PasswordEncoder passwordEncoder, JwtService jwtService) {
         this.userRepository = userRepository;
         this.passwordEncoder = passwordEncoder;
@@ -45,6 +45,7 @@ public class AuthServiceImpl implements AuthService {
         );
 
         User savedUser = userRepository.save(user);
+
         return new RegisterResponse(savedUser.getId(), savedUser.getEmail());
     }
 
@@ -54,7 +55,10 @@ public class AuthServiceImpl implements AuthService {
         User user = userRepository.findByEmailIgnoreCase(normalizeEmail(request.email()))
                 .orElseThrow(() -> new UnauthorizedException("Invalid email or password"));
 
-        if (!user.isEnabled() || !passwordEncoder.matches(request.password(), user.getPasswordHash())) {
+        if (!user.isEnabled()
+                || user.getAuthProvider() != AuthProvider.LOCAL
+                || user.getPasswordHash() == null
+                || !passwordEncoder.matches(request.password(), user.getPasswordHash())) {
             throw new UnauthorizedException("Invalid email or password");
         }
 

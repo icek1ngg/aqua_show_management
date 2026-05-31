@@ -2,6 +2,7 @@ import { createBrowserRouter } from 'react-router-dom';
 
 import App from './App.jsx';
 import LoginPage from '../features/auth/LoginPage.jsx';
+import OAuthSuccessPage from '../features/auth/OAuthSuccessPage.jsx';
 import ProtectedRoute from '../features/auth/ProtectedRoute.jsx';
 import RegisterPage from '../features/auth/RegisterPage.jsx';
 import BookingDetailPage from '../features/booking/BookingDetailPage.jsx';
@@ -29,6 +30,10 @@ export const router = createBrowserRouter([
       {
         path: 'register',
         element: <RegisterPage />,
+      },
+      {
+        path: 'oauth2/success',
+        element: <OAuthSuccessPage />,
       },
       {
         path: 'profile',
