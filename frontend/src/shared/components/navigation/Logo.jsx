@@ -1,14 +1,16 @@
+import { Link } from 'react-router-dom';
+
 export default function Logo({ variant = 'default', className = '' }) {
   const isFooter = variant === 'footer';
 
   return (
-    <a
+    <Link
       className={[
         'group inline-flex items-center gap-2 font-bold tracking-tight transition-colors',
         isFooter ? 'text-cyan-200 hover:text-white' : 'text-cyan-800 hover:text-teal-700',
         className,
       ].join(' ')}
-      href="#"
+      to="/"
       aria-label="AquaPulse home"
     >
       <span
@@ -34,6 +36,6 @@ export default function Logo({ variant = 'default', className = '' }) {
         </svg>
       </span>
       <span className="text-xl sm:text-2xl">AquaPulse</span>
-    </a>
+    </Link>
   );
 }

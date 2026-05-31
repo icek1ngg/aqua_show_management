@@ -1,6 +1,143 @@
 import AuthLayout from '../../shared/layouts/AuthLayout.jsx';
 import Logo from '../../shared/components/navigation/Logo.jsx';
 
+const loginBubbles = [
+  {
+    width: '20px',
+    height: '20px',
+    left: '7%',
+    top: '76%',
+    '--bubble-duration': '4.8s',
+    '--bubble-delay': '-1.2s',
+    '--bubble-drift': '18px',
+    '--bubble-rise': '118px',
+  },
+  {
+    width: '40px',
+    height: '40px',
+    left: '15%',
+    top: '58%',
+    '--bubble-duration': '6.8s',
+    '--bubble-delay': '-3.4s',
+    '--bubble-drift': '-18px',
+    '--bubble-rise': '148px',
+  },
+  {
+    width: '16px',
+    height: '16px',
+    left: '25%',
+    top: '82%',
+    '--bubble-duration': '4.4s',
+    '--bubble-delay': '-2.1s',
+    '--bubble-drift': '26px',
+    '--bubble-rise': '104px',
+  },
+  {
+    width: '48px',
+    height: '48px',
+    left: '37%',
+    top: '67%',
+    '--bubble-duration': '7.4s',
+    '--bubble-delay': '-4.8s',
+    '--bubble-drift': '-24px',
+    '--bubble-rise': '156px',
+  },
+  {
+    width: '24px',
+    height: '24px',
+    left: '50%',
+    top: '74%',
+    '--bubble-duration': '5.2s',
+    '--bubble-delay': '-1.8s',
+    '--bubble-drift': '14px',
+    '--bubble-rise': '126px',
+  },
+  {
+    width: '36px',
+    height: '36px',
+    left: '62%',
+    top: '52%',
+    '--bubble-duration': '6.1s',
+    '--bubble-delay': '-3.9s',
+    '--bubble-drift': '-22px',
+    '--bubble-rise': '138px',
+  },
+  {
+    width: '16px',
+    height: '16px',
+    left: '73%',
+    top: '80%',
+    '--bubble-duration': '4.2s',
+    '--bubble-delay': '-0.8s',
+    '--bubble-drift': '22px',
+    '--bubble-rise': '96px',
+  },
+  {
+    width: '56px',
+    height: '56px',
+    left: '82%',
+    top: '62%',
+    '--bubble-duration': '7.8s',
+    '--bubble-delay': '-5.6s',
+    '--bubble-drift': '-30px',
+    '--bubble-rise': '160px',
+  },
+  {
+    width: '24px',
+    height: '24px',
+    left: '91%',
+    top: '72%',
+    '--bubble-duration': '5.6s',
+    '--bubble-delay': '-2.7s',
+    '--bubble-drift': '-14px',
+    '--bubble-rise': '122px',
+  },
+  {
+    width: '20px',
+    height: '20px',
+    left: '43%',
+    top: '88%',
+    '--bubble-duration': '5s',
+    '--bubble-delay': '-3.1s',
+    '--bubble-drift': '30px',
+    '--bubble-rise': '112px',
+  },
+  {
+    width: '12px',
+    height: '12px',
+    left: '20%',
+    top: '36%',
+    '--bubble-duration': '4s',
+    '--bubble-delay': '-1.6s',
+    '--bubble-drift': '-12px',
+    '--bubble-rise': '88px',
+  },
+  {
+    width: '20px',
+    height: '20px',
+    left: '70%',
+    top: '34%',
+    '--bubble-duration': '5.8s',
+    '--bubble-delay': '-4.2s',
+    '--bubble-drift': '18px',
+    '--bubble-rise': '102px',
+  },
+];
+
+function BubbleLayer({ bubbles }) {
+  return (
+    <div className="pointer-events-none absolute inset-0 z-10 overflow-hidden" aria-hidden="true">
+      {bubbles.map((bubble, index) => (
+        <span
+          key={`${bubble.left}-${bubble.top}-${index}`}
+          className="aquapulse-bubble"
+          style={bubble}
+        />
+      ))}
+    </div>
+  );
+}
+
 export default function LoginPage() {
   const handleSubmit = (event) => {
     event.preventDefault();
@@ -12,15 +149,16 @@ export default function LoginPage() {
         <section className="relative hidden min-h-[680px] items-center justify-center overflow-hidden bg-cyan-950 lg:flex">
           <img
             alt="AquaPulse water display"
-            className="absolute inset-0 h-full w-full object-cover"
+            className="absolute inset-0 z-0 h-full w-full object-cover"
             src="https://lh3.googleusercontent.com/aida-public/AB6AXuDwa1CnH9Pzvtiza_g9WIXaq7O8teYe46CgqFFLM8l4Ms8-xZUYX7ZtkZ0pI1rtpVbCgVgVa6d3bfBychRf0vCHNPTyFvRUNePQAAOcEpmHY2BUE5mcUoVLsyeQYjDlkMBBcFQwKm3bVnwxgjAm3XNaAV5OyoL8DtiKV-WXE3DG5RnCmaGSOArlT_aqRdEqINJyN6JQRkF-RsRrpgCzifDOa_VIkJ5bVA0mvbCWFj5rn4B7xs-pwa1NMgz0iOZDqz3viFF11zHfoQ"
           />
-          <div className="absolute inset-0 bg-gradient-to-tr from-cyan-950/90 via-teal-700/55 to-cyan-300/20" />
-          <div className="absolute left-10 top-16 h-24 w-24 rounded-full border border-white/20 bg-white/10 blur-[1px]" />
-          <div className="absolute bottom-24 right-14 h-36 w-36 rounded-full border border-cyan-200/20 bg-cyan-200/10 blur-[1px]" />
-          <div className="absolute -bottom-24 left-0 right-0 h-48 rounded-[50%] bg-white" />
+          <div className="absolute inset-0 z-[1] bg-gradient-to-tr from-cyan-950/90 via-teal-700/55 to-cyan-300/20" />
+          <div className="absolute left-10 top-16 z-[2] h-24 w-24 rounded-full border border-white/20 bg-white/10 blur-[1px]" />
+          <div className="absolute bottom-24 right-14 z-[2] h-36 w-36 rounded-full border border-cyan-200/20 bg-cyan-200/10 blur-[1px]" />
+          <div className="absolute -bottom-24 left-0 right-0 z-[11] h-48 rounded-[50%] bg-white" />
+          <BubbleLayer bubbles={loginBubbles} />
 
-          <div className="relative z-10 max-w-lg px-12 text-white">
+          <div className="relative z-20 max-w-lg px-12 text-white">
             <p className="mb-5 inline-flex rounded-full border border-white/20 bg-white/10 px-4 py-2 text-xs font-bold uppercase tracking-[0.24em] text-cyan-100 backdrop-blur">
               Premier Entertainment
             </p>
@@ -101,16 +239,22 @@ export default function LoginPage() {
                 </div>
               </div>
 
-              <div className="flex items-center gap-3 px-1">
+              <label className="flex cursor-pointer items-center gap-3 px-1 text-sm text-slate-600" htmlFor="remember-login">
                 <input
-                  className="h-5 w-5 cursor-pointer rounded border-cyan-200 text-cyan-700 focus:ring-cyan-200"
+                  className="peer sr-only"
                   id="remember-login"
                   type="checkbox"
                 />
-                <label className="cursor-pointer text-sm text-slate-600" htmlFor="remember-login">
-                  Remember me for 30 days
-                </label>
-              </div>
+                <span
+                  className="flex h-5 w-5 shrink-0 items-center justify-center rounded-full border-2 border-cyan-300 bg-white shadow-sm transition peer-checked:border-cyan-600 peer-checked:bg-gradient-to-br peer-checked:from-cyan-400 peer-checked:to-teal-700 peer-checked:[&>svg]:opacity-100 peer-hover:border-cyan-500 peer-hover:bg-cyan-50 peer-focus-visible:ring-4 peer-focus-visible:ring-cyan-200"
+                  aria-hidden="true"
+                >
+                  <svg className="h-3 w-3 text-white opacity-0 transition" viewBox="0 0 12 12" fill="none">
+                    <path d="M2.25 6.15 4.85 8.75 9.75 3.25" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" />
+                  </svg>
+                </span>
+                <span>Remember me</span>
+              </label>
 
               <div className="space-y-4 pt-2">
                 <button

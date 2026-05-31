@@ -8,3 +8,75 @@ body {
   min-height: 100vh;
   font-family: 'Plus Jakarta Sans', system-ui, -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif;
 }
+
+@keyframes aquapulseBubbleRise {
+  0% {
+    opacity: 0.4;
+    transform: translate3d(0, 20px, 0) scale(0.9);
+  }
+
+  25% {
+    opacity: 0.85;
+  }
+
+  50% {
+    opacity: 0.75;
+    transform: translate3d(var(--bubble-drift, 16px), -60px, 0) scale(1.05);
+  }
+
+  100% {
+    opacity: 0.28;
+    transform: translate3d(
+      calc(0px - var(--bubble-drift, 16px)),
+      calc(0px - var(--bubble-rise, 130px)),
+      0
+    ) scale(1.15);
+  }
+}
+
+.aquapulse-bubble {
+  position: absolute;
+  border-radius: 9999px;
+  background: rgba(255, 255, 255, 0.25);
+  border: 1px solid rgba(255, 255, 255, 0.6);
+  box-shadow:
+    0 0 18px rgba(34, 211, 238, 0.45),
+    inset 0 0 10px rgba(255, 255, 255, 0.35);
+  animation-name: aquapulseBubbleRise;
+  animation-duration: var(--bubble-duration, 6s);
+  animation-delay: var(--bubble-delay, 0s);
+  animation-timing-function: ease-in-out;
+  animation-iteration-count: infinite;
+  animation-fill-mode: both;
+  opacity: 0.4;
+  pointer-events: none;
+  will-change: transform, opacity;
+}
+
+@keyframes aquapulseTicketDrawerSlideIn {
+  from {
+    transform: translateX(100%);
+  }
+
+  to {
+    transform: translateX(0);
+  }
+}
+
+@keyframes aquapulseTicketOverlayFadeIn {
+  from {
+    opacity: 0;
+  }
+
+  to {
+    opacity: 1;
+  }
+}
+
+.aquapulse-ticket-drawer {
+  animation: aquapulseTicketDrawerSlideIn 260ms ease-out both;
+}
+
+.aquapulse-ticket-overlay {
+  animation: aquapulseTicketOverlayFadeIn 180ms ease-out both;
+}
