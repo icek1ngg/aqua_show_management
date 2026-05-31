@@ -12,6 +12,9 @@ import org.springframework.web.bind.annotation.ExceptionHandler;
 import org.springframework.web.bind.annotation.RestControllerAdvice;
 import org.springframework.web.method.annotation.MethodArgumentTypeMismatchException;
 
+import java.util.LinkedHashMap;
+import java.util.Map;
+
 @RestControllerAdvice
 public class GlobalExceptionHandler {
 
@@ -24,25 +27,24 @@ public class GlobalExceptionHandler {
 
     @ExceptionHandler(MethodArgumentNotValidException.class)
     public ResponseEntity<ApiResponse<Void>> handleValidationException(MethodArgumentNotValidException exception) {
-        String message = exception.getBindingResult()
+        Map<String, String> errors = new LinkedHashMap<>();
+        exception.getBindingResult()
                 .getFieldErrors()
-                .stream()
-                .findFirst()
-                .map(fieldError -> fieldError.getField() + ": " + fieldError.getDefaultMessage())
-                .orElse("Validation failed");
+                .forEach(fieldError -> errors.putIfAbsent(fieldError.getField(), fieldError.getDefaultMessage()));
 
-        return ResponseEntity.badRequest().body(ApiResponse.failure(message));
+        return ResponseEntity.badRequest().body(ApiResponse.validationFailure(errors));
     }
 
     @ExceptionHandler(ConstraintViolationException.class)
     public ResponseEntity<ApiResponse<Void>> handleConstraintViolationException(ConstraintViolationException exception) {
-        String message = exception.getConstraintViolations()
-                .stream()
-                .findFirst()
-                .map(violation -> violation.getPropertyPath() + ": " + violation.getMessage())
-                .orElse("Validation failed");
+        Map<String, String> errors = new LinkedHashMap<>();
+        exception.getConstraintViolations()
+                .forEach(violation -> errors.putIfAbsent(
+                        violation.getPropertyPath().toString(),
+                        violation.getMessage()
+                ));
 
-        return ResponseEntity.badRequest().body(ApiResponse.failure(message));
+        return ResponseEntity.badRequest().body(ApiResponse.validationFailure(errors));
     }
 
     @ExceptionHandler({
