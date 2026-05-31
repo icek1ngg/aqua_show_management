@@ -156,6 +156,7 @@ public class BookingServiceImpl implements BookingService {
         User user = resolveUser(currentUserEmail);
         return bookingRepository.findByUserOrderByCreatedAtDesc(user)
                 .stream()
+                .map(this::expirePendingBookingIfNeeded)
                 .map(this::toResponse)
                 .toList();
     }
@@ -164,6 +165,7 @@ public class BookingServiceImpl implements BookingService {
     public BookingResponse getBookingDetail(UUID id, String currentUserEmail) {
         User user = resolveUser(currentUserEmail);
         return bookingRepository.findByIdAndUser(id, user)
+                .map(this::expirePendingBookingIfNeeded)
                 .map(this::toResponse)
                 .orElseThrow(() -> new NotFoundException("Booking not found"));
     }
@@ -176,7 +178,7 @@ public class BookingServiceImpl implements BookingService {
         if (!booking.getUser().getId().equals(user.getId())) {
             throw new NotFoundException("Booking not found");
         }
-        return toResponse(booking);
+        return toResponse(expirePendingBookingIfNeeded(booking));
     }
 
     private User resolveUser(String currentUserEmail) {
@@ -232,5 +234,19 @@ public class BookingServiceImpl implements BookingService {
                 booking.getCreatedAt(),
                 booking.getExpiresAt()
         );
+    }
+
+    private Booking expirePendingBookingIfNeeded(Booking booking) {
+        if (booking.getStatus() != BookingStatus.PENDING_PAYMENT || booking.getExpiresAt() == null) {
+            return booking;
+        }
+
+        if (booking.getExpiresAt().isAfter(Instant.now())) {
+            return booking;
+        }
+
+        booking.setStatus(BookingStatus.EXPIRED);
+        // TODO: Future scheduled job should expire old bookings and release Redis holds.
+        return bookingRepository.save(booking);
     }
 }

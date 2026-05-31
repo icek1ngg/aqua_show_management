@@ -146,6 +146,15 @@ class BookingServiceControllerTest {
 
         assertThat(response.id()).isEqualTo(bookingId);
         assertThat(response.holdId()).isEqualTo("hold-123");
+        assertThat(response.bookingCode()).isEqualTo("AQB20260531ABC123");
+        assertThat(response.showName()).isEqualTo("Symphony of Lights");
+        assertThat(response.showDate()).isEqualTo(booking.getShowDate());
+        assertThat(response.ticketType()).isEqualTo("STANDARD");
+        assertThat(response.quantity()).isEqualTo(2);
+        assertThat(response.unitPrice()).isEqualByComparingTo("45.00");
+        assertThat(response.totalAmount()).isEqualByComparingTo("90.00");
+        assertThat(response.status()).isEqualTo(BookingStatus.PENDING_PAYMENT);
+        assertThat(response.expiresAt()).isEqualTo(booking.getExpiresAt());
     }
 
     @Test
@@ -157,6 +166,42 @@ class BookingServiceControllerTest {
 
         assertThatThrownBy(() -> bookingService.getBookingDetail(bookingId, "user@example.com"))
                 .isInstanceOf(NotFoundException.class);
+    }
+
+    @Test
+    void getBookingDetailConvertsExpiredPendingBookingToExpired() {
+        User user = user("user@example.com");
+        Booking booking = booking(user, "hold-expired");
+        booking.setExpiresAt(Instant.now().minusSeconds(60));
+        UUID bookingId = booking.getId();
+        when(userRepository.findByEmailIgnoreCase("user@example.com")).thenReturn(Optional.of(user));
+        when(bookingRepository.findByIdAndUser(bookingId, user)).thenReturn(Optional.of(booking));
+        when(bookingRepository.save(any(Booking.class))).thenAnswer(invocation -> invocation.getArgument(0));
+
+        BookingResponse response = bookingService.getBookingDetail(bookingId, "user@example.com");
+
+        assertThat(response.status()).isEqualTo(BookingStatus.EXPIRED);
+        verify(bookingRepository).save(booking);
+    }
+
+    @Test
+    void getBookingDetailReturnsPaidAndCancelledStatusesUnchanged() {
+        User user = user("user@example.com");
+        Booking paidBooking = booking(user, "hold-paid");
+        paidBooking.setStatus(BookingStatus.PAID);
+        Booking cancelledBooking = booking(user, "hold-cancelled");
+        cancelledBooking.setStatus(BookingStatus.CANCELLED);
+        cancelledBooking.setExpiresAt(Instant.now().minusSeconds(60));
+        when(userRepository.findByEmailIgnoreCase("user@example.com")).thenReturn(Optional.of(user));
+        when(bookingRepository.findByIdAndUser(paidBooking.getId(), user)).thenReturn(Optional.of(paidBooking));
+        when(bookingRepository.findByIdAndUser(cancelledBooking.getId(), user)).thenReturn(Optional.of(cancelledBooking));
+
+        BookingResponse paidResponse = bookingService.getBookingDetail(paidBooking.getId(), "user@example.com");
+        BookingResponse cancelledResponse = bookingService.getBookingDetail(cancelledBooking.getId(), "user@example.com");
+
+        assertThat(paidResponse.status()).isEqualTo(BookingStatus.PAID);
+        assertThat(cancelledResponse.status()).isEqualTo(BookingStatus.CANCELLED);
+        verify(bookingRepository, never()).save(any());
     }
 
     @Test
@@ -222,7 +267,7 @@ class BookingServiceControllerTest {
         booking.setUnitPrice(new BigDecimal("45.00"));
         booking.setTotalAmount(new BigDecimal("90.00"));
         booking.setStatus(BookingStatus.PENDING_PAYMENT);
-        booking.setExpiresAt(Instant.parse("2026-05-31T15:15:00Z"));
+        booking.setExpiresAt(Instant.now().plusSeconds(900));
         setId(booking, UUID.randomUUID());
         return booking;
     }
