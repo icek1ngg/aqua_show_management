@@ -151,6 +151,143 @@ function FieldError({ children }) {
   return <p className="ml-1 text-sm font-semibold text-red-600">{children}</p>;
 }
 
+const loginBubbles = [
+  {
+    width: '20px',
+    height: '20px',
+    left: '7%',
+    top: '76%',
+    '--bubble-duration': '4.8s',
+    '--bubble-delay': '-1.2s',
+    '--bubble-drift': '18px',
+    '--bubble-rise': '118px',
+  },
+  {
+    width: '40px',
+    height: '40px',
+    left: '15%',
+    top: '58%',
+    '--bubble-duration': '6.8s',
+    '--bubble-delay': '-3.4s',
+    '--bubble-drift': '-18px',
+    '--bubble-rise': '148px',
+  },
+  {
+    width: '16px',
+    height: '16px',
+    left: '25%',
+    top: '82%',
+    '--bubble-duration': '4.4s',
+    '--bubble-delay': '-2.1s',
+    '--bubble-drift': '26px',
+    '--bubble-rise': '104px',
+  },
+  {
+    width: '48px',
+    height: '48px',
+    left: '37%',
+    top: '67%',
+    '--bubble-duration': '7.4s',
+    '--bubble-delay': '-4.8s',
+    '--bubble-drift': '-24px',
+    '--bubble-rise': '156px',
+  },
+  {
+    width: '24px',
+    height: '24px',
+    left: '50%',
+    top: '74%',
+    '--bubble-duration': '5.2s',
+    '--bubble-delay': '-1.8s',
+    '--bubble-drift': '14px',
+    '--bubble-rise': '126px',
+  },
+  {
+    width: '36px',
+    height: '36px',
+    left: '62%',
+    top: '52%',
+    '--bubble-duration': '6.1s',
+    '--bubble-delay': '-3.9s',
+    '--bubble-drift': '-22px',
+    '--bubble-rise': '138px',
+  },
+  {
+    width: '16px',
+    height: '16px',
+    left: '73%',
+    top: '80%',
+    '--bubble-duration': '4.2s',
+    '--bubble-delay': '-0.8s',
+    '--bubble-drift': '22px',
+    '--bubble-rise': '96px',
+  },
+  {
+    width: '56px',
+    height: '56px',
+    left: '82%',
+    top: '62%',
+    '--bubble-duration': '7.8s',
+    '--bubble-delay': '-5.6s',
+    '--bubble-drift': '-30px',
+    '--bubble-rise': '160px',
+  },
+  {
+    width: '24px',
+    height: '24px',
+    left: '91%',
+    top: '72%',
+    '--bubble-duration': '5.6s',
+    '--bubble-delay': '-2.7s',
+    '--bubble-drift': '-14px',
+    '--bubble-rise': '122px',
+  },
+  {
+    width: '20px',
+    height: '20px',
+    left: '43%',
+    top: '88%',
+    '--bubble-duration': '5s',
+    '--bubble-delay': '-3.1s',
+    '--bubble-drift': '30px',
+    '--bubble-rise': '112px',
+  },
+  {
+    width: '12px',
+    height: '12px',
+    left: '20%',
+    top: '36%',
+    '--bubble-duration': '4s',
+    '--bubble-delay': '-1.6s',
+    '--bubble-drift': '-12px',
+    '--bubble-rise': '88px',
+  },
+  {
+    width: '20px',
+    height: '20px',
+    left: '70%',
+    top: '34%',
+    '--bubble-duration': '5.8s',
+    '--bubble-delay': '-4.2s',
+    '--bubble-drift': '18px',
+    '--bubble-rise': '102px',
+  },
+];
+
+function BubbleLayer({ bubbles }) {
+  return (
+    <div className="pointer-events-none absolute inset-0 z-10 overflow-hidden" aria-hidden="true">
+      {bubbles.map((bubble, index) => (
+        <span
+          key={`${bubble.left}-${bubble.top}-${index}`}
+          className="aquapulse-bubble"
+          style={bubble}
+        />
+      ))}
+    </div>
+  );
+}
+
 export default function LoginPage() {
   const { login } = useAuth();
   const location = useLocation();
