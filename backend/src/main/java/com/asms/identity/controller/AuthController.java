@@ -68,7 +68,7 @@ public class AuthController {
     }
 
     @GetMapping("/verify-email")
-    public void verifyEmail(@RequestParam String token, HttpServletResponse response) throws IOException {
+    public void verifyEmail(@RequestParam("token") String token, HttpServletResponse response) throws IOException {
         try {
             emailVerificationService.verifyEmail(token);
             response.sendRedirect(frontendBaseUrl + "/login?verified=true");

@@ -1,14 +1,21 @@
 import { useEffect, useState } from 'react';
+import { useParams } from 'react-router-dom';
 
+import { getBookingDetail } from '../../services/bookingService.js';
 import MainLayout from '../../shared/layouts/MainLayout.jsx';
 
 const initialCountdownSeconds = 13 * 60 + 21;
 
 const mockBooking = {
   id: 'AQ-882190',
+  bookingCode: 'AQ-882190',
   showName: 'Symphony of Lights',
+  showDate: '2024-10-24',
   dateTime: 'Oct 24, 2024 - 08:30 PM',
   venue: 'Aqua Plaza',
+  ticketType: 'Standard Entry',
+  status: 'PENDING_PAYMENT',
+  expiresAt: null,
   quantity: '2 Adult Tickets',
   totalAmount: '$45.00',
   imageUrl:
@@ -28,10 +35,109 @@ function formatCountdown(seconds) {
   return `${minutes.toString().padStart(2, '0')}:${remainingSeconds.toString().padStart(2, '0')}`;
 }
 
+function secondsUntil(expiresAt) {
+  if (!expiresAt) {
+    return initialCountdownSeconds;
+  }
+
+  const expiresAtTime = new Date(expiresAt).getTime();
+  if (Number.isNaN(expiresAtTime)) {
+    return initialCountdownSeconds;
+  }
+
+  return Math.max(0, Math.floor((expiresAtTime - Date.now()) / 1000));
+}
+
+function formatCurrency(value) {
+  const amount = Number(value);
+  if (Number.isNaN(amount)) {
+    return '$0.00';
+  }
+
+  return `$${amount.toFixed(2)}`;
+}
+
+function formatDate(value) {
+  if (!value) {
+    return 'Not available';
+  }
+
+  const date = new Date(value);
+  if (Number.isNaN(date.getTime())) {
+    return value;
+  }
+
+  return date.toLocaleDateString(undefined, { year: 'numeric', month: 'long', day: 'numeric' });
+}
+
+function normalizeBooking(booking) {
+  if (!booking) {
+    return mockBooking;
+  }
+
+  return {
+    id: booking.id,
+    bookingCode: booking.bookingCode || booking.id,
+    showName: booking.showName || mockBooking.showName,
+    showDate: booking.showDate,
+    dateTime: formatDate(booking.showDate),
+    venue: mockBooking.venue,
+    ticketType: booking.ticketType || 'Standard Entry',
+    status: booking.status || 'PENDING_PAYMENT',
+    expiresAt: booking.expiresAt,
+    quantity: `${booking.quantity || 0} ${booking.ticketType || 'Tickets'}`,
+    totalAmount: formatCurrency(booking.totalAmount),
+    imageUrl: mockBooking.imageUrl,
+  };
+}
+
 export default function BookingPendingPage() {
+  const { id } = useParams();
+  const [booking, setBooking] = useState(null);
+  const [isLoadingBooking, setIsLoadingBooking] = useState(true);
+  const [loadError, setLoadError] = useState('');
   const [countdownSeconds, setCountdownSeconds] = useState(initialCountdownSeconds);
-  const isExpired = countdownSeconds === 0;
-  const status = isExpired ? 'EXPIRED' : 'PENDING_PAYMENT';
+  const displayBooking = normalizeBooking(booking);
+  const isExpired = displayBooking.status === 'EXPIRED' || countdownSeconds === 0;
+  const status = isExpired ? 'EXPIRED' : displayBooking.status;
+
+  useEffect(() => {
+    let isMounted = true;
+
+    async function loadBooking() {
+      if (!id) {
+        setLoadError('Booking ID is missing.');
+        setIsLoadingBooking(false);
+        return;
+      }
+
+      try {
+        setIsLoadingBooking(true);
+        setLoadError('');
+        const bookingDetail = await getBookingDetail(id);
+        if (!isMounted) {
+          return;
+        }
+        setBooking(bookingDetail);
+        setCountdownSeconds(secondsUntil(bookingDetail.expiresAt));
+      } catch {
+        if (!isMounted) {
+          return;
+        }
+        setLoadError('Could not load booking details. Showing a temporary preview instead.');
+      } finally {
+        if (isMounted) {
+          setIsLoadingBooking(false);
+        }
+      }
+    }
+
+    loadBooking();
+
+    return () => {
+      isMounted = false;
+    };
+  }, [id]);
 
   useEffect(() => {
     if (countdownSeconds === 0) {
@@ -46,6 +152,7 @@ export default function BookingPendingPage() {
   }, [countdownSeconds]);
 
   const handleContinue = () => {};
+  const detailHref = id ? `/bookings/${id}` : '/bookings/my';
 
   return (
     <MainLayout navbarProps={{ isLoggedIn: true, user: mockUser }} showNavbar={false}>
@@ -56,7 +163,7 @@ export default function BookingPendingPage() {
         <div className="absolute -right-20 bottom-24 h-64 w-64 rounded-full bg-cyan-200/30 blur-3xl" />
 
         <div className="absolute right-4 top-4 z-20 flex items-center gap-3 rounded-full bg-white/80 px-4 py-2 shadow-sm ring-1 ring-slate-200 backdrop-blur-md sm:right-6 lg:right-8">
-          <span className="text-sm font-semibold text-slate-600">Order ID: #{mockBooking.id}</span>
+          <span className="text-sm font-semibold text-slate-600">Order ID: #{displayBooking.bookingCode}</span>
           <button
             className="flex h-9 w-9 items-center justify-center rounded-full bg-slate-100 text-slate-600 transition hover:bg-cyan-50 hover:text-cyan-700"
             type="button"
@@ -96,9 +203,21 @@ export default function BookingPendingPage() {
               <p className="max-w-xl text-lg leading-8 text-slate-600">
                 {isExpired
                   ? 'The checkout window ended and these seats are no longer held. Please create a new booking when you are ready.'
-                  : `We created your reservation for ${mockBooking.showName}. To guarantee your seats, please continue before the timer expires.`}
+                  : `We created your reservation for ${displayBooking.showName}. To guarantee your seats, please continue before the timer expires.`}
               </p>
             </div>
+
+            {(isLoadingBooking || loadError) && (
+              <div
+                className={[
+                  'rounded-2xl border px-5 py-4 text-sm font-semibold shadow-sm',
+                  loadError ? 'border-yellow-100 bg-yellow-50 text-yellow-800' : 'border-cyan-100 bg-white/80 text-cyan-800',
+                ].join(' ')}
+                role={loadError ? 'alert' : 'status'}
+              >
+                {isLoadingBooking ? 'Loading booking details...' : loadError}
+              </div>
+            )}
 
             <div className="flex flex-col items-center gap-8 rounded-[2rem] border border-cyan-100 bg-white/80 p-8 shadow-[0_4px_20px_rgba(0,206,209,0.08)] backdrop-blur-xl md:flex-row">
               <div className="text-center">
@@ -143,13 +262,13 @@ export default function BookingPendingPage() {
               )}
               <a
                 className="rounded-full border-2 border-cyan-700 bg-white px-8 py-4 font-bold text-cyan-700 transition hover:bg-cyan-50"
-                href="/bookings/1"
+                href={detailHref}
               >
                 View Booking Detail
               </a>
             </div>
 
-            <a className="hidden items-center gap-2 font-bold text-cyan-700 underline-offset-4 hover:underline lg:inline-flex" href="#">
+            <a className="hidden items-center gap-2 font-bold text-cyan-700 underline-offset-4 hover:underline lg:inline-flex" href="/">
               <span className="material-symbols-outlined">arrow_back</span>
               Back to Home
             </a>
@@ -158,9 +277,9 @@ export default function BookingPendingPage() {
           <aside className="lg:col-span-5">
             <div className="overflow-hidden rounded-[2rem] border border-white bg-white shadow-[0_20px_48px_rgba(0,0,0,0.05)]">
               <div className="relative h-48 overflow-hidden">
-                <img alt={mockBooking.showName} className="h-full w-full object-cover transition duration-700 hover:scale-110" src={mockBooking.imageUrl} />
+                <img alt={displayBooking.showName} className="h-full w-full object-cover transition duration-700 hover:scale-110" src={displayBooking.imageUrl} />
                 <div className="absolute right-4 top-4 rounded-full bg-yellow-200 px-3 py-1 text-xs font-black text-slate-900">
-                  {mockBooking.totalAmount}
+                  {displayBooking.totalAmount}
                 </div>
               </div>
 
@@ -168,6 +287,7 @@ export default function BookingPendingPage() {
                 <div className="flex items-start justify-between">
                   <div>
                     <h2 className="text-2xl font-black text-cyan-700">Booking Summary</h2>
+                    <p className="mt-1 text-sm font-semibold text-slate-500">{displayBooking.bookingCode}</p>
                   </div>
                   <span className="material-symbols-outlined text-4xl text-cyan-200">confirmation_number</span>
                 </div>
@@ -175,25 +295,33 @@ export default function BookingPendingPage() {
                 <div className="space-y-4 border-t border-cyan-100 pt-4">
                   <div className="flex justify-between gap-4">
                     <span className="text-slate-500">Show Name</span>
-                    <span className="font-bold text-slate-900">{mockBooking.showName}</span>
+                    <span className="font-bold text-slate-900">{displayBooking.showName}</span>
                   </div>
                   <div className="flex justify-between gap-4">
-                    <span className="text-slate-500">Date & Time</span>
-                    <span className="text-right font-bold text-slate-900">{mockBooking.dateTime}</span>
+                    <span className="text-slate-500">Show Date</span>
+                    <span className="text-right font-bold text-slate-900">{displayBooking.dateTime}</span>
                   </div>
                   <div className="flex justify-between gap-4">
-                    <span className="text-slate-500">Venue</span>
-                    <span className="font-bold text-slate-900">{mockBooking.venue}</span>
+                    <span className="text-slate-500">Ticket Type</span>
+                    <span className="font-bold text-slate-900">{displayBooking.ticketType}</span>
                   </div>
                   <div className="flex justify-between gap-4">
                     <span className="text-slate-500">Quantity</span>
-                    <span className="font-bold text-slate-900">{mockBooking.quantity}</span>
+                    <span className="font-bold text-slate-900">{displayBooking.quantity}</span>
+                  </div>
+                  <div className="flex justify-between gap-4">
+                    <span className="text-slate-500">Status</span>
+                    <span className="font-bold text-slate-900">{status}</span>
+                  </div>
+                  <div className="flex justify-between gap-4">
+                    <span className="text-slate-500">Expires At</span>
+                    <span className="text-right font-bold text-slate-900">{displayBooking.expiresAt ? formatDate(displayBooking.expiresAt) : 'Not available'}</span>
                   </div>
                 </div>
 
                 <div className="flex items-center justify-between border-t-2 border-dashed border-cyan-100 pt-6">
                   <span className="text-xl font-black text-slate-950">Total Amount</span>
-                  <span className="text-3xl font-black text-cyan-700">{mockBooking.totalAmount}</span>
+                  <span className="text-3xl font-black text-cyan-700">{displayBooking.totalAmount}</span>
                 </div>
               </div>
             </div>
@@ -212,10 +340,10 @@ export default function BookingPendingPage() {
                   Continue to Payment
                 </button>
               )}
-              <a className="w-full rounded-full border-2 border-cyan-700 bg-white py-4 text-center font-bold text-cyan-700" href="/bookings/1">
+              <a className="w-full rounded-full border-2 border-cyan-700 bg-white py-4 text-center font-bold text-cyan-700" href={detailHref}>
                 View Booking Detail
               </a>
-              <a className="py-2 text-center font-bold text-cyan-700" href="#">
+              <a className="py-2 text-center font-bold text-cyan-700" href="/">
                 Back to Home
               </a>
             </div>

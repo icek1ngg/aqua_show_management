@@ -1,6 +1,7 @@
 import { useEffect, useState } from 'react';
-import { useSearchParams, useNavigate } from 'react-router-dom';
+import { useLocation, useNavigate, useSearchParams } from 'react-router-dom';
 
+import { createBooking, getBookingByHoldId } from '../../services/bookingService.js';
 import MainLayout from '../../shared/layouts/MainLayout.jsx';
 
 // TEMPORARY / FRONTEND-ONLY mock database of show options
@@ -66,11 +67,46 @@ function formatDateString(dateStr) {
   }
 }
 
+const bookingPollIntervalMs = 1500;
+const bookingPollTimeoutMs = 20000;
+
+function sleep(ms) {
+  return new Promise((resolve) => {
+    window.setTimeout(resolve, ms);
+  });
+}
+
+function getBookingErrorMessage(error) {
+  const status = error?.response?.status;
+  const responseData = error?.response?.data;
+
+  if (status === 401) {
+    return 'Please sign in to create a booking.';
+  }
+
+  if (status === 409) {
+    return 'Not enough tickets available.';
+  }
+
+  if (status === 503) {
+    return 'Booking service is temporarily unavailable. Please try again shortly.';
+  }
+
+  if (responseData?.errors) {
+    return Object.values(responseData.errors).filter(Boolean).join(' ');
+  }
+
+  return responseData?.message || 'Could not create booking. Please try again.';
+}
+
 export default function CreateBookingPage() {
   const [searchParams, setSearchParams] = useSearchParams();
   const navigate = useNavigate();
+  const location = useLocation();
 
   // Retrieve URL search parameters
+  const showIdParam = searchParams.get('showId');
+  const scheduleIdParam = searchParams.get('scheduleId');
   const showNameParam = searchParams.get('show');
   const dateParam = searchParams.get('date');
   const quantityParam = Number(searchParams.get('quantity'));
@@ -79,6 +115,9 @@ export default function CreateBookingPage() {
   // State management
   const [quantity, setQuantity] = useState(1);
   const [bookingError, setBookingError] = useState('');
+  const [bookingStatusMessage, setBookingStatusMessage] = useState('');
+  const [submitState, setSubmitState] = useState('idle');
+  const isBookingInProgress = submitState === 'creating' || submitState === 'processing';
 
   // Handle query parameter updates and synchronization
   useEffect(() => {
@@ -88,7 +127,7 @@ export default function CreateBookingPage() {
   }, [quantityParam]);
 
   // Check if required params are missing
-  const isParamsMissing = !showNameParam || !dateParam || isNaN(quantityParam) || quantityParam < 1;
+  const isParamsMissing = !showIdParam || !scheduleIdParam || !showNameParam || !dateParam || isNaN(quantityParam) || quantityParam < 1;
 
   if (isParamsMissing) {
     return (
@@ -144,6 +183,7 @@ export default function CreateBookingPage() {
   };
 
   const decrementQuantity = () => {
+    if (isBookingInProgress) return;
     setBookingError('');
     const nextVal = Math.max(1, quantity - 1);
     setQuantity(nextVal);
@@ -151,13 +191,48 @@ export default function CreateBookingPage() {
   };
 
   const incrementQuantity = () => {
+    if (isBookingInProgress) return;
     setBookingError('');
     const nextVal = Math.min(showData.maxQuantity, quantity + 1);
     setQuantity(nextVal);
     updateQuantityParams(nextVal);
   };
 
-  const handleConfirmBooking = () => {
+  const pollCreatedBooking = async (holdId) => {
+    const startedAt = Date.now();
+
+    while (Date.now() - startedAt < bookingPollTimeoutMs) {
+      await sleep(bookingPollIntervalMs);
+
+      try {
+        const booking = await getBookingByHoldId(holdId);
+        if (booking?.id) {
+          navigate(`/bookings/${booking.id}/pending`);
+          return true;
+        }
+      } catch (error) {
+        if (error?.response?.status === 401) {
+          throw error;
+        }
+      }
+    }
+
+    return false;
+  };
+
+  const handleConfirmBooking = async () => {
+    if (isBookingInProgress) {
+      return;
+    }
+
+    setBookingError('');
+    setBookingStatusMessage('');
+
+    if (!showIdParam || !scheduleIdParam) {
+      setBookingError('Selected show schedule is required. Please search for tickets again.');
+      return;
+    }
+
     if (!showNameParam || !dateParam) {
       setBookingError('Selected show and date are required.');
       return;
@@ -168,7 +243,42 @@ export default function CreateBookingPage() {
       return;
     }
 
-    setBookingError('Booking details are valid. Checkout will be connected in a later phase.');
+    const payload = {
+      showId: showIdParam,
+      scheduleId: scheduleIdParam,
+      showName: showNameParam,
+      showDate: dateParam,
+      ticketType: ticketTypeParam,
+      quantity,
+    };
+
+    try {
+      setSubmitState('creating');
+      setBookingStatusMessage('Creating booking...');
+      const result = await createBooking(payload);
+
+      if (!result?.holdId) {
+        throw new Error('Booking hold was not returned.');
+      }
+
+      setSubmitState('processing');
+      setBookingStatusMessage('Booking request is being processed...');
+      const found = await pollCreatedBooking(result.holdId);
+
+      if (!found) {
+        setSubmitState('idle');
+        setBookingStatusMessage('');
+        setBookingError('Your booking is still processing. Please check My Bookings shortly.');
+      }
+    } catch (error) {
+      setSubmitState('idle');
+      setBookingStatusMessage('');
+      setBookingError(getBookingErrorMessage(error));
+
+      if (error?.response?.status === 401) {
+        navigate('/login', { state: { from: location } });
+      }
+    }
   };
 
   return (
@@ -258,7 +368,7 @@ export default function CreateBookingPage() {
                   <div className="flex items-center rounded-full border-2 border-cyan-100 bg-cyan-50 p-2">
                     <button
                       className="flex h-10 w-10 items-center justify-center rounded-full bg-white text-cyan-700 shadow-sm transition hover:bg-cyan-700 hover:text-white disabled:cursor-not-allowed disabled:opacity-50"
-                      disabled={quantity === 1}
+                      disabled={quantity === 1 || isBookingInProgress}
                       onClick={decrementQuantity}
                       type="button"
                       aria-label="Decrease quantity"
@@ -268,7 +378,7 @@ export default function CreateBookingPage() {
                     <span className="w-14 text-center text-2xl font-black text-slate-950">{quantity}</span>
                     <button
                       className="flex h-10 w-10 items-center justify-center rounded-full bg-white text-cyan-700 shadow-sm transition hover:bg-cyan-700 hover:text-white disabled:cursor-not-allowed disabled:opacity-50"
-                      disabled={quantity === showData.maxQuantity}
+                      disabled={quantity === showData.maxQuantity || isBookingInProgress}
                       onClick={incrementQuantity}
                       type="button"
                       aria-label="Increase quantity"
@@ -311,7 +421,7 @@ export default function CreateBookingPage() {
                 <div className="relative z-10 mb-8 space-y-4">
                   <div className="flex gap-3 rounded-2xl bg-cyan-50 p-4 text-sm text-cyan-800">
                     <span className="material-symbols-outlined text-sm">info</span>
-                    <p>Tickets are held for 15 minutes until checkout is confirmed.</p>
+                    <p>Frontend pricing is an estimate only. Final booking price is calculated by AquaPulse on the server.</p>
                   </div>
                   <div className="flex items-center gap-2 px-1 text-sm text-slate-500">
                     <span className="material-symbols-outlined text-lg text-cyan-600">verified</span>
@@ -322,22 +432,27 @@ export default function CreateBookingPage() {
                 <div className="relative z-10 space-y-4">
                   {bookingError && (
                     <div
-                      className={`rounded-2xl border px-4 py-3 text-sm font-semibold ${
-                        bookingError.includes('valid')
-                          ? 'border-emerald-100 bg-emerald-50 text-emerald-700'
-                          : 'border-red-100 bg-red-50 text-red-700'
-                      }`}
-                      role={bookingError.includes('valid') ? 'status' : 'alert'}
+                      className="rounded-2xl border border-red-100 bg-red-50 px-4 py-3 text-sm font-semibold text-red-700"
+                      role="alert"
                     >
                       {bookingError}
                     </div>
                   )}
+                  {bookingStatusMessage && (
+                    <div
+                      className="rounded-2xl border border-cyan-100 bg-cyan-50 px-4 py-3 text-sm font-semibold text-cyan-800"
+                      role="status"
+                    >
+                      {bookingStatusMessage}
+                    </div>
+                  )}
                   <button
-                    className="w-full rounded-full bg-cyan-700 py-4 text-lg font-bold text-white shadow-lg shadow-cyan-900/10 transition hover:bg-cyan-800"
+                    className="w-full rounded-full bg-cyan-700 py-4 text-lg font-bold text-white shadow-lg shadow-cyan-900/10 transition hover:bg-cyan-800 disabled:cursor-not-allowed disabled:opacity-70"
+                    disabled={isBookingInProgress}
                     onClick={handleConfirmBooking}
                     type="button"
                   >
-                    Confirm Booking
+                    {submitState === 'creating' ? 'Creating booking...' : submitState === 'processing' ? 'Processing booking...' : 'Confirm Booking'}
                   </button>
                   <button
                     className="w-full text-center text-sm font-bold text-cyan-700 underline-offset-4 hover:underline cursor-pointer"
