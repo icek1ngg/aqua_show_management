@@ -144,7 +144,7 @@ function BookingStatus({ status, expiresAt }) {
 
 function BookingAction({ booking }) {
   const target = booking.status === 'PENDING_PAYMENT' ? `/bookings/${booking.id}/pending` : `/bookings/${booking.id}`;
-  const label = booking.status === 'PENDING_PAYMENT' ? 'Open Pending Payment' : 'View Details';
+  const label = booking.status === 'PENDING_PAYMENT' ? 'View Pending' : 'View Details';
 
   return (
     <Link
