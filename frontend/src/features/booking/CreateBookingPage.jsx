@@ -1,56 +1,170 @@
-import { useState } from 'react';
+import { useEffect, useState } from 'react';
+import { useSearchParams, useNavigate } from 'react-router-dom';
 
 import MainLayout from '../../shared/layouts/MainLayout.jsx';
 
-const show = {
-  name: 'Symphony of Lights',
-  category: 'Water Show',
-  badge: 'Popular',
-  date: 'Oct 24, 2024',
-  time: '08:00 PM - 09:30 PM',
-  venue: 'Aqua Plaza',
-  ticketType: 'General Admission',
-  pricePerTicket: 45,
-  maxQuantity: 10,
-  description:
-    'Witness the world\'s most advanced synchronized water performance. A breathtaking choreography of 50-foot water jets, 4K laser projections, and an orchestral soundtrack that will leave you spellbound.',
-  imageUrl:
-    'https://lh3.googleusercontent.com/aida-public/AB6AXuBQJ-Fo4HDO72JbLax0CiFqctWCGXvU4YEfKNT6BKoii53LhvXYm3tK9deyNpu3SQhQuDwXH4brHWFob4XTMXC0igb1FTIelijgurjSK40wqc_V-h4hB2iXApJSw4tuIL9RRKwcdhGhhcgV9V5pOtwPQGvlVc5CRVwmmWl5xWGLSkDEXdqrpRF327LZc7RzHHIIOK5u5seDmxx49urrFLxksqEEDJ5_xPJn8EULd2-53B3FmPiCpcXrt3oMMoWR8T3lZdXTQe3xXQ',
-};
-
-const mockUser = {
-  name: 'Marina Blue Waters',
-  avatarUrl:
-    'https://lh3.googleusercontent.com/aida-public/AB6AXuD8Ktsr2eh2zseRpqmcWc1jQ2IUGLAARYiIysbobKUntDOh1nfDEifzPo42cD1xCI3T5oWurk7H1oKkKP_l2LrvMSTbQqGTFw60SUPYoNNMIv3gfUV3GqpU11JvrHJJDZgeCC_B5r0q8iYCRft-Kxz2bcJz_sWISuXeYsix-dHPCFCu7EefAYCNtuwQt1sSeMzD1LYvsG6zg6WcWlfRAxuW6RJDQt2u2lZ8PPXPaVPdz65gIS2xSH4QbYVkuUlpX6vy3tt5-fusYw',
+// TEMPORARY / FRONTEND-ONLY mock database of show options
+const showDatabase = {
+  'Symphony of Lights': {
+    name: 'Symphony of Lights',
+    category: 'Water Show',
+    badge: 'Popular',
+    pricePerTicket: 45,
+    maxQuantity: 10,
+    time: '08:00 PM - 09:30 PM',
+    venue: 'Aqua Plaza',
+    description: "Witness the world's most advanced synchronized water performance. A breathtaking choreography of 50-foot water jets, 4K laser projections, and an orchestral soundtrack that will leave you spellbound.",
+    imageUrl: 'https://lh3.googleusercontent.com/aida-public/AB6AXuBQJ-Fo4HDO72JbLax0CiFqctWCGXvU4YEfKNT6BKoii53LhvXYm3tK9deyNpu3SQhQuDwXH4brHWFob4XTMXC0igb1FTIelijgurjSK40wqc_V-h4hB2iXApJSw4tuIL9RRKwcdhGhhcgV9V5pOtwPQGvlVc5CRVwmmWl5xWGLSkDEXdqrpRF327LZc7RzHHIIOK5u5seDmxx49urrFLxksqEEDJ5_xPJn8EULd2-53B3FmPiCpcXrt3oMMoWR8T3lZdXTQe3xXQ',
+  },
+  'Ocean Dreams': {
+    name: 'Ocean Dreams',
+    category: 'Marine Show',
+    badge: 'Trending',
+    pricePerTicket: 35,
+    maxQuantity: 10,
+    time: '02:00 PM - 03:30 PM',
+    venue: 'Marine Amphitheater',
+    description: 'Dive into the magical world of our ocean friends. A heartwarming and educational showcase featuring intelligent dolphins, playful sea lions, and majestic penguins.',
+    imageUrl: 'https://lh3.googleusercontent.com/aida-public/AB6AXuCLkcsyUKlIImgmce-9G2dAo8GcDQHC4tMU_HtQpL0TEZHFnZMA593upxVQv7NP_8xUJLFZ9UhPc2TkLmRBIwG4nADjfrcPCCV1OcprAX9PJYRROaEPTJIr9XSSsURgaOernS9YgRdb06XKur09aBAzonxwlnjCul3WOZ_hy89pXKbtzNbQMxBkKc-JLsrTQN5WL9Qd5ekbJS4-Q_1eRRxp5L5pm-iG_pY2SQwZkYFcKXI6Ead_uy9WTRTwJK2BTK1zLuqph8bxCQ',
+  },
+  'Aqua Parade': {
+    name: 'Aqua Parade',
+    category: 'Float Parade',
+    badge: 'Festive',
+    pricePerTicket: 30,
+    maxQuantity: 10,
+    time: '04:30 PM - 05:30 PM',
+    venue: 'Canal Street',
+    description: 'A vibrant celebration on water! Watch stunningly decorated floats, acrobats, and dancers parade down the canals in a burst of music, lights, and color.',
+    imageUrl: 'https://lh3.googleusercontent.com/aida-public/AB6AXuCujaSo6RV1Zoca54QEd2IVZ0mAIhk-vMjIjrWZ7vuCp0P6wllTuqPk4C8vUmNCkvR3RIODJ1oFmeSH8MZ-G37u1qMR5SGvZxUPPJnMsqk3L4KrtxQarbpM4eTByeZzXqJBfd1vj5K372GpP8Ayu4fBjMoU297quKk5Ks1Zu3OJVF7JnLc7tv52VksRq713j_R4nTLp2eF5SXS-k8LDvGqMXUTAVexCDC4W2CRrf9wRyqfIIqm9G3VrZTqy0eU7D4yRB5CiNTWJug',
+  },
+  'Mermaid Splash': {
+    name: 'Mermaid Splash',
+    category: 'Underwater Theater',
+    badge: 'Magical',
+    pricePerTicket: 50,
+    maxQuantity: 10,
+    time: '11:00 AM - 12:30 PM',
+    venue: 'Deep Ocean Tank',
+    description: 'Believe in magic with our beautiful mermaids performing synchronized swimming, acrobatics, and storytelling in our giant deep ocean aquarium.',
+    imageUrl: 'https://lh3.googleusercontent.com/aida-public/AB6AXuCAs3NVAK7aoUYuYTZX3AmIWjo37TVxp8y6qJgQ9aCIxerTaTrUNtCZg6IkvjGYTrm8NkWAmMk9EYSAS0zHX-Ybuchms5PmzM8GSFwWEwlI4Yo9RrGTNwDjP0uBNcrI0GEVscCdtCQdMPXEMe6JZqLjxpYxC0m-dniRVU5w8F3YNuK1ONb9aqNtSQ8JjTFMnaKVdluoElQViAQ2wGLue9tKyOx3JFBWEQNJawzk2cibhFjqAkAmwOrkKMOymHdXyYfPgbQ1y6XgQQ',
+  }
 };
 
 function formatCurrency(amount) {
   return `$${amount.toFixed(2)}`;
 }
 
+function formatDateString(dateStr) {
+  if (!dateStr) return 'Not selected';
+  try {
+    const dateObj = new Date(dateStr);
+    if (isNaN(dateObj.getTime())) return dateStr;
+    return dateObj.toLocaleDateString(undefined, { year: 'numeric', month: 'long', day: 'numeric' });
+  } catch {
+    return dateStr;
+  }
+}
+
 export default function CreateBookingPage() {
+  const [searchParams, setSearchParams] = useSearchParams();
+  const navigate = useNavigate();
+
+  // Retrieve URL search parameters
+  const showNameParam = searchParams.get('show');
+  const dateParam = searchParams.get('date');
+  const quantityParam = Number(searchParams.get('quantity'));
+  const ticketTypeParam = searchParams.get('ticketType') || 'Standard Entry';
+
+  // State management
   const [quantity, setQuantity] = useState(1);
   const [bookingError, setBookingError] = useState('');
-  const totalAmount = quantity * show.pricePerTicket;
+
+  // Handle query parameter updates and synchronization
+  useEffect(() => {
+    if (quantityParam && Number.isInteger(quantityParam) && quantityParam >= 1) {
+      setQuantity(quantityParam);
+    }
+  }, [quantityParam]);
+
+  // Check if required params are missing
+  const isParamsMissing = !showNameParam || !dateParam || isNaN(quantityParam) || quantityParam < 1;
+
+  if (isParamsMissing) {
+    return (
+      <MainLayout>
+        <div className="mx-auto max-w-3xl px-4 py-20 text-center sm:px-6 lg:px-8 flex flex-col items-center justify-center min-h-[60vh]">
+          <div className="inline-flex h-24 w-24 items-center justify-center rounded-full bg-cyan-50 text-cyan-700 mb-8 border border-cyan-100 shadow-sm animate-pulse">
+            <span className="material-symbols-outlined text-4xl">confirmation_number</span>
+          </div>
+          <h1 className="text-4xl font-black tracking-tight text-slate-950">Select Tickets to Continue</h1>
+          <p className="mt-4 text-base text-slate-600 max-w-md">
+            Please search for a show, date, and ticket quantity using the Ticket Search Drawer to start your booking.
+          </p>
+          <div className="mt-8 flex flex-col justify-center gap-4 sm:flex-row w-full sm:w-auto px-4">
+            <button
+              className="rounded-full bg-gradient-to-r from-cyan-600 to-teal-800 px-10 py-4 font-bold text-white shadow-lg transition hover:scale-105 active:scale-95"
+              onClick={() => window.dispatchEvent(new CustomEvent('aquapulse:open-ticket-drawer'))}
+              type="button"
+            >
+              Open Ticket Finder
+            </button>
+            <a
+              className="rounded-full border-2 border-cyan-100 bg-white px-10 py-4 font-bold text-slate-600 shadow-sm transition hover:bg-cyan-50 active:scale-95 text-center"
+              href="/"
+            >
+              Back Home
+            </a>
+          </div>
+        </div>
+      </MainLayout>
+    );
+  }
+
+  // Load show details from mock database
+  const showData = showDatabase[showNameParam] || showDatabase['Symphony of Lights'];
+
+  // Calculate ticket pricing based on ticketType
+  // TEMPORARY: Front-end price estimation only. Not trusted for backend transactions.
+  let calculatedPricePerTicket = showData.pricePerTicket;
+  if (ticketTypeParam === 'VIP Entry') {
+    calculatedPricePerTicket += 25; // VIP premium fee
+  } else if (ticketTypeParam === 'Family Package') {
+    calculatedPricePerTicket *= 0.8; // 20% bundle discount
+  }
+
+  const totalAmount = quantity * calculatedPricePerTicket;
+
+  const updateQuantityParams = (nextQuantity) => {
+    setSearchParams((prevParams) => {
+      const nextParams = new URLSearchParams(prevParams);
+      nextParams.set('quantity', String(nextQuantity));
+      return nextParams;
+    });
+  };
 
   const decrementQuantity = () => {
     setBookingError('');
-    setQuantity((currentQuantity) => Math.max(1, currentQuantity - 1));
+    const nextVal = Math.max(1, quantity - 1);
+    setQuantity(nextVal);
+    updateQuantityParams(nextVal);
   };
 
   const incrementQuantity = () => {
     setBookingError('');
-    setQuantity((currentQuantity) => Math.min(show.maxQuantity, currentQuantity + 1));
+    const nextVal = Math.min(showData.maxQuantity, quantity + 1);
+    setQuantity(nextVal);
+    updateQuantityParams(nextVal);
   };
 
   const handleConfirmBooking = () => {
-    if (!show?.name || !show?.date || !show?.time) {
-      setBookingError('Selected show and schedule are required.');
+    if (!showNameParam || !dateParam) {
+      setBookingError('Selected show and date are required.');
       return;
     }
 
-    if (!Number.isInteger(quantity) || quantity < 1 || quantity > show.maxQuantity) {
-      setBookingError(`Quantity must be a number from 1 to ${show.maxQuantity}.`);
+    if (!Number.isInteger(quantity) || quantity < 1 || quantity > showData.maxQuantity) {
+      setBookingError(`Quantity must be a number from 1 to ${showData.maxQuantity}.`);
       return;
     }
 
@@ -58,7 +172,7 @@ export default function CreateBookingPage() {
   };
 
   return (
-    <MainLayout navbarProps={{ isLoggedIn: true, user: mockUser }}>
+    <MainLayout>
       <section className="relative overflow-hidden bg-gradient-to-br from-teal-800 to-cyan-400 py-14 text-white md:py-20">
         <div className="absolute left-[10%] top-10 h-16 w-16 rounded-full bg-white/15" />
         <div className="absolute bottom-12 right-[15%] h-24 w-24 rounded-full bg-white/10" />
@@ -86,20 +200,20 @@ export default function CreateBookingPage() {
           <div className="space-y-8 lg:col-span-8">
             <article className="overflow-hidden rounded-[2rem] border border-cyan-100 bg-white shadow-[0_12px_32px_rgba(0,105,107,0.1)]">
               <div className="relative h-64 md:h-96">
-                <img alt={show.name} className="h-full w-full object-cover" src={show.imageUrl} />
+                <img alt={showData.name} className="h-full w-full object-cover" src={showData.imageUrl} />
                 <div className="absolute left-4 top-4 flex flex-wrap gap-2">
                   <span className="rounded-full bg-cyan-700/90 px-3 py-1 text-sm font-bold text-white backdrop-blur-md">
-                    {show.category}
+                    {showData.category}
                   </span>
                   <span className="flex items-center gap-1 rounded-full bg-yellow-300 px-3 py-1 text-sm font-bold text-slate-950 backdrop-blur-md">
                     <span className="material-symbols-outlined text-[14px]">star</span>
-                    {show.badge}
+                    {showData.badge}
                   </span>
                 </div>
               </div>
               <div className="p-6 md:p-8">
-                <h2 className="mb-4 text-3xl font-black tracking-tight text-slate-950">{show.name}</h2>
-                <p className="text-base leading-8 text-slate-600">{show.description}</p>
+                <h2 className="mb-4 text-3xl font-black tracking-tight text-slate-950">{showData.name}</h2>
+                <p className="text-base leading-8 text-slate-600">{showData.description}</p>
               </div>
             </article>
 
@@ -110,8 +224,8 @@ export default function CreateBookingPage() {
                 </div>
                 <div>
                   <p className="mb-1 text-xs font-black uppercase tracking-[0.18em] text-slate-500">Date & Time</p>
-                  <p className="text-2xl font-black text-slate-950">{show.date}</p>
-                  <p className="text-slate-600">{show.time}</p>
+                  <p className="text-2xl font-black text-slate-950">{formatDateString(dateParam)}</p>
+                  <p className="text-slate-600">{showData.time}</p>
                 </div>
               </div>
 
@@ -121,7 +235,7 @@ export default function CreateBookingPage() {
                 </div>
                 <div>
                   <p className="mb-1 text-xs font-black uppercase tracking-[0.18em] text-slate-500">Venue</p>
-                  <p className="text-2xl font-black text-slate-950">{show.venue}</p>
+                  <p className="text-2xl font-black text-slate-950">{showData.venue}</p>
                   <div className="mt-1 flex items-center gap-2">
                     <span className="h-2 w-2 rounded-full bg-cyan-700" />
                     <span className="text-sm font-bold text-cyan-700">Available Now</span>
@@ -133,10 +247,10 @@ export default function CreateBookingPage() {
             <section className="rounded-[2rem] border border-cyan-100 bg-white p-6 shadow-[0_12px_32px_rgba(0,105,107,0.1)] md:p-8">
               <div className="flex flex-col items-center justify-between gap-6 md:flex-row">
                 <div>
-                  <h2 className="mb-1 text-2xl font-black text-slate-950">{show.ticketType}</h2>
-                  <p className="text-slate-600">Includes standard seating and digital show guide.</p>
+                  <h2 className="mb-1 text-2xl font-black text-slate-950">{ticketTypeParam}</h2>
+                  <p className="text-slate-600">Includes admission and digital show guide (Estimates only).</p>
                   <p className="mt-2 text-2xl font-black text-cyan-700">
-                    {formatCurrency(show.pricePerTicket)} <span className="text-base font-normal text-slate-500">/ ticket</span>
+                    {formatCurrency(calculatedPricePerTicket)} <span className="text-base font-normal text-slate-500">/ ticket</span>
                   </p>
                 </div>
 
@@ -154,7 +268,7 @@ export default function CreateBookingPage() {
                     <span className="w-14 text-center text-2xl font-black text-slate-950">{quantity}</span>
                     <button
                       className="flex h-10 w-10 items-center justify-center rounded-full bg-white text-cyan-700 shadow-sm transition hover:bg-cyan-700 hover:text-white disabled:cursor-not-allowed disabled:opacity-50"
-                      disabled={quantity === show.maxQuantity}
+                      disabled={quantity === showData.maxQuantity}
                       onClick={incrementQuantity}
                       type="button"
                       aria-label="Increase quantity"
@@ -162,7 +276,7 @@ export default function CreateBookingPage() {
                       <span className="material-symbols-outlined">add</span>
                     </button>
                   </div>
-                  <p className="text-xs italic text-slate-500">Max {show.maxQuantity} tickets per booking</p>
+                  <p className="text-xs italic text-slate-500">Max {showData.maxQuantity} tickets per booking</p>
                 </div>
               </div>
             </section>
@@ -179,10 +293,10 @@ export default function CreateBookingPage() {
                 <div className="relative z-10 mb-8 space-y-4">
                   <div className="flex items-start justify-between gap-4">
                     <div>
-                      <p className="font-bold text-slate-950">{show.name}</p>
-                      <p className="text-sm text-slate-500">Oct 24, 08:00 PM</p>
+                      <p className="font-bold text-slate-950">{showData.name}</p>
+                      <p className="text-sm text-slate-500">{formatDateString(dateParam)}, {showData.time.split(' ')[0]} {showData.time.split(' ')[1]}</p>
                     </div>
-                    <p className="font-bold text-slate-950">{formatCurrency(show.pricePerTicket)}</p>
+                    <p className="font-bold text-slate-950">{formatCurrency(calculatedPricePerTicket)}</p>
                   </div>
                   <div className="flex items-center justify-between border-y border-cyan-100 py-4">
                     <p className="text-slate-500">Quantity</p>
@@ -225,9 +339,13 @@ export default function CreateBookingPage() {
                   >
                     Confirm Booking
                   </button>
-                  <a className="block text-center text-sm font-bold text-cyan-700 underline-offset-4 hover:underline" href="#">
-                    Back to Schedules
-                  </a>
+                  <button
+                    className="w-full text-center text-sm font-bold text-cyan-700 underline-offset-4 hover:underline cursor-pointer"
+                    onClick={() => window.dispatchEvent(new CustomEvent('aquapulse:open-ticket-drawer'))}
+                    type="button"
+                  >
+                    Open Ticket Finder
+                  </button>
                 </div>
               </section>
             </div>

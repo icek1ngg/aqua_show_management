@@ -1,22 +1,14 @@
-import { useState } from 'react';
+import { useEffect, useState } from 'react';
+import { useNavigate } from 'react-router-dom';
 
+import { useAuth } from '../../features/auth/AuthContext.jsx';
 import MainLayout from '../../shared/layouts/MainLayout.jsx';
+import { updateProfile } from '../../services/authService.js';
 import {
   sanitizeDigits,
   validateName,
   validatePhone,
 } from '../../shared/utils/validation.js';
-
-const mockUser = {
-  firstName: 'Marina Blue',
-  lastName: 'Waters',
-  gender: 'FEMALE',
-  phone: '0909123456',
-  email: 'marina.waters@aquashow.local',
-  address: '789 Ocean Breeze Boulevard, Wave City, Aqua District 10101',
-  avatarUrl:
-    'https://lh3.googleusercontent.com/aida-public/AB6AXuCAs3NVAK7aoUYuYTZX3AmIWjo37TVxp8y6qJgQ9aCIxerTaTrUNtCZg6IkvjGYTrm8NkWAmMk9EYSAS0zHX-Ybuchms5PmzM8GSFwWEwlI4Yo9RrGTNwDjP0uBNcrI0GEVscCdtCQdMPXEMe6JZqLjxpYxC0m-dniRVU5w8F3YNuK1ONb9aqNtSQ8JjTFMnaKVdluoElQViAQ2wGLue9tKyOx3JFBWEQNJawzk2cibhFjqAkAmwOrkKMOymHdXyYfPgbQ1y6XgQQ',
-};
 
 function FieldLabel({ children, icon }) {
   return (
@@ -39,15 +31,52 @@ const inputClassName =
   'w-full rounded-2xl border border-transparent bg-cyan-50/70 px-6 py-4 text-base text-slate-900 shadow-sm outline-none transition focus:border-cyan-500 focus:bg-white focus:ring-2 focus:ring-cyan-200';
 
 export default function EditProfilePage() {
+  const { user, loading, refreshCurrentUser } = useAuth();
+  const navigate = useNavigate();
+
   const [values, setValues] = useState({
-    firstMiddleName: mockUser.firstName,
-    lastName: mockUser.lastName,
-    gender: mockUser.gender,
-    phoneNumber: sanitizeDigits(mockUser.phone),
-    address: mockUser.address,
+    firstMiddleName: '',
+    lastName: '',
+    gender: '',
+    phoneNumber: '',
+    address: '',
+    dateOfBirth: '',
   });
+
   const [fieldErrors, setFieldErrors] = useState({});
   const [successMessage, setSuccessMessage] = useState('');
+  const [generalError, setGeneralError] = useState('');
+  const [isSaving, setIsSaving] = useState(false);
+
+  useEffect(() => {
+    if (!user && !loading) {
+      refreshCurrentUser();
+    }
+  }, [user, loading, refreshCurrentUser]);
+
+  useEffect(() => {
+    if (user) {
+      setValues({
+        firstMiddleName: user.firstMiddleName || '',
+        lastName: user.lastName || '',
+        gender: user.gender || '',
+        phoneNumber: user.phoneNumber || '',
+        address: user.address || '',
+        dateOfBirth: user.dateOfBirth || '',
+      });
+    }
+  }, [user]);
+
+  if (loading || !user) {
+    return (
+      <MainLayout>
+        <div className="flex min-h-[60vh] flex-col items-center justify-center gap-4">
+          <div className="h-12 w-12 animate-spin rounded-full border-4 border-cyan-700 border-t-transparent" />
+          <p className="text-sm font-semibold text-cyan-800">Loading your profile...</p>
+        </div>
+      </MainLayout>
+    );
+  }
 
   const clearFieldError = (fieldName) => {
     setFieldErrors((currentErrors) => {
@@ -69,20 +98,32 @@ export default function EditProfilePage() {
     }));
     clearFieldError(name);
     setSuccessMessage('');
+    setGeneralError('');
   };
 
-  const handleSubmit = (event) => {
+  const handleSubmit = async (event) => {
     event.preventDefault();
 
+    // Client-side validations
     const nextErrors = {
       firstMiddleName: validateName(values.firstMiddleName, 'First and middle name'),
       lastName: validateName(values.lastName, 'Last name'),
-      phoneNumber: validatePhone(values.phoneNumber),
+      phoneNumber: validatePhone(values.phoneNumber, { required: false }),
       address: values.address.length > 255 ? 'Address must not exceed 255 characters.' : '',
     };
 
     if (values.gender && !['MALE', 'FEMALE', 'OTHER'].includes(values.gender)) {
       nextErrors.gender = 'Please select a valid gender.';
+    }
+
+    if (values.dateOfBirth) {
+      const today = new Date();
+      today.setHours(0, 0, 0, 0);
+      const dob = new Date(values.dateOfBirth);
+      dob.setHours(0, 0, 0, 0);
+      if (dob >= today) {
+        nextErrors.dateOfBirth = 'Date of birth must be in the past (before today).';
+      }
     }
 
     const activeErrors = Object.fromEntries(Object.entries(nextErrors).filter(([, message]) => message));
@@ -93,7 +134,40 @@ export default function EditProfilePage() {
       return;
     }
 
-    setSuccessMessage('Profile changes are valid. Saving will be connected in a later phase.');
+    setIsSaving(true);
+    setSuccessMessage('');
+    setGeneralError('');
+
+    try {
+      // Map empty inputs to null to avoid storing empty string values for optional fields
+      const payload = {
+        lastName: values.lastName.trim(),
+        firstMiddleName: values.firstMiddleName.trim(),
+        gender: values.gender || null,
+        phoneNumber: values.phoneNumber.trim() ? values.phoneNumber.trim() : null,
+        address: values.address.trim() ? values.address.trim() : null,
+        dateOfBirth: values.dateOfBirth || null,
+      };
+
+      await updateProfile(payload);
+      setSuccessMessage('Profile updated successfully! Redirecting...');
+      
+      // Refresh AuthContext
+      await refreshCurrentUser();
+
+      setTimeout(() => {
+        navigate('/profile');
+      }, 1500);
+    } catch (error) {
+      const backendValidationErrors = error.response?.data?.errors;
+      if (backendValidationErrors) {
+        setFieldErrors(backendValidationErrors);
+      } else {
+        setGeneralError(error.response?.data?.message || error.message || 'Failed to update profile.');
+      }
+    } finally {
+      setIsSaving(false);
+    }
   };
 
   return (
@@ -115,9 +189,8 @@ export default function EditProfilePage() {
               <div>
                 <div className="mb-2 flex flex-wrap items-center gap-3">
                   <h1 className="text-3xl font-black tracking-tight">Edit Profile</h1>
-                  <span className="flex items-center gap-1 rounded-full border border-cyan-200/30 bg-cyan-200/20 px-3 py-1 text-[10px] font-black uppercase tracking-[0.24em] text-cyan-50">
-                    <span className="material-symbols-outlined text-[14px]">verified</span>
-                    Active Account
+                  <span className="flex items-center gap-1 rounded-full border border-cyan-200/30 bg-cyan-200/20 px-3 py-1 text-[10px] font-black uppercase tracking-[0.24em] text-cyan-50 uppercase">
+                    {user.status} Account
                   </span>
                 </div>
                 <p className="text-sm leading-6 text-white/80">Update your personal information for your AquaPulse account.</p>
@@ -128,26 +201,20 @@ export default function EditProfilePage() {
               <form className="space-y-12" onSubmit={handleSubmit}>
                 <div className="flex flex-col items-center gap-8 border-b border-cyan-100 pb-10 md:flex-row">
                   <div className="group relative">
-                    <div className="h-32 w-32 overflow-hidden rounded-full border-4 border-cyan-100 bg-cyan-50 shadow-xl ring-4 ring-white">
-                      <img alt="Profile" className="h-full w-full object-cover" src={mockUser.avatarUrl} />
+                    <div className="h-32 w-32 overflow-hidden rounded-full border-4 border-cyan-100 bg-cyan-50 shadow-xl ring-4 ring-white flex items-center justify-center">
+                      {user.avatarUrl ? (
+                        <img alt="Profile" className="h-full w-full object-cover" src={user.avatarUrl} />
+                      ) : (
+                        <span className="flex h-full w-full items-center justify-center bg-cyan-100 text-4xl font-black text-cyan-800 uppercase">
+                          {(user.fullName || user.email || 'A').charAt(0)}
+                        </span>
+                      )}
                     </div>
-                    <button
-                      className="absolute bottom-1 right-1 flex items-center justify-center rounded-full border-2 border-white bg-cyan-700 p-2 text-white shadow-lg transition hover:scale-110"
-                      type="button"
-                      aria-label="Change profile photo placeholder"
-                    >
-                      <span className="material-symbols-outlined text-sm">photo_camera</span>
-                    </button>
                   </div>
 
                   <div className="text-center md:text-left">
-                    <button
-                      className="mb-3 rounded-full bg-cyan-100 px-6 py-2.5 text-sm font-bold text-cyan-800 shadow-sm transition hover:bg-cyan-200"
-                      type="button"
-                    >
-                      Change Photo
-                    </button>
-                    <p className="text-sm text-slate-500">JPG, GIF or PNG. Max size of 800K.</p>
+                    <h3 className="text-lg font-black text-slate-800">{user.fullName}</h3>
+                    <p className="text-sm text-slate-500">Avatar initials automatically refresh on name change.</p>
                   </div>
                 </div>
 
@@ -161,6 +228,7 @@ export default function EditProfilePage() {
                       type="text"
                       value={values.firstMiddleName}
                       onChange={handleChange}
+                      disabled={isSaving}
                     />
                     <FieldError>{fieldErrors.firstMiddleName}</FieldError>
                   </div>
@@ -174,6 +242,7 @@ export default function EditProfilePage() {
                       type="text"
                       value={values.lastName}
                       onChange={handleChange}
+                      disabled={isSaving}
                     />
                     <FieldError>{fieldErrors.lastName}</FieldError>
                   </div>
@@ -186,6 +255,7 @@ export default function EditProfilePage() {
                         name="gender"
                         value={values.gender}
                         onChange={handleChange}
+                        disabled={isSaving}
                       >
                         <option value="">Prefer not to say</option>
                         <option value="FEMALE">Female</option>
@@ -206,20 +276,35 @@ export default function EditProfilePage() {
                       inputMode="numeric"
                       name="phoneNumber"
                       pattern="[0-9]*"
-                      placeholder="0909123456"
+                      placeholder="0909123456 (Optional)"
                       type="tel"
                       value={values.phoneNumber}
                       onChange={handleChange}
+                      disabled={isSaving}
                     />
                     <FieldError>{fieldErrors.phoneNumber}</FieldError>
                   </div>
 
-                  <div className="space-y-3 md:col-span-2">
+                  <div className="space-y-3">
+                    <FieldLabel icon="calendar_month">Date of Birth</FieldLabel>
+                    <input
+                      className={inputClassName}
+                      name="dateOfBirth"
+                      type="date"
+                      value={values.dateOfBirth}
+                      onChange={handleChange}
+                      disabled={isSaving}
+                    />
+                    <FieldError>{fieldErrors.dateOfBirth}</FieldError>
+                  </div>
+
+                  <div className="space-y-3">
                     <FieldLabel icon="lock">Email Address</FieldLabel>
                     <div className="relative">
                       <input
                         className="w-full cursor-not-allowed rounded-2xl border border-cyan-100 bg-slate-100 px-6 py-4 text-base text-slate-500 shadow-inner outline-none"
-                        defaultValue={mockUser.email}
+                        value={user.email}
+                        readOnly
                         disabled
                         type="email"
                       />
@@ -227,7 +312,7 @@ export default function EditProfilePage() {
                         Read Only
                       </span>
                     </div>
-                    <p className="ml-4 text-xs italic text-slate-500">Email cannot be changed from this page. Contact support for assistance.</p>
+                    <p className="ml-4 text-xs italic text-slate-500">Email cannot be changed. Contact support for assistance.</p>
                   </div>
 
                   <div className="space-y-3 md:col-span-2">
@@ -236,10 +321,11 @@ export default function EditProfilePage() {
                       className={`${inputClassName} min-h-32 resize-none`}
                       maxLength="255"
                       name="address"
-                      placeholder="123 Coral Reef Drive, Atlantis City..."
+                      placeholder="123 Coral Reef Drive, Atlantis City... (Optional)"
                       rows="3"
                       value={values.address}
                       onChange={handleChange}
+                      disabled={isSaving}
                     />
                     <FieldError>{fieldErrors.address}</FieldError>
                   </div>
@@ -251,10 +337,19 @@ export default function EditProfilePage() {
                   </div>
                 )}
 
+                {generalError && (
+                  <div className="rounded-2xl border border-red-100 bg-red-50 px-4 py-3 text-sm font-semibold text-red-700" role="alert">
+                    {generalError}
+                  </div>
+                )}
+
                 <div className="flex flex-col items-center justify-between gap-6 border-t border-cyan-100 pt-10 md:flex-row">
-                  <button className="order-3 px-4 py-2 font-bold text-slate-400 transition hover:text-red-600 md:order-1" type="button">
-                    Discard Changes
-                  </button>
+                  <a 
+                    className="order-3 px-4 py-2 font-bold text-slate-400 transition hover:text-cyan-700 md:order-1" 
+                    href="/profile"
+                  >
+                    Back to Profile
+                  </a>
 
                   <div className="order-1 flex w-full flex-col gap-4 sm:flex-row md:order-2 md:w-auto">
                     <a
@@ -264,10 +359,11 @@ export default function EditProfilePage() {
                       Cancel
                     </a>
                     <button
-                      className="rounded-full bg-gradient-to-r from-cyan-600 to-teal-800 px-12 py-4 font-bold text-white shadow-[0_12px_24px_rgba(0,105,107,0.2)] transition hover:shadow-[0_16px_32px_rgba(0,105,107,0.3)] active:scale-95"
+                      className="rounded-full bg-gradient-to-r from-cyan-600 to-teal-800 px-12 py-4 font-bold text-white shadow-[0_12px_24px_rgba(0,105,107,0.2)] transition hover:shadow-[0_16px_32px_rgba(0,105,107,0.3)] active:scale-95 disabled:opacity-50 disabled:cursor-not-allowed"
                       type="submit"
+                      disabled={isSaving}
                     >
-                      Save Changes
+                      {isSaving ? 'Saving...' : 'Save Changes'}
                     </button>
                   </div>
                 </div>

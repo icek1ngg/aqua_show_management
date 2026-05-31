@@ -10,6 +10,21 @@ import {
 const showOptions = ['Symphony of Lights', 'Ocean Dreams', 'Aqua Parade', 'Mermaid Splash'];
 const ticketTypes = ['Standard Entry', 'VIP Entry', 'Family Package'];
 
+// Mock mapping for future-proof query parameters (Temporary / Frontend-only)
+const showIds = {
+  'Symphony of Lights': 'show_symphony_lights',
+  'Ocean Dreams': 'show_ocean_dreams',
+  'Aqua Parade': 'show_aqua_parade',
+  'Mermaid Splash': 'show_mermaid_splash',
+};
+
+const scheduleIds = {
+  'Symphony of Lights': 'sch_symphony_lights_8pm',
+  'Ocean Dreams': 'sch_ocean_dreams_2pm',
+  'Aqua Parade': 'sch_aqua_parade_430pm',
+  'Mermaid Splash': 'sch_mermaid_splash_11am',
+};
+
 function getTodayDateInputValue() {
   const today = new Date();
   const timezoneOffset = today.getTimezoneOffset() * 60000;
@@ -29,7 +44,7 @@ export default function TicketSearchDrawer({ open, onClose }) {
   const [formValues, setFormValues] = useState({
     show: '',
     date: '',
-    guests: '',
+    quantity: '',
     ticketType: '',
   });
   const [fieldErrors, setFieldErrors] = useState({});
@@ -53,7 +68,7 @@ export default function TicketSearchDrawer({ open, onClose }) {
     const { name, value } = event.target;
     setFormValues((currentValues) => ({
       ...currentValues,
-      [name]: name === 'guests' ? sanitizeDigits(value, 2) : value,
+      [name]: name === 'quantity' ? sanitizeDigits(value, 2) : value,
     }));
     setFieldErrors((currentErrors) => {
       if (!currentErrors[name]) {
@@ -69,14 +84,14 @@ export default function TicketSearchDrawer({ open, onClose }) {
   const handleSubmit = (event) => {
     event.preventDefault();
 
-    const guestsNumber = Number(formValues.guests);
+    const quantityNumber = Number(formValues.quantity);
     const nextErrors = {
       show: validateRequired(formValues.show, 'Show'),
       date: validateRequired(formValues.date, 'Date') || (isTodayOrFuture(formValues.date) ? '' : 'Date cannot be in the past.'),
-      guests: validateRequired(formValues.guests, 'Guests')
-        || (Number.isInteger(guestsNumber) && guestsNumber >= 1 && guestsNumber <= 10
+      quantity: validateRequired(formValues.quantity, 'Quantity')
+        || (Number.isInteger(quantityNumber) && quantityNumber >= 1 && quantityNumber <= 10
           ? ''
-          : 'Guests must be a number from 1 to 10.'),
+          : 'Quantity must be a number from 1 to 10.'),
       ticketType: validateRequired(formValues.ticketType, 'Ticket type'),
     };
 
@@ -87,11 +102,15 @@ export default function TicketSearchDrawer({ open, onClose }) {
     }
 
     const params = new URLSearchParams();
-    Object.entries(formValues).forEach(([key, value]) => {
-      if (value) {
-        params.set(key, value);
-      }
-    });
+    const showId = showIds[formValues.show] || '';
+    const scheduleId = scheduleIds[formValues.show] || '';
+
+    if (showId) params.set('showId', showId);
+    if (scheduleId) params.set('scheduleId', scheduleId);
+    if (formValues.show) params.set('show', formValues.show);
+    if (formValues.date) params.set('date', formValues.date);
+    if (formValues.quantity) params.set('quantity', formValues.quantity);
+    if (formValues.ticketType) params.set('ticketType', formValues.ticketType);
 
     onClose();
     navigate(`/bookings/create?${params.toString()}`);
@@ -192,28 +211,28 @@ export default function TicketSearchDrawer({ open, onClose }) {
 
             <div className="grid gap-4 sm:grid-cols-2">
               <div className="space-y-2">
-                <label className="ml-1 block text-sm font-bold text-slate-700" htmlFor="ticket-guests">
-                  Guests
+                <label className="ml-1 block text-sm font-bold text-slate-700" htmlFor="ticket-quantity">
+                  Quantity
                 </label>
                 <div className="relative">
                   <span className="material-symbols-outlined absolute left-4 top-1/2 -translate-y-1/2 text-cyan-700">
-                    groups
+                    numbers
                   </span>
                   <input
                     className="w-full rounded-2xl border border-cyan-100 bg-cyan-50/70 py-4 pl-12 pr-4 text-sm font-semibold text-slate-800 outline-none transition focus:border-cyan-500 focus:bg-white focus:ring-2 focus:ring-cyan-200"
-                    id="ticket-guests"
+                    id="ticket-quantity"
                     inputMode="numeric"
                     max="10"
                     min="1"
-                    name="guests"
+                    name="quantity"
                     pattern="[0-9]*"
-                    placeholder="Number of guests"
+                    placeholder="Ticket quantity"
                     type="text"
-                    value={formValues.guests}
+                    value={formValues.quantity}
                     onChange={handleChange}
                   />
                 </div>
-                <FieldError>{fieldErrors.guests}</FieldError>
+                <FieldError>{fieldErrors.quantity}</FieldError>
               </div>
 
               <div className="space-y-2">

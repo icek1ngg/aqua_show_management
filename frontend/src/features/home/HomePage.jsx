@@ -139,10 +139,10 @@ export default function HomePage() {
 
             <label className="space-y-2">
               <span className="flex items-center gap-2 px-1 text-sm font-bold text-slate-600">
-                <span className="material-symbols-outlined text-cyan-700">group</span>
-                Guests
+                <span className="material-symbols-outlined text-cyan-700">numbers</span>
+                Quantity
               </span>
-              <input className="w-full rounded-full border border-cyan-100 bg-cyan-50/70 px-5 py-3 text-slate-700 focus:border-cyan-400 focus:outline-none focus:ring-2 focus:ring-cyan-200" min="1" placeholder="Number of guests" type="number" />
+              <input className="w-full rounded-full border border-cyan-100 bg-cyan-50/70 px-5 py-3 text-slate-700 focus:border-cyan-400 focus:outline-none focus:ring-2 focus:ring-cyan-200" min="1" placeholder="Ticket quantity" type="number" />
             </label>
 
             <label className="space-y-2">

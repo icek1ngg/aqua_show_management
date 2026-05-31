@@ -34,7 +34,7 @@ function UserAvatar({ user, className = 'h-9 w-9' }) {
 
   return (
     <span className={`${className} flex items-center justify-center rounded-full border-2 border-cyan-300 bg-cyan-100 text-sm font-black text-cyan-800`}>
-      {(user?.name || user?.email || 'A').charAt(0).toUpperCase()}
+      {(user?.fullName || user?.name || user?.email || 'A').charAt(0).toUpperCase()}
     </span>
   );
 }
@@ -159,6 +159,14 @@ export default function Navbar() {
   const [isMobileOpen, setIsMobileOpen] = useState(false);
   const [isMobileUserMenuOpen, setIsMobileUserMenuOpen] = useState(false);
   const [isTicketDrawerOpen, setIsTicketDrawerOpen] = useState(false);
+
+  useEffect(() => {
+    const handleOpenDrawer = () => {
+      setIsTicketDrawerOpen(true);
+    };
+    window.addEventListener('aquapulse:open-ticket-drawer', handleOpenDrawer);
+    return () => window.removeEventListener('aquapulse:open-ticket-drawer', handleOpenDrawer);
+  }, []);
 
   const closeMobileMenu = () => {
     setIsMobileOpen(false);

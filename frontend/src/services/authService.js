@@ -15,6 +15,11 @@ export async function getCurrentUser() {
   return response.data;
 }
 
+export async function updateProfile(payload) {
+  const response = await apiClient.put('/users/profile', payload);
+  return response.data;
+}
+
 export async function logout() {
   const response = await apiClient.post('/auth/logout');
   return response.data;

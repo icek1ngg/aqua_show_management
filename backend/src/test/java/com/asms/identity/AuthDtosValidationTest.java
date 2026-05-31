@@ -59,6 +59,20 @@ class AuthDtosValidationTest {
                 .isEmpty();
         assertThat(fieldErrors(updateProfileRequest("Nguyen", "Van A", "MALE", "0909123456", "Ho Chi Minh City")))
                 .isEmpty();
+        assertThat(fieldErrors(updateProfileRequest("Nguyen", "Van A", "MALE", "   ", "Ho Chi Minh City")))
+                .isEmpty();
+        assertThat(fieldErrors(updateProfileRequest("Nguyen", "Van A", "MALE", "", "Ho Chi Minh City")))
+                .isEmpty();
+    }
+
+    @Test
+    void updateProfileRejectsTodayAndFutureDateOfBirth() {
+        assertThat(fieldErrors(updateProfileRequest("Nguyen", "Van A", "MALE", "0909123456", "Ho Chi Minh City", java.time.LocalDate.now())))
+                .contains("dateOfBirth");
+        assertThat(fieldErrors(updateProfileRequest("Nguyen", "Van A", "MALE", "0909123456", "Ho Chi Minh City", java.time.LocalDate.now().plusDays(1))))
+                .contains("dateOfBirth");
+        assertThat(fieldErrors(updateProfileRequest("Nguyen", "Van A", "MALE", "0909123456", "Ho Chi Minh City", java.time.LocalDate.now().minusDays(1))))
+                .isEmpty();
     }
 
     private Object registerRequest(
@@ -95,17 +109,29 @@ class AuthDtosValidationTest {
             String phoneNumber,
             String address
     ) {
+        return updateProfileRequest(lastName, firstMiddleName, gender, phoneNumber, address, null);
+    }
+
+    private Object updateProfileRequest(
+            String lastName,
+            String firstMiddleName,
+            String gender,
+            String phoneNumber,
+            String address,
+            java.time.LocalDate dateOfBirth
+    ) {
         try {
             Class<?> genderClass = Class.forName("com.asms.identity.enums.Gender");
-            Object genderValue = Enum.valueOf((Class<? extends Enum>) genderClass.asSubclass(Enum.class), gender);
+            Object genderValue = gender != null ? Enum.valueOf((Class<? extends Enum>) genderClass.asSubclass(Enum.class), gender) : null;
             return newRecord(
                     "com.asms.identity.dto.AuthDtos$UpdateProfileRequest",
-                    new Class<?>[]{String.class, String.class, genderClass, String.class, String.class},
+                    new Class<?>[]{String.class, String.class, genderClass, String.class, String.class, java.time.LocalDate.class},
                     lastName,
                     firstMiddleName,
                     genderValue,
                     phoneNumber,
-                    address
+                    address,
+                    dateOfBirth
             );
         } catch (ClassNotFoundException exception) {
             throw new IllegalStateException(exception);
