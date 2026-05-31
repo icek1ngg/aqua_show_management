@@ -159,6 +159,8 @@ export default function LoginPage() {
   const [searchParams] = useSearchParams();
   const [errorMessage, setErrorMessage] = useState('');
   const [successMessage, setSuccessMessage] = useState('');
+  const [isResending, setIsResending] = useState(false);
+  const [email, setEmail] = useState('');
   const [showPassword, setShowPassword] = useState(false);
   const [fieldErrors, setFieldErrors] = useState({});
   const [isSubmitting, setIsSubmitting] = useState(false);
@@ -166,6 +168,12 @@ export default function LoginPage() {
   useEffect(() => {
     if (searchParams.get('oauthError') === 'true') {
       setErrorMessage('Google authentication failed. Please try again.');
+      setSuccessMessage('');
+    } else if (searchParams.get('verified') === 'true') {
+      setSuccessMessage('Email verified successfully. You can now sign in.');
+      setErrorMessage('');
+    } else if (searchParams.get('verified') === 'false') {
+      setErrorMessage('Verification link is invalid or expired.');
       setSuccessMessage('');
     }
   }, [searchParams]);
@@ -182,6 +190,33 @@ export default function LoginPage() {
       delete nextErrors[fieldName];
       return nextErrors;
     });
+  };
+
+  const handleResendVerification = async () => {
+    setErrorMessage('');
+    setSuccessMessage('');
+
+    const emailError = validateEmail(email);
+    if (emailError) {
+      setFieldErrors((prev) => ({ ...prev, email: emailError }));
+      setErrorMessage(emailError);
+      return;
+    }
+
+    setIsResending(true);
+    try {
+      const response = await authService.resendVerification(email);
+      setSuccessMessage(response.message || 'Verification email resent successfully.');
+    } catch (error) {
+      const message =
+        error.response?.data?.message ||
+        error.response?.data?.error ||
+        error.message ||
+        'Failed to resend verification email.';
+      setErrorMessage(message);
+    } finally {
+      setIsResending(false);
+    }
   };
 
   const handleSubmit = async (event) => {
@@ -288,7 +323,11 @@ export default function LoginPage() {
                     placeholder="name@aquashow.com"
                     required
                     type="email"
-                    onChange={() => clearFieldError('email')}
+                    value={email}
+                    onChange={(e) => {
+                      setEmail(e.target.value);
+                      clearFieldError('email');
+                    }}
                   />
                 </div>
                 <FieldError>{fieldErrors.email}</FieldError>
@@ -350,7 +389,20 @@ export default function LoginPage() {
 
               {errorMessage && (
                 <div className="rounded-2xl border border-red-100 bg-red-50 px-4 py-3 text-sm font-semibold text-red-700" role="alert">
-                  {errorMessage}
+                  <p>{errorMessage}</p>
+                  {errorMessage === 'Please verify your email before signing in.' && (
+                    <div className="mt-2">
+                      <button
+                        className="inline-flex items-center gap-1.5 text-cyan-800 hover:text-cyan-950 font-bold transition-colors duration-150 focus:outline-none disabled:cursor-not-allowed disabled:opacity-50"
+                        disabled={isResending}
+                        onClick={handleResendVerification}
+                        type="button"
+                      >
+                        <span className="material-symbols-outlined text-base">mail</span>
+                        <span>{isResending ? 'Sending...' : 'Resend verification email'}</span>
+                      </button>
+                    </div>
+                  )}
                 </div>
               )}
 

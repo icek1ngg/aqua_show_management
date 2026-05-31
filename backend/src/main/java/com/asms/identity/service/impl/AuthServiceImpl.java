@@ -1,6 +1,7 @@
 package com.asms.identity.service.impl;
 
 import com.asms.core.exception.ConflictException;
+import com.asms.core.exception.MailSendingException;
 import com.asms.core.exception.UnauthorizedException;
 import com.asms.identity.dto.AuthDtos.LoginRequest;
 import com.asms.identity.dto.AuthDtos.LoginResponse;
@@ -9,9 +10,11 @@ import com.asms.identity.dto.AuthDtos.RegisterResponse;
 import com.asms.identity.dto.AuthDtos.UserProfileResponse;
 import com.asms.identity.entity.User;
 import com.asms.identity.enums.AuthProvider;
+import com.asms.identity.enums.UserStatus;
 import com.asms.identity.repository.UserRepository;
 import com.asms.identity.security.JwtService;
 import com.asms.identity.service.AuthService;
+import com.asms.identity.service.EmailVerificationService;
 import org.springframework.security.crypto.password.PasswordEncoder;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
@@ -22,14 +25,22 @@ public class AuthServiceImpl implements AuthService {
     private final UserRepository userRepository;
     private final PasswordEncoder passwordEncoder;
     private final JwtService jwtService;
-    public AuthServiceImpl(UserRepository userRepository, PasswordEncoder passwordEncoder, JwtService jwtService) {
+    private final EmailVerificationService emailVerificationService;
+
+    public AuthServiceImpl(
+            UserRepository userRepository,
+            PasswordEncoder passwordEncoder,
+            JwtService jwtService,
+            EmailVerificationService emailVerificationService
+    ) {
         this.userRepository = userRepository;
         this.passwordEncoder = passwordEncoder;
         this.jwtService = jwtService;
+        this.emailVerificationService = emailVerificationService;
     }
 
     @Override
-    @Transactional
+    @Transactional(noRollbackFor = MailSendingException.class)
     public RegisterResponse register(RegisterRequest request) {
         String email = normalizeEmail(request.email());
         if (userRepository.existsByEmailIgnoreCase(email)) {
@@ -43,8 +54,11 @@ public class AuthServiceImpl implements AuthService {
                 normalizeNullable(request.phoneNumber()),
                 passwordEncoder.encode(request.password())
         );
+        user.setStatus(UserStatus.PENDING_VERIFICATION);
 
         User savedUser = userRepository.save(user);
+
+        emailVerificationService.sendVerificationEmail(savedUser);
 
         return new RegisterResponse(savedUser.getId(), savedUser.getEmail());
     }
@@ -54,6 +68,10 @@ public class AuthServiceImpl implements AuthService {
     public LoginResponse login(LoginRequest request) {
         User user = userRepository.findByEmailIgnoreCase(normalizeEmail(request.email()))
                 .orElseThrow(() -> new UnauthorizedException("Invalid email or password"));
+
+        if (user.getStatus() == UserStatus.PENDING_VERIFICATION) {
+            throw new UnauthorizedException("Please verify your email before signing in.");
+        }
 
         if (!user.isEnabled()
                 || user.getAuthProvider() != AuthProvider.LOCAL

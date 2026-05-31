@@ -181,6 +181,10 @@ public class User implements UserDetails {
         return status;
     }
 
+    public void setStatus(UserStatus status) {
+        this.status = status;
+    }
+
     @Override
     public Collection<? extends GrantedAuthority> getAuthorities() {
         return List.of(new SimpleGrantedAuthority("ROLE_" + role.name()));

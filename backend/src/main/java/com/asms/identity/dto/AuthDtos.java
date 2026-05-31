@@ -100,4 +100,11 @@ public final class AuthDtos {
             String address
     ) {
     }
+
+    public record ResendVerificationRequest(
+            @NotBlank(message = "Email is required")
+            @Email(message = "Email format is invalid")
+            String email
+    ) {
+    }
 }
