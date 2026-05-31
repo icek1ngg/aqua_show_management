@@ -53,7 +53,7 @@ function formatDate(value) {
     return value;
   }
 
-  return date.toLocaleDateString(undefined, { year: 'numeric', month: 'long', day: 'numeric' });
+  return date.toLocaleDateString('en-US', { year: 'numeric', month: 'long', day: 'numeric' });
 }
 
 function formatDateTime(value) {
@@ -66,7 +66,7 @@ function formatDateTime(value) {
     return value;
   }
 
-  return date.toLocaleString(undefined, {
+  return date.toLocaleString('en-US', {
     year: 'numeric',
     month: 'long',
     day: 'numeric',
@@ -229,7 +229,6 @@ export default function BookingPendingPage() {
   const effectiveStatus =
     displayBooking?.status === 'PENDING_PAYMENT' && countdownSeconds === 0 ? 'EXPIRED' : displayBooking?.status;
   const statusConfig = getStatusConfig(effectiveStatus);
-  const detailHref = id ? `/bookings/${id}` : '/bookings/my';
 
   return (
     <MainLayout showNavbar={false}>
@@ -239,17 +238,19 @@ export default function BookingPendingPage() {
         <div className="absolute bottom-40 left-[20%] h-16 w-16 rounded-full bg-cyan-400/20" />
         <div className="absolute -right-20 bottom-24 h-64 w-64 rounded-full bg-cyan-200/30 blur-3xl" />
 
-        <div className="absolute right-4 top-4 z-20 flex items-center gap-3 rounded-full bg-white/80 px-4 py-2 shadow-sm ring-1 ring-slate-200 backdrop-blur-md sm:right-6 lg:right-8">
-          <span className="text-sm font-semibold text-slate-600">
-            Order ID: #{displayBooking?.bookingCode || id || 'Loading'}
-          </span>
-          <button
-            className="flex h-9 w-9 items-center justify-center rounded-full bg-slate-100 text-slate-600 transition hover:bg-cyan-50 hover:text-cyan-700"
-            type="button"
-            aria-label="Order ID help"
-          >
-            <span className="material-symbols-outlined text-lg">help</span>
-          </button>
+        <div className="absolute right-4 top-4 z-20 flex items-center sm:right-6 lg:right-8">
+          <div className="flex items-center gap-3 rounded-full bg-white/80 px-4 py-2 shadow-sm ring-1 ring-slate-200 backdrop-blur-md">
+            <span className="text-sm font-semibold text-slate-600">
+              Order ID: #{displayBooking?.bookingCode || id || 'Loading'}
+            </span>
+            <button
+              className="flex h-9 w-9 items-center justify-center rounded-full bg-slate-100 text-slate-600 transition hover:bg-cyan-50 hover:text-cyan-700"
+              type="button"
+              aria-label="Order ID help"
+            >
+              <span className="material-symbols-outlined text-lg">help</span>
+            </button>
+          </div>
         </div>
 
         {isLoadingBooking && (
@@ -268,20 +269,12 @@ export default function BookingPendingPage() {
               <span className="material-symbols-outlined !text-5xl text-red-500">error</span>
               <h1 className="mt-4 text-3xl font-black text-cyan-800">Booking unavailable</h1>
               <p className="mt-2 text-slate-600">{loadError}</p>
-              <div className="mt-8 flex flex-col justify-center gap-3 sm:flex-row">
-                <Link className="rounded-full bg-gradient-to-r from-cyan-600 to-teal-800 px-6 py-3 font-bold text-white" to="/bookings/my">
-                  My Bookings
-                </Link>
-                <Link className="rounded-full border-2 border-cyan-700 bg-white px-6 py-3 font-bold text-cyan-700" to="/">
-                  Back Home
-                </Link>
-              </div>
             </div>
           </section>
         )}
 
         {!isLoadingBooking && !loadError && displayBooking && (
-          <div className="relative z-10 mx-auto grid max-w-7xl grid-cols-1 gap-10 px-4 pt-12 sm:px-6 lg:grid-cols-12 lg:px-8">
+          <div className="relative z-10 mx-auto grid max-w-7xl grid-cols-1 gap-10 px-4 pt-6 sm:px-6 lg:grid-cols-12 lg:px-8">
             <section className="flex flex-col justify-center space-y-8 lg:col-span-7">
               <div className="flex flex-col items-start space-y-4">
                 <div className={['flex h-20 w-20 items-center justify-center rounded-full', statusConfig.tone].join(' ')}>
@@ -326,34 +319,15 @@ export default function BookingPendingPage() {
                 </div>
               )}
 
-              <div className="hidden flex-col items-center gap-4 lg:flex lg:flex-row">
+              <div className="hidden flex-col items-start gap-3 lg:flex">
                 {effectiveStatus === 'PENDING_PAYMENT' && (
                   <button className="rounded-full bg-slate-300 px-8 py-4 font-bold text-slate-600" disabled type="button">
                     Payment coming soon
                   </button>
                 )}
-                {['EXPIRED', 'FAILED'].includes(effectiveStatus) && (
-                  <Link className="rounded-full bg-gradient-to-r from-cyan-600 to-teal-800 px-8 py-4 font-bold text-white shadow-lg transition hover:scale-105" to="/">
-                    Book Again
-                  </Link>
-                )}
-                {effectiveStatus === 'PAID' && (
-                  <button className="rounded-full bg-slate-300 px-8 py-4 font-bold text-slate-600" disabled type="button">
-                    View Ticket coming soon
-                  </button>
-                )}
-                <Link className="rounded-full border-2 border-cyan-700 bg-white px-8 py-4 font-bold text-cyan-700 transition hover:bg-cyan-50" to="/bookings/my">
-                  My Bookings
-                </Link>
-                <Link className="rounded-full border-2 border-cyan-700 bg-white px-8 py-4 font-bold text-cyan-700 transition hover:bg-cyan-50" to={detailHref}>
-                  View Booking Detail
-                </Link>
+                <BackHomeLink />
               </div>
 
-              <Link className="hidden items-center gap-2 font-bold text-cyan-700 underline-offset-4 hover:underline lg:inline-flex" to="/">
-                <span className="material-symbols-outlined">arrow_back</span>
-                Back Home
-              </Link>
             </section>
 
             <aside className="lg:col-span-5">
@@ -392,31 +366,13 @@ export default function BookingPendingPage() {
                 </div>
               </div>
 
-              <div className="mt-8 flex flex-col gap-4 lg:hidden">
+              <div className="mt-8 flex flex-col items-start gap-4 lg:hidden">
                 {effectiveStatus === 'PENDING_PAYMENT' && (
                   <button className="w-full rounded-full bg-slate-300 py-4 font-bold text-slate-600" disabled type="button">
                     Payment coming soon
                   </button>
                 )}
-                {['EXPIRED', 'FAILED'].includes(effectiveStatus) && (
-                  <Link className="w-full rounded-full bg-gradient-to-r from-cyan-600 to-teal-800 py-4 text-center font-bold text-white shadow-lg" to="/">
-                    Book Again
-                  </Link>
-                )}
-                {effectiveStatus === 'PAID' && (
-                  <button className="w-full rounded-full bg-slate-300 py-4 font-bold text-slate-600" disabled type="button">
-                    View Ticket coming soon
-                  </button>
-                )}
-                <Link className="w-full rounded-full border-2 border-cyan-700 bg-white py-4 text-center font-bold text-cyan-700" to="/bookings/my">
-                  My Bookings
-                </Link>
-                <Link className="w-full rounded-full border-2 border-cyan-700 bg-white py-4 text-center font-bold text-cyan-700" to={detailHref}>
-                  View Booking Detail
-                </Link>
-                <Link className="py-2 text-center font-bold text-cyan-700" to="/">
-                  Back Home
-                </Link>
+                <BackHomeLink />
               </div>
             </aside>
           </div>
@@ -439,5 +395,18 @@ function SummaryRow({ label, value }) {
       <span className="text-slate-500">{label}</span>
       <span className="text-right font-bold text-slate-900">{value || 'Not available'}</span>
     </div>
+  );
+}
+
+function BackHomeLink() {
+  return (
+    <Link
+      to="/"
+      aria-label="Back Home"
+      className="inline-flex w-fit shrink-0 items-center justify-center gap-2 rounded-full border border-cyan-200 bg-white/80 px-4 py-2 text-sm font-semibold text-cyan-700 shadow-sm transition hover:-translate-y-0.5 hover:border-cyan-300 hover:bg-cyan-50 hover:text-cyan-800 focus:outline-none focus:ring-2 focus:ring-cyan-300"
+    >
+      <span className="text-lg leading-none" aria-hidden="true">←</span>
+      <span>Back Home</span>
+    </Link>
   );
 }

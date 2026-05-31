@@ -61,7 +61,7 @@ function formatDateString(dateStr) {
   try {
     const dateObj = new Date(dateStr);
     if (isNaN(dateObj.getTime())) return dateStr;
-    return dateObj.toLocaleDateString(undefined, { year: 'numeric', month: 'long', day: 'numeric' });
+    return dateObj.toLocaleDateString('en-US', { year: 'numeric', month: 'long', day: 'numeric' });
   } catch {
     return dateStr;
   }
