@@ -73,7 +73,7 @@ export default function BookingPendingPage() {
                             Ticket Release Warning
                         </p>
 <p className="text-body-md text-on-surface-variant mt-1">
-                            Unpaid bookings are automatically cancelled and tickets are returned to the pool after 15 minutes.
+                            Unpaid bookings are automatically released and tickets are returned to the pool after 15 minutes.
                         </p>
 </div>
 </div>

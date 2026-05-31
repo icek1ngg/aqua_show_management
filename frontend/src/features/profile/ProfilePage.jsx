@@ -80,7 +80,7 @@ export default function ProfilePage() {
   const displayDob = user.dateOfBirth || 'Not provided';
   const displayProvider = user.authProvider === 'GOOGLE' ? 'Google Account' : 'Local Account';
   const displayCreated = user.createdAt
-    ? new Date(user.createdAt).toLocaleDateString(undefined, { year: 'numeric', month: 'long', day: 'numeric' })
+    ? new Date(user.createdAt).toLocaleDateString('en-US', { year: 'numeric', month: 'long', day: 'numeric' })
     : 'Not provided';
 
   return (

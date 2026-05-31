@@ -10,6 +10,7 @@ import jakarta.validation.constraints.NotNull;
 import java.math.BigDecimal;
 import java.time.Instant;
 import java.time.LocalDate;
+import java.util.List;
 import java.util.UUID;
 
 public final class BookingDtos {
@@ -65,6 +66,17 @@ public final class BookingDtos {
             BookingStatus status,
             Instant createdAt,
             Instant expiresAt
+    ) {
+    }
+
+    public record PageBookingResponse(
+            List<BookingResponse> items,
+            int page,
+            int size,
+            long totalItems,
+            int totalPages,
+            boolean hasNext,
+            boolean hasPrevious
     ) {
     }
 

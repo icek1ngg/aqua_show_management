@@ -3,6 +3,7 @@ package com.asms.booking.controller;
 import com.asms.booking.dto.BookingDtos.BookingResponse;
 import com.asms.booking.dto.BookingDtos.CreateBookingRequest;
 import com.asms.booking.dto.BookingDtos.CreateBookingResponse;
+import com.asms.booking.dto.BookingDtos.PageBookingResponse;
 import com.asms.booking.service.BookingService;
 import com.asms.core.exception.UnauthorizedException;
 import com.asms.core.response.ApiResponse;
@@ -14,9 +15,9 @@ import org.springframework.web.bind.annotation.PathVariable;
 import org.springframework.web.bind.annotation.PostMapping;
 import org.springframework.web.bind.annotation.RequestBody;
 import org.springframework.web.bind.annotation.RequestMapping;
+import org.springframework.web.bind.annotation.RequestParam;
 import org.springframework.web.bind.annotation.RestController;
 
-import java.util.List;
 import java.util.UUID;
 
 @RestController
@@ -41,10 +42,14 @@ public class BookingController {
     }
 
     @GetMapping("/my")
-    public ApiResponse<List<BookingResponse>> getMyBookings(@AuthenticationPrincipal User user) {
+    public ApiResponse<PageBookingResponse> getMyBookings(
+            @AuthenticationPrincipal User user,
+            @RequestParam(name = "page", defaultValue = "0") int page,
+            @RequestParam(name = "size", defaultValue = "5") int size
+    ) {
         return ApiResponse.success(
                 "Bookings fetched successfully",
-                bookingService.getMyBookings(currentUserEmail(user))
+                bookingService.getMyBookings(currentUserEmail(user), page, size)
         );
     }
 
