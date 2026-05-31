@@ -30,17 +30,32 @@ function formatCurrency(amount) {
 
 export default function CreateBookingPage() {
   const [quantity, setQuantity] = useState(1);
+  const [bookingError, setBookingError] = useState('');
   const totalAmount = quantity * show.pricePerTicket;
 
   const decrementQuantity = () => {
+    setBookingError('');
     setQuantity((currentQuantity) => Math.max(1, currentQuantity - 1));
   };
 
   const incrementQuantity = () => {
+    setBookingError('');
     setQuantity((currentQuantity) => Math.min(show.maxQuantity, currentQuantity + 1));
   };
 
-  const handleConfirmBooking = () => {};
+  const handleConfirmBooking = () => {
+    if (!show?.name || !show?.date || !show?.time) {
+      setBookingError('Selected show and schedule are required.');
+      return;
+    }
+
+    if (!Number.isInteger(quantity) || quantity < 1 || quantity > show.maxQuantity) {
+      setBookingError(`Quantity must be a number from 1 to ${show.maxQuantity}.`);
+      return;
+    }
+
+    setBookingError('Booking details are valid. Checkout will be connected in a later phase.');
+  };
 
   return (
     <MainLayout navbarProps={{ isLoggedIn: true, user: mockUser }}>
@@ -191,6 +206,18 @@ export default function CreateBookingPage() {
                 </div>
 
                 <div className="relative z-10 space-y-4">
+                  {bookingError && (
+                    <div
+                      className={`rounded-2xl border px-4 py-3 text-sm font-semibold ${
+                        bookingError.includes('valid')
+                          ? 'border-emerald-100 bg-emerald-50 text-emerald-700'
+                          : 'border-red-100 bg-red-50 text-red-700'
+                      }`}
+                      role={bookingError.includes('valid') ? 'status' : 'alert'}
+                    >
+                      {bookingError}
+                    </div>
+                  )}
                   <button
                     className="w-full rounded-full bg-cyan-700 py-4 text-lg font-bold text-white shadow-lg shadow-cyan-900/10 transition hover:bg-cyan-800"
                     onClick={handleConfirmBooking}

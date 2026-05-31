@@ -1,5 +1,16 @@
+import { useState } from 'react';
+import { Link, useNavigate } from 'react-router-dom';
+
 import AuthLayout from '../../shared/layouts/AuthLayout.jsx';
 import Logo from '../../shared/components/navigation/Logo.jsx';
+import {
+  sanitizeDigits,
+  validateEmail,
+  validateName,
+  validatePassword,
+  validatePhone,
+} from '../../shared/utils/validation.js';
+import { useAuth } from './AuthContext.jsx';
 
 const registerBubbles = [
   {
@@ -148,9 +159,104 @@ function BubbleLayer({ bubbles }) {
   );
 }
 
+function splitFullName(fullName) {
+  const parts = fullName.trim().split(/\s+/).filter(Boolean);
+
+  return {
+    lastName: parts[0] || '',
+    firstMiddleName: parts.slice(1).join(' '),
+  };
+}
+
+function FieldError({ children }) {
+  if (!children) {
+    return null;
+  }
+
+  return <p className="ml-1 text-sm font-semibold text-red-600">{children}</p>;
+}
+
 export default function RegisterPage() {
-  const handleSubmit = (event) => {
+  const { register } = useAuth();
+  const navigate = useNavigate();
+  const [errorMessage, setErrorMessage] = useState('');
+  const [successMessage, setSuccessMessage] = useState('');
+  const [fieldErrors, setFieldErrors] = useState({});
+  const [phone, setPhone] = useState('');
+  const [isSubmitting, setIsSubmitting] = useState(false);
+
+  const clearFieldError = (fieldName) => {
+    setErrorMessage('');
+    setFieldErrors((currentErrors) => {
+      if (!currentErrors[fieldName]) {
+        return currentErrors;
+      }
+
+      const nextErrors = { ...currentErrors };
+      delete nextErrors[fieldName];
+      return nextErrors;
+    });
+  };
+
+  const handlePhoneChange = (event) => {
+    setPhone(sanitizeDigits(event.target.value));
+    clearFieldError('phone');
+    setErrorMessage('');
+  };
+
+  const handleSubmit = async (event) => {
     event.preventDefault();
+
+    const formData = new FormData(event.currentTarget);
+    const fullName = String(formData.get('fullName') || '').trim();
+    const email = String(formData.get('email') || '').trim();
+    const phone = String(formData.get('phone') || '').trim();
+    const password = String(formData.get('password') || '');
+    const confirmPassword = String(formData.get('confirmPassword') || '');
+    const acceptedTerms = formData.get('acceptedTerms') === 'on';
+
+    setErrorMessage('');
+    setSuccessMessage('');
+    setFieldErrors({});
+
+    const nextErrors = {
+      fullName: validateName(fullName, 'Full name', { min: 2 }),
+      email: validateEmail(email),
+      phone: validatePhone(phone),
+      password: validatePassword(password),
+      confirmPassword: password === confirmPassword ? '' : 'Password confirmation does not match.',
+      acceptedTerms: acceptedTerms ? '' : 'Please agree to the Terms and Conditions and Privacy Policy.',
+    };
+
+    const { lastName, firstMiddleName } = splitFullName(fullName);
+    if (!nextErrors.fullName && !firstMiddleName) {
+      nextErrors.fullName = 'Please enter both last name and first or middle name.';
+    }
+
+    const activeErrors = Object.fromEntries(Object.entries(nextErrors).filter(([, message]) => message));
+    if (Object.keys(activeErrors).length > 0) {
+      setFieldErrors(activeErrors);
+      setErrorMessage(Object.values(activeErrors)[0]);
+      return;
+    }
+
+    setIsSubmitting(true);
+
+    try {
+      await register({
+        lastName,
+        firstMiddleName,
+        email,
+        phoneNumber: phone,
+        password,
+      });
+      setSuccessMessage('Account created successfully. Redirecting to login...');
+      window.setTimeout(() => navigate('/login'), 900);
+    } catch (error) {
+      setErrorMessage(error.message);
+    } finally {
+      setIsSubmitting(false);
+    }
   };
 
   return (
@@ -180,17 +286,13 @@ export default function RegisterPage() {
               entertainment.
             </p>
 
-            <div className="mt-8 flex flex-col gap-4">
-              <span className="flex w-fit items-center gap-4 rounded-2xl border border-white/20 bg-white/10 p-4 text-sm font-bold backdrop-blur-md transition hover:scale-[1.02]">
-                <span className="flex h-10 w-10 items-center justify-center rounded-full bg-yellow-300 text-slate-950">
-                  <span className="material-symbols-outlined">star</span>
-                </span>
+            <div className="mt-8 flex flex-wrap gap-4">
+              <span className="flex items-center gap-2 rounded-full border border-white/20 bg-white/10 px-5 py-3 text-sm font-bold backdrop-blur-md">
+                <span className="material-symbols-outlined text-cyan-300">star</span>
                 Access Exclusive Shows
               </span>
-              <span className="flex w-fit items-center gap-4 rounded-2xl border border-white/20 bg-white/10 p-4 text-sm font-bold backdrop-blur-md transition hover:scale-[1.02]">
-                <span className="flex h-10 w-10 items-center justify-center rounded-full bg-cyan-300 text-slate-950">
-                  <span className="material-symbols-outlined">schedule</span>
-                </span>
+              <span className="flex items-center gap-2 rounded-full border border-white/20 bg-white/10 px-5 py-3 text-sm font-bold backdrop-blur-md">
+                <span className="material-symbols-outlined text-cyan-300">schedule</span>
                 Priority Booking
               </span>
             </div>
@@ -220,10 +322,14 @@ export default function RegisterPage() {
                   <input
                     className="w-full rounded-full border border-transparent bg-cyan-50/70 py-4 pl-12 pr-4 text-slate-900 outline-none transition focus:border-cyan-500 focus:bg-white focus:ring-2 focus:ring-cyan-200"
                     id="register-name"
+                    name="fullName"
                     placeholder="John Doe"
+                    required
                     type="text"
+                    onChange={() => clearFieldError('fullName')}
                   />
                 </div>
+                <FieldError>{fieldErrors.fullName}</FieldError>
               </div>
 
               <div className="grid grid-cols-1 gap-4 md:grid-cols-2">
@@ -238,10 +344,14 @@ export default function RegisterPage() {
                     <input
                       className="w-full rounded-full border border-transparent bg-cyan-50/70 py-4 pl-12 pr-4 text-slate-900 outline-none transition focus:border-cyan-500 focus:bg-white focus:ring-2 focus:ring-cyan-200"
                       id="register-email"
+                      name="email"
                       placeholder="john@example.com"
+                      required
                       type="email"
+                      onChange={() => clearFieldError('email')}
                     />
                   </div>
+                  <FieldError>{fieldErrors.email}</FieldError>
                 </div>
 
                 <div className="space-y-2">
@@ -255,10 +365,16 @@ export default function RegisterPage() {
                     <input
                       className="w-full rounded-full border border-transparent bg-cyan-50/70 py-4 pl-12 pr-4 text-slate-900 outline-none transition focus:border-cyan-500 focus:bg-white focus:ring-2 focus:ring-cyan-200"
                       id="register-phone"
+                      inputMode="numeric"
+                      name="phone"
+                      pattern="[0-9]*"
                       placeholder="0123456789"
                       type="tel"
+                      value={phone}
+                      onChange={handlePhoneChange}
                     />
                   </div>
+                  <FieldError>{fieldErrors.phone}</FieldError>
                 </div>
               </div>
 
@@ -274,10 +390,14 @@ export default function RegisterPage() {
                     <input
                       className="w-full rounded-full border border-transparent bg-cyan-50/70 py-4 pl-12 pr-4 text-slate-900 outline-none transition focus:border-cyan-500 focus:bg-white focus:ring-2 focus:ring-cyan-200"
                       id="register-password"
+                      name="password"
                       placeholder="••••••••"
+                      required
                       type="password"
+                      onChange={() => clearFieldError('password')}
                     />
                   </div>
+                  <FieldError>{fieldErrors.password}</FieldError>
                 </div>
 
                 <div className="space-y-2">
@@ -291,15 +411,25 @@ export default function RegisterPage() {
                     <input
                       className="w-full rounded-full border border-transparent bg-cyan-50/70 py-4 pl-12 pr-4 text-slate-900 outline-none transition focus:border-cyan-500 focus:bg-white focus:ring-2 focus:ring-cyan-200"
                       id="register-confirm-password"
+                      name="confirmPassword"
                       placeholder="••••••••"
+                      required
                       type="password"
+                      onChange={() => clearFieldError('confirmPassword')}
                     />
                   </div>
+                  <FieldError>{fieldErrors.confirmPassword}</FieldError>
                 </div>
               </div>
 
               <div className="flex items-start gap-3 rounded-2xl bg-cyan-50/60 p-4 transition hover:bg-cyan-50">
-                <input className="peer sr-only" id="register-terms" type="checkbox" />
+                <input
+                  className="peer sr-only"
+                  id="register-terms"
+                  name="acceptedTerms"
+                  type="checkbox"
+                  onChange={() => clearFieldError('acceptedTerms')}
+                />
                 <label
                   className="mt-0.5 flex h-5 w-5 shrink-0 cursor-pointer items-center justify-center rounded-full border-2 border-cyan-300 bg-white shadow-sm transition peer-checked:border-cyan-600 peer-checked:bg-gradient-to-br peer-checked:from-cyan-400 peer-checked:to-teal-700 peer-checked:[&>svg]:opacity-100 peer-hover:border-cyan-500 peer-hover:bg-cyan-50 peer-focus-visible:ring-4 peer-focus-visible:ring-cyan-200"
                   htmlFor="register-terms"
@@ -323,21 +453,35 @@ export default function RegisterPage() {
                   .
                 </p>
               </div>
+              <FieldError>{fieldErrors.acceptedTerms}</FieldError>
+
+              {errorMessage && (
+                <div className="rounded-2xl border border-red-100 bg-red-50 px-4 py-3 text-sm font-semibold text-red-700" role="alert">
+                  {errorMessage}
+                </div>
+              )}
+
+              {successMessage && (
+                <div className="rounded-2xl border border-emerald-100 bg-emerald-50 px-4 py-3 text-sm font-semibold text-emerald-700" role="status">
+                  {successMessage}
+                </div>
+              )}
 
               <button
-                className="flex w-full items-center justify-center gap-2 rounded-full bg-gradient-to-r from-[#ff6900] to-[#c2410c] py-4 font-bold text-white shadow-lg shadow-orange-700/20 transition duration-300 hover:-translate-y-0.5 hover:shadow-orange-700/30 active:translate-y-0"
+                className="flex w-full items-center justify-center gap-2 rounded-full bg-gradient-to-r from-[#ff6900] to-[#c2410c] py-4 font-bold text-white shadow-lg shadow-orange-700/20 transition duration-300 hover:-translate-y-0.5 hover:shadow-orange-700/30 active:translate-y-0 disabled:cursor-not-allowed disabled:opacity-70"
+                disabled={isSubmitting}
                 type="submit"
               >
-                Create Account
+                {isSubmitting ? 'Creating account...' : 'Create Account'}
                 <span className="material-symbols-outlined">arrow_forward</span>
               </button>
             </form>
 
             <p className="mt-10 text-center text-sm text-slate-600">
               Already have an account?
-              <a className="ml-1 font-bold text-cyan-700 underline-offset-4 transition hover:underline" href="#">
+              <Link className="ml-1 font-bold text-cyan-700 underline-offset-4 transition hover:underline" to="/login">
                 Sign In
-              </a>
+              </Link>
             </p>
           </div>
         </section>
