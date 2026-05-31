@@ -75,7 +75,10 @@ public final class AuthDtos {
             String phoneNumber,
             String address,
             UserRole role,
-            UserStatus status
+            UserStatus status,
+            com.asms.identity.enums.AuthProvider authProvider,
+            java.time.LocalDate dateOfBirth,
+            java.time.Instant createdAt
     ) {
     }
 
@@ -92,12 +95,14 @@ public final class AuthDtos {
 
             Gender gender,
 
-            @NotBlank(message = "Phone number is required")
-            @Pattern(regexp = "^\\d{9,11}$", message = "Phone number must contain 9 to 11 digits only")
+            @Pattern(regexp = "^\\s*$|^\\d{9,11}$", message = "Phone number must contain 9 to 11 digits only")
             String phoneNumber,
 
             @Size(max = 255, message = "Address must not exceed 255 characters")
-            String address
+            String address,
+
+            @jakarta.validation.constraints.Past(message = "Date of birth must be in the past")
+            java.time.LocalDate dateOfBirth
     ) {
     }
 

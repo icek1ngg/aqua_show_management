@@ -1,15 +1,6 @@
+import { useEffect } from 'react';
+import { useAuth } from '../../features/auth/AuthContext.jsx';
 import MainLayout from '../../shared/layouts/MainLayout.jsx';
-
-const mockUser = {
-  name: 'Alex Julian Rivers',
-  email: 'alex.rivers@aquashow.local',
-  phone: '+1 555-234-8901',
-  role: 'Customer',
-  status: 'Active',
-  authProvider: 'Google Account',
-  avatarUrl:
-    'https://lh3.googleusercontent.com/aida-public/AB6AXuDlBL0LAOFq0pJGG9MfCYDo7c0I07OBklNd6GAvPmj4ad2UFkPC4SmabcizbHlOdqDgIoexUTWuRinzKrrqy_Viupr3hqIF7z1GYsfCDKqFEzihUQArCRJ1JHcSc0ovFMfSGzpD3_CJMPDB4ij-4OgxR7QDnknGxLMuP1JyVL8UfZqJ_zrr6b42rkBQc9Jyii9mW_Q7cc6JFwwJZAuKQ8FBqIhHfH4f7KoBB1z9qneb4XIUDJ-OCGFGrHAJtfZWJOGz4gxYJATAww',
-};
 
 const bookingStats = [
   { label: 'Total Bookings', value: '12', className: 'text-cyan-700' },
@@ -24,18 +15,14 @@ const quickActions = [
     icon: 'confirmation_number',
     className: 'text-cyan-700 hover:bg-cyan-50',
     iconClassName: 'bg-cyan-100 text-cyan-700',
+    to: '/bookings/create',
   },
   {
     label: 'View Available Shows',
     icon: 'event',
     className: 'text-teal-700 hover:bg-teal-50',
     iconClassName: 'bg-teal-100 text-teal-700',
-  },
-  {
-    label: 'Logout',
-    icon: 'logout',
-    className: 'text-red-600 hover:bg-red-50',
-    iconClassName: 'bg-red-100 text-red-600',
+    to: '/',
   },
 ];
 
@@ -69,8 +56,35 @@ const recentBookings = [
 ];
 
 export default function ProfilePage() {
+  const { user, loading, refreshCurrentUser } = useAuth();
+
+  useEffect(() => {
+    if (!user && !loading) {
+      refreshCurrentUser();
+    }
+  }, [user, loading, refreshCurrentUser]);
+
+  if (loading || !user) {
+    return (
+      <MainLayout>
+        <div className="flex min-h-[60vh] flex-col items-center justify-center gap-4">
+          <div className="h-12 w-12 animate-spin rounded-full border-4 border-cyan-700 border-t-transparent" />
+          <p className="text-sm font-semibold text-cyan-800">Loading your profile...</p>
+        </div>
+      </MainLayout>
+    );
+  }
+
+  const displayPhone = user.phoneNumber || 'Not provided';
+  const displayGender = user.gender ? (user.gender.charAt(0) + user.gender.slice(1).toLowerCase()) : 'Not provided';
+  const displayDob = user.dateOfBirth || 'Not provided';
+  const displayProvider = user.authProvider === 'GOOGLE' ? 'Google Account' : 'Local Account';
+  const displayCreated = user.createdAt
+    ? new Date(user.createdAt).toLocaleDateString(undefined, { year: 'numeric', month: 'long', day: 'numeric' })
+    : 'Not provided';
+
   return (
-    <MainLayout navbarProps={{ isLoggedIn: true, user: { name: mockUser.name, avatarUrl: mockUser.avatarUrl } }}>
+    <MainLayout>
       <div className="mx-auto max-w-7xl px-4 py-8 sm:px-6 md:py-12 lg:px-8">
         <header className="relative mb-12 flex min-h-[300px] flex-col justify-center overflow-hidden rounded-[2rem] bg-gradient-to-br from-cyan-500 via-teal-600 to-cyan-900 px-6 py-10 shadow-2xl shadow-cyan-950/20 md:px-10">
           <div className="absolute left-[12%] top-10 h-6 w-6 rounded-full bg-white/20" />
@@ -91,8 +105,14 @@ export default function ProfilePage() {
 
           <div className="relative z-10 flex flex-col items-center gap-6 text-center md:flex-row md:items-end md:text-left">
             <div className="relative">
-              <div className="h-28 w-28 overflow-hidden rounded-3xl border-4 border-white bg-white shadow-xl md:h-36 md:w-36">
-                <img alt="Profile avatar" className="h-full w-full object-cover" src={mockUser.avatarUrl} />
+              <div className="h-28 w-28 overflow-hidden rounded-3xl border-4 border-white bg-white shadow-xl md:h-36 md:w-36 flex items-center justify-center">
+                {user.avatarUrl ? (
+                  <img alt="Profile avatar" className="h-full w-full object-cover" src={user.avatarUrl} />
+                ) : (
+                  <span className="flex h-full w-full items-center justify-center bg-cyan-100 text-4xl font-black text-cyan-800 uppercase">
+                    {(user.fullName || user.email || 'A').charAt(0)}
+                  </span>
+                )}
               </div>
               <a
                 className="absolute -bottom-2 -right-2 rounded-full border-2 border-white bg-[#ff6900] p-2 text-white shadow-lg transition hover:scale-110"
@@ -107,7 +127,7 @@ export default function ProfilePage() {
               <p className="mb-3 inline-flex rounded-full border border-white/20 bg-white/10 px-4 py-1.5 text-xs font-bold uppercase tracking-[0.24em] text-cyan-50 backdrop-blur">
                 AquaPulse profile
               </p>
-              <h1 className="text-4xl font-black tracking-tight text-white md:text-5xl">My Profile</h1>
+              <h1 className="text-4xl font-black tracking-tight text-white md:text-5xl">{user.fullName}</h1>
               <p className="mt-3 max-w-xl text-base leading-7 text-white/90">
                 Manage your AquaPulse account, bookings, and ticket information.
               </p>
@@ -116,7 +136,7 @@ export default function ProfilePage() {
         </header>
 
         <div className="grid grid-cols-1 gap-8 lg:grid-cols-12">
-          <aside className="space-y-8 lg:col-span-4">
+          <aside className="space-y-8 lg:col-span-5">
             <section className="rounded-[2rem] border border-cyan-100 bg-white p-8 shadow-[0_4px_20px_rgba(0,206,209,0.08)]">
               <h2 className="mb-6 flex items-center gap-3 text-2xl font-black text-slate-950">
                 <span className="material-symbols-outlined text-cyan-700">account_circle</span>
@@ -126,31 +146,57 @@ export default function ProfilePage() {
               <div className="space-y-6">
                 <div>
                   <span className="mb-1 block text-sm font-bold text-slate-500">Full Name</span>
-                  <p className="rounded-2xl bg-cyan-50/70 p-3 font-semibold text-slate-900">{mockUser.name}</p>
+                  <p className="rounded-2xl bg-cyan-50/70 p-3 font-semibold text-slate-900">{user.fullName}</p>
+                </div>
+                <div className="grid grid-cols-1 gap-4 sm:grid-cols-2">
+                  <div>
+                    <span className="mb-1 block text-sm font-bold text-slate-500">Last Name</span>
+                    <p className="rounded-2xl bg-cyan-50/70 p-3 font-semibold text-slate-900">{user.lastName}</p>
+                  </div>
+                  <div>
+                    <span className="mb-1 block text-sm font-bold text-slate-500">First & Middle Name</span>
+                    <p className="rounded-2xl bg-cyan-50/70 p-3 font-semibold text-slate-900">{user.firstMiddleName}</p>
+                  </div>
                 </div>
                 <div>
                   <span className="mb-1 block text-sm font-bold text-slate-500">Email</span>
                   <p className="flex items-center gap-2 rounded-2xl bg-slate-100 p-3 text-slate-600">
                     <span className="material-symbols-outlined text-sm">lock</span>
-                    {mockUser.email}
+                    {user.email}
                   </p>
                 </div>
-                <div>
-                  <span className="mb-1 block text-sm font-bold text-slate-500">Phone</span>
-                  <p className="rounded-2xl bg-cyan-50/70 p-3 font-semibold text-slate-900">{mockUser.phone}</p>
+                <div className="grid grid-cols-1 gap-4 sm:grid-cols-2">
+                  <div>
+                    <span className="mb-1 block text-sm font-bold text-slate-500">Phone</span>
+                    <p className="rounded-2xl bg-cyan-50/70 p-3 font-semibold text-slate-900">{displayPhone}</p>
+                  </div>
+                  <div>
+                    <span className="mb-1 block text-sm font-bold text-slate-500">Gender</span>
+                    <p className="rounded-2xl bg-cyan-50/70 p-3 font-semibold text-slate-900">{displayGender}</p>
+                  </div>
+                </div>
+                <div className="grid grid-cols-1 gap-4 sm:grid-cols-2">
+                  <div>
+                    <span className="mb-1 block text-sm font-bold text-slate-500">Date of Birth</span>
+                    <p className="rounded-2xl bg-cyan-50/70 p-3 font-semibold text-slate-900">{displayDob}</p>
+                  </div>
+                  <div>
+                    <span className="mb-1 block text-sm font-bold text-slate-500">Member Since</span>
+                    <p className="rounded-2xl bg-cyan-50/70 p-3 font-semibold text-slate-900">{displayCreated}</p>
+                  </div>
                 </div>
 
                 <div className="grid grid-cols-2 gap-4">
                   <div>
                     <span className="mb-1 block text-sm font-bold text-slate-500">Role</span>
-                    <span className="inline-block rounded-full bg-cyan-100 px-3 py-1 text-sm font-bold text-cyan-700">
-                      {mockUser.role}
+                    <span className="inline-block rounded-full bg-cyan-100 px-3 py-1 text-sm font-bold text-cyan-700 uppercase">
+                      {user.role}
                     </span>
                   </div>
                   <div>
                     <span className="mb-1 block text-sm font-bold text-slate-500">Status</span>
-                    <span className="inline-block rounded-full bg-emerald-100 px-3 py-1 text-sm font-bold text-emerald-700">
-                      {mockUser.status}
+                    <span className="inline-block rounded-full bg-emerald-100 px-3 py-1 text-sm font-bold text-emerald-700 uppercase">
+                      {user.status}
                     </span>
                   </div>
                 </div>
@@ -158,10 +204,10 @@ export default function ProfilePage() {
                 <div>
                   <span className="mb-1 block text-sm font-bold text-slate-500">Auth Provider</span>
                   <p className="flex items-center gap-2 font-semibold text-slate-900">
-                    <span className="flex h-6 w-6 items-center justify-center rounded-full bg-white text-xs font-black text-cyan-700 shadow-sm ring-1 ring-cyan-100">
-                      G
+                    <span className="flex h-6 w-6 items-center justify-center rounded-full bg-white text-xs font-black text-cyan-700 shadow-sm ring-1 ring-cyan-100 uppercase">
+                      {displayProvider.charAt(0)}
                     </span>
-                    {mockUser.authProvider}
+                    {displayProvider}
                   </p>
                 </div>
               </div>
@@ -181,7 +227,7 @@ export default function ProfilePage() {
                 {quickActions.map((action) => (
                   <a
                     className={`group flex items-center gap-3 rounded-2xl p-3 text-left font-bold transition ${action.className}`}
-                    href="#"
+                    href={action.to}
                     key={action.label}
                   >
                     <span className={`rounded-full p-2 transition group-hover:scale-110 ${action.iconClassName}`}>
@@ -194,7 +240,7 @@ export default function ProfilePage() {
             </section>
           </aside>
 
-          <main className="space-y-8 lg:col-span-8">
+          <main className="space-y-8 lg:col-span-7">
             <section className="grid grid-cols-2 gap-4 md:grid-cols-4">
               {bookingStats.map((stat) => (
                 <article
@@ -210,7 +256,7 @@ export default function ProfilePage() {
             <section className="rounded-[2rem] border border-cyan-100 bg-white p-6 shadow-[0_4px_20px_rgba(0,206,209,0.08)] md:p-8">
               <div className="mb-8 flex items-center justify-between gap-4">
                 <h2 className="text-2xl font-black text-slate-950">Recent Bookings</h2>
-                <a className="font-bold text-cyan-700 underline-offset-4 transition hover:underline" href="#">
+                <a className="font-bold text-cyan-700 underline-offset-4 transition hover:underline" href="/bookings/my">
                   View All
                 </a>
               </div>

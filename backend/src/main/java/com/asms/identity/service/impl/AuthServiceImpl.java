@@ -100,7 +100,10 @@ public class AuthServiceImpl implements AuthService {
                 user.getPhoneNumber(),
                 user.getAddress(),
                 user.getRole(),
-                user.getStatus()
+                user.getStatus(),
+                user.getAuthProvider(),
+                user.getDateOfBirth(),
+                user.getCreatedAt()
         );
     }
 

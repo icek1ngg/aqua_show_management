@@ -56,6 +56,9 @@ public class User implements UserDetails {
     @Column(length = 500)
     private String address;
 
+    @Column(name = "date_of_birth")
+    private java.time.LocalDate dateOfBirth;
+
     @Enumerated(EnumType.STRING)
     @Column(nullable = false, length = 30)
     private UserRole role;
@@ -187,6 +190,18 @@ public class User implements UserDetails {
 
     public void setStatus(UserStatus status) {
         this.status = status;
+    }
+
+    public java.time.LocalDate getDateOfBirth() {
+        return dateOfBirth;
+    }
+
+    public void setDateOfBirth(java.time.LocalDate dateOfBirth) {
+        this.dateOfBirth = dateOfBirth;
+    }
+
+    public Instant getCreatedAt() {
+        return createdAt;
     }
 
     @Override

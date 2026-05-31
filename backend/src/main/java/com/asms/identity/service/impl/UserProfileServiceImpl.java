@@ -37,6 +37,7 @@ public class UserProfileServiceImpl implements UserProfileService {
         user.setGender(request.gender());
         user.setPhoneNumber(normalizeNullable(request.phoneNumber()));
         user.setAddress(normalizeNullable(request.address()));
+        user.setDateOfBirth(request.dateOfBirth());
 
         return toProfileResponse(user);
     }
@@ -52,13 +53,16 @@ public class UserProfileServiceImpl implements UserProfileService {
                 user.getPhoneNumber(),
                 user.getAddress(),
                 user.getRole(),
-                user.getStatus()
+                user.getStatus(),
+                user.getAuthProvider(),
+                user.getDateOfBirth(),
+                user.getCreatedAt()
         );
     }
 
     private String normalizeNullable(String value) {
         if (value == null || value.isBlank()) {
-            return "";
+            return null;
         }
         return value.trim();
     }
