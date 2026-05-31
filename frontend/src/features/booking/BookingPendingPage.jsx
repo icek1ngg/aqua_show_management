@@ -101,18 +101,6 @@ function getStatusConfig(status) {
       warningTitle: 'Booking Hold Expired',
       warningMessage: 'Seats are returned to availability after the hold window ends.',
     },
-    CANCELLED: {
-      icon: 'cancel',
-      tone: 'text-slate-600 bg-slate-100',
-      badge: 'bg-slate-100 text-slate-700',
-      alertTone: 'text-slate-600',
-      alertIcon: 'info',
-      headline: 'This booking was cancelled.',
-      title: 'Cancelled',
-      message: 'This booking is no longer active.',
-      warningTitle: 'Booking Cancelled',
-      warningMessage: 'You can create a new booking whenever you are ready.',
-    },
     PAID: {
       icon: 'check_circle',
       tone: 'text-emerald-700 bg-emerald-100',

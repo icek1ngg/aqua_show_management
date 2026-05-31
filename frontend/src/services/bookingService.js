@@ -9,8 +9,13 @@ export async function createBooking(payload) {
   return unwrapApiResponse(response);
 }
 
-export async function getMyBookings() {
-  const response = await apiClient.get('/bookings/my');
+export async function getMyBookings({ page = 0, size = 5 } = {}) {
+  const response = await apiClient.get('/bookings/my', {
+    params: {
+      page,
+      size,
+    },
+  });
   return unwrapApiResponse(response);
 }
 

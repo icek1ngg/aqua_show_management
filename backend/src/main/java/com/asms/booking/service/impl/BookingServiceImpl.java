@@ -4,6 +4,7 @@ import com.asms.booking.dto.BookingDtos.BookingMessage;
 import com.asms.booking.dto.BookingDtos.BookingResponse;
 import com.asms.booking.dto.BookingDtos.CreateBookingRequest;
 import com.asms.booking.dto.BookingDtos.CreateBookingResponse;
+import com.asms.booking.dto.BookingDtos.PageBookingResponse;
 import com.asms.booking.dto.TicketHoldDtos.HoldResult;
 import com.asms.booking.entity.Booking;
 import com.asms.booking.enums.BookingStatus;
@@ -20,6 +21,8 @@ import com.asms.identity.entity.User;
 import com.asms.identity.repository.UserRepository;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
+import org.springframework.data.domain.Page;
+import org.springframework.data.domain.PageRequest;
 import org.springframework.stereotype.Service;
 
 import java.math.BigDecimal;
@@ -35,6 +38,8 @@ public class BookingServiceImpl implements BookingService {
     private static final BigDecimal STANDARD_PRICE = new BigDecimal("45.00");
     private static final BigDecimal VIP_PRICE = new BigDecimal("70.00");
     private static final BigDecimal FAMILY_PRICE = new BigDecimal("36.00");
+    private static final int DEFAULT_MY_BOOKINGS_PAGE_SIZE = 5;
+    private static final int MAX_MY_BOOKINGS_PAGE_SIZE = 5;
 
     private final BookingRepository bookingRepository;
     private final UserRepository userRepository;
@@ -152,13 +157,26 @@ public class BookingServiceImpl implements BookingService {
     }
 
     @Override
-    public List<BookingResponse> getMyBookings(String currentUserEmail) {
+    public PageBookingResponse getMyBookings(String currentUserEmail, int page, int size) {
         User user = resolveUser(currentUserEmail);
-        return bookingRepository.findByUserOrderByCreatedAtDesc(user)
+        int safePage = Math.max(page, 0);
+        int safeSize = sanitizeMyBookingsPageSize(size);
+        Page<Booking> bookingPage = bookingRepository.findByUserOrderByCreatedAtDesc(user, PageRequest.of(safePage, safeSize));
+        List<BookingResponse> items = bookingPage.getContent()
                 .stream()
                 .map(this::expirePendingBookingIfNeeded)
                 .map(this::toResponse)
                 .toList();
+
+        return new PageBookingResponse(
+                items,
+                bookingPage.getNumber(),
+                bookingPage.getSize(),
+                bookingPage.getTotalElements(),
+                bookingPage.getTotalPages(),
+                bookingPage.hasNext(),
+                bookingPage.hasPrevious()
+        );
     }
 
     @Override
@@ -248,5 +266,12 @@ public class BookingServiceImpl implements BookingService {
         booking.setStatus(BookingStatus.EXPIRED);
         // TODO: Future scheduled job should expire old bookings and release Redis holds.
         return bookingRepository.save(booking);
+    }
+
+    private int sanitizeMyBookingsPageSize(int size) {
+        if (size <= 0) {
+            return DEFAULT_MY_BOOKINGS_PAGE_SIZE;
+        }
+        return Math.min(size, MAX_MY_BOOKINGS_PAGE_SIZE);
     }
 }

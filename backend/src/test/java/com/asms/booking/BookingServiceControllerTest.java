@@ -4,6 +4,7 @@ import com.asms.booking.dto.BookingDtos.BookingResponse;
 import com.asms.booking.dto.BookingDtos.BookingMessage;
 import com.asms.booking.dto.BookingDtos.CreateBookingRequest;
 import com.asms.booking.dto.BookingDtos.CreateBookingResponse;
+import com.asms.booking.dto.BookingDtos.PageBookingResponse;
 import com.asms.booking.dto.TicketHoldDtos.HoldResult;
 import com.asms.booking.entity.Booking;
 import com.asms.booking.enums.BookingStatus;
@@ -20,6 +21,9 @@ import com.asms.identity.entity.User;
 import com.asms.identity.repository.UserRepository;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
+import org.mockito.ArgumentCaptor;
+import org.springframework.data.domain.PageImpl;
+import org.springframework.data.domain.Pageable;
 
 import java.lang.reflect.Field;
 import java.math.BigDecimal;
@@ -32,6 +36,7 @@ import java.util.UUID;
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.assertThatThrownBy;
 import static org.mockito.ArgumentMatchers.any;
+import static org.mockito.ArgumentMatchers.eq;
 import static org.mockito.Mockito.doThrow;
 import static org.mockito.Mockito.mock;
 import static org.mockito.Mockito.never;
@@ -126,12 +131,101 @@ class BookingServiceControllerTest {
         User user = user("user@example.com");
         Booking booking = booking(user, "hold-123");
         when(userRepository.findByEmailIgnoreCase("user@example.com")).thenReturn(Optional.of(user));
-        when(bookingRepository.findByUserOrderByCreatedAtDesc(user)).thenReturn(List.of(booking));
+        when(bookingRepository.findByUserOrderByCreatedAtDesc(eq(user), any(Pageable.class)))
+                .thenReturn(new PageImpl<>(List.of(booking), org.springframework.data.domain.PageRequest.of(0, 5), 1));
 
-        List<BookingResponse> response = bookingService.getMyBookings("user@example.com");
+        PageBookingResponse response = bookingService.getMyBookings("user@example.com", 0, 5);
 
-        assertThat(response).hasSize(1);
-        assertThat(response.getFirst().holdId()).isEqualTo("hold-123");
+        assertThat(response.items()).hasSize(1);
+        assertThat(response.items().getFirst().holdId()).isEqualTo("hold-123");
+        assertThat(response.page()).isZero();
+        assertThat(response.size()).isEqualTo(5);
+        assertThat(response.totalItems()).isEqualTo(1);
+        assertThat(response.totalPages()).isEqualTo(1);
+        assertThat(response.hasNext()).isFalse();
+        assertThat(response.hasPrevious()).isFalse();
+    }
+
+    @Test
+    void getMyBookingsReturnsFiveItemsByDefaultAndNewestOrderFromRepository() {
+        User user = user("user@example.com");
+        List<Booking> pageItems = List.of(
+                booking(user, "hold-1", "AQB20260531NEW001"),
+                booking(user, "hold-2", "AQB20260531NEW002"),
+                booking(user, "hold-3", "AQB20260531NEW003"),
+                booking(user, "hold-4", "AQB20260531NEW004"),
+                booking(user, "hold-5", "AQB20260531NEW005")
+        );
+        when(userRepository.findByEmailIgnoreCase("user@example.com")).thenReturn(Optional.of(user));
+        when(bookingRepository.findByUserOrderByCreatedAtDesc(eq(user), any(Pageable.class)))
+                .thenReturn(new PageImpl<>(pageItems, org.springframework.data.domain.PageRequest.of(0, 5), 12));
+
+        PageBookingResponse response = bookingService.getMyBookings("user@example.com", 0, 5);
+
+        assertThat(response.items()).hasSize(5);
+        assertThat(response.items().getFirst().bookingCode()).isEqualTo("AQB20260531NEW001");
+        assertThat(response.page()).isZero();
+        assertThat(response.size()).isEqualTo(5);
+        assertThat(response.totalItems()).isEqualTo(12);
+        assertThat(response.totalPages()).isEqualTo(3);
+        assertThat(response.hasNext()).isTrue();
+        assertThat(response.hasPrevious()).isFalse();
+    }
+
+    @Test
+    void getMyBookingsPageOneReturnsNextFiveItems() {
+        User user = user("user@example.com");
+        List<Booking> pageItems = List.of(
+                booking(user, "hold-6", "AQB20260531NEXT06"),
+                booking(user, "hold-7", "AQB20260531NEXT07"),
+                booking(user, "hold-8", "AQB20260531NEXT08"),
+                booking(user, "hold-9", "AQB20260531NEXT09"),
+                booking(user, "hold-10", "AQB20260531NEXT10")
+        );
+        when(userRepository.findByEmailIgnoreCase("user@example.com")).thenReturn(Optional.of(user));
+        when(bookingRepository.findByUserOrderByCreatedAtDesc(eq(user), any(Pageable.class)))
+                .thenReturn(new PageImpl<>(pageItems, org.springframework.data.domain.PageRequest.of(1, 5), 12));
+
+        PageBookingResponse response = bookingService.getMyBookings("user@example.com", 1, 5);
+
+        assertThat(response.items()).hasSize(5);
+        assertThat(response.items().getFirst().bookingCode()).isEqualTo("AQB20260531NEXT06");
+        assertThat(response.page()).isEqualTo(1);
+        assertThat(response.hasNext()).isTrue();
+        assertThat(response.hasPrevious()).isTrue();
+    }
+
+    @Test
+    void getMyBookingsClampsNegativePageAndOversizedPageSize() {
+        User user = user("user@example.com");
+        when(userRepository.findByEmailIgnoreCase("user@example.com")).thenReturn(Optional.of(user));
+        when(bookingRepository.findByUserOrderByCreatedAtDesc(eq(user), any(Pageable.class)))
+                .thenReturn(new PageImpl<>(List.of(), org.springframework.data.domain.PageRequest.of(0, 5), 0));
+
+        PageBookingResponse response = bookingService.getMyBookings("user@example.com", -4, 99);
+
+        ArgumentCaptor<Pageable> pageableCaptor = ArgumentCaptor.forClass(Pageable.class);
+        verify(bookingRepository).findByUserOrderByCreatedAtDesc(eq(user), pageableCaptor.capture());
+        assertThat(pageableCaptor.getValue().getPageNumber()).isZero();
+        assertThat(pageableCaptor.getValue().getPageSize()).isEqualTo(5);
+        assertThat(response.page()).isZero();
+        assertThat(response.size()).isEqualTo(5);
+    }
+
+    @Test
+    void controllerReturnsPaginatedMyBookingsResponse() {
+        User user = user("user@example.com");
+        Booking booking = booking(user, "hold-123");
+        when(userRepository.findByEmailIgnoreCase("user@example.com")).thenReturn(Optional.of(user));
+        when(bookingRepository.findByUserOrderByCreatedAtDesc(eq(user), any(Pageable.class)))
+                .thenReturn(new PageImpl<>(List.of(booking), org.springframework.data.domain.PageRequest.of(0, 5), 1));
+        com.asms.booking.controller.BookingController controller = new com.asms.booking.controller.BookingController(bookingService);
+
+        ApiResponse<PageBookingResponse> response = controller.getMyBookings(user, 0, 20);
+
+        assertThat(response.success()).isTrue();
+        assertThat(response.data().items()).hasSize(1);
+        assertThat(response.data().size()).isEqualTo(5);
     }
 
     @Test
@@ -185,22 +279,28 @@ class BookingServiceControllerTest {
     }
 
     @Test
-    void getBookingDetailReturnsPaidAndCancelledStatusesUnchanged() {
+    void getBookingDetailReturnsPaidFailedAndExpiredStatusesUnchanged() {
         User user = user("user@example.com");
         Booking paidBooking = booking(user, "hold-paid");
         paidBooking.setStatus(BookingStatus.PAID);
-        Booking cancelledBooking = booking(user, "hold-cancelled");
-        cancelledBooking.setStatus(BookingStatus.CANCELLED);
-        cancelledBooking.setExpiresAt(Instant.now().minusSeconds(60));
+        Booking failedBooking = booking(user, "hold-failed");
+        failedBooking.setStatus(BookingStatus.FAILED);
+        failedBooking.setExpiresAt(Instant.now().minusSeconds(60));
+        Booking expiredBooking = booking(user, "hold-expired-status");
+        expiredBooking.setStatus(BookingStatus.EXPIRED);
+        expiredBooking.setExpiresAt(Instant.now().minusSeconds(60));
         when(userRepository.findByEmailIgnoreCase("user@example.com")).thenReturn(Optional.of(user));
         when(bookingRepository.findByIdAndUser(paidBooking.getId(), user)).thenReturn(Optional.of(paidBooking));
-        when(bookingRepository.findByIdAndUser(cancelledBooking.getId(), user)).thenReturn(Optional.of(cancelledBooking));
+        when(bookingRepository.findByIdAndUser(failedBooking.getId(), user)).thenReturn(Optional.of(failedBooking));
+        when(bookingRepository.findByIdAndUser(expiredBooking.getId(), user)).thenReturn(Optional.of(expiredBooking));
 
         BookingResponse paidResponse = bookingService.getBookingDetail(paidBooking.getId(), "user@example.com");
-        BookingResponse cancelledResponse = bookingService.getBookingDetail(cancelledBooking.getId(), "user@example.com");
+        BookingResponse failedResponse = bookingService.getBookingDetail(failedBooking.getId(), "user@example.com");
+        BookingResponse expiredResponse = bookingService.getBookingDetail(expiredBooking.getId(), "user@example.com");
 
         assertThat(paidResponse.status()).isEqualTo(BookingStatus.PAID);
-        assertThat(cancelledResponse.status()).isEqualTo(BookingStatus.CANCELLED);
+        assertThat(failedResponse.status()).isEqualTo(BookingStatus.FAILED);
+        assertThat(expiredResponse.status()).isEqualTo(BookingStatus.EXPIRED);
         verify(bookingRepository, never()).save(any());
     }
 
@@ -254,9 +354,13 @@ class BookingServiceControllerTest {
     }
 
     private Booking booking(User user, String holdId) {
+        return booking(user, holdId, "AQB20260531ABC123");
+    }
+
+    private Booking booking(User user, String holdId, String bookingCode) {
         Booking booking = Booking.create();
         booking.setUser(user);
-        booking.setBookingCode("AQB20260531ABC123");
+        booking.setBookingCode(bookingCode);
         booking.setHoldId(holdId);
         booking.setShowId("show-1");
         booking.setScheduleId("schedule-1");
