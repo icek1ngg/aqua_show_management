@@ -11,9 +11,13 @@ import BookingDetailPage from '../features/booking/BookingDetailPage.jsx';
 import BookingHistoryPage from '../features/booking/BookingHistoryPage.jsx';
 import BookingPendingPage from '../features/booking/BookingPendingPage.jsx';
 import CreateBookingPage from '../features/booking/CreateBookingPage.jsx';
+import MockPayosCheckoutPage from '../features/payment/MockPayosCheckoutPage.jsx';
+import PaymentPage from '../features/payment/PaymentPage.jsx';
+import PaymentResultPage from '../features/payment/PaymentResultPage.jsx';
 import HomePage from '../features/home/HomePage.jsx';
 import EditProfilePage from '../features/profile/EditProfilePage.jsx';
 import ProfilePage from '../features/profile/ProfilePage.jsx';
+import StaffTicketValidationPage from '../features/staff/StaffTicketValidationPage.jsx';
 
 export const router = createBrowserRouter([
   {
@@ -73,6 +77,34 @@ export const router = createBrowserRouter([
         element: (
           <ProtectedRoute>
             <BookingPendingPage />
+          </ProtectedRoute>
+        ),
+      },
+      {
+        path: 'bookings/:bookingId/payment',
+        element: (
+          <ProtectedRoute>
+            <PaymentPage />
+          </ProtectedRoute>
+        ),
+      },
+      {
+        path: 'mock/payos-checkout',
+        element: <MockPayosCheckoutPage />,
+      },
+      {
+        path: 'payments/result',
+        element: (
+          <ProtectedRoute>
+            <PaymentResultPage />
+          </ProtectedRoute>
+        ),
+      },
+      {
+        path: 'staff/tickets/validate',
+        element: (
+          <ProtectedRoute allowedRoles={['STAFF']}>
+            <StaffTicketValidationPage />
           </ProtectedRoute>
         ),
       },
