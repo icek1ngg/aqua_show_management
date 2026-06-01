@@ -1,5 +1,9 @@
 server:
   port: 8080
+  servlet:
+    session:
+      # JWT authentication does not require Tomcat persistent servlet sessions.
+      persistent: false
 
 spring:
   application:

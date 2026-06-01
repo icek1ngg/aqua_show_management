@@ -30,10 +30,12 @@ logs/
 frontend/.env*
 backend/.env*
 backend/.env
+load-tests/.env.k6
 
 # Keep example env files
 !frontend/.env.example
 !backend/.env.example
+!load-tests/.env.k6.example
 
 # =========================
 # Frontend - Node / React / Vite
