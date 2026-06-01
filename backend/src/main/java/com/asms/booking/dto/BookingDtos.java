@@ -1,11 +1,16 @@
 package com.asms.booking.dto;
 
 import com.asms.booking.enums.BookingStatus;
+import com.asms.notification.enums.EmailNotificationStatus;
+import com.asms.notification.enums.EmailNotificationType;
+import com.asms.payment.enums.PaymentStatus;
+import com.asms.ticketing.enums.TicketStatus;
 import jakarta.validation.constraints.FutureOrPresent;
 import jakarta.validation.constraints.Max;
 import jakarta.validation.constraints.Min;
 import jakarta.validation.constraints.NotBlank;
 import jakarta.validation.constraints.NotNull;
+import jakarta.validation.constraints.Positive;
 
 import java.math.BigDecimal;
 import java.time.Instant;
@@ -65,7 +70,48 @@ public final class BookingDtos {
             BigDecimal totalAmount,
             BookingStatus status,
             Instant createdAt,
-            Instant expiresAt
+            Instant expiresAt,
+            PaymentSummary payment,
+            TicketSummary tickets,
+            EmailNotificationSummary emailNotification
+    ) {
+    }
+
+    public record PaymentSummary(
+            UUID id,
+            String payosOrderCode,
+            String transactionId,
+            BigDecimal amount,
+            PaymentStatus status,
+            Instant paidAt,
+            Instant createdAt
+    ) {
+    }
+
+    public record TicketSummary(
+            int total,
+            int valid,
+            int used,
+            int expired,
+            List<TicketDetail> items
+    ) {
+    }
+
+    public record TicketDetail(
+            UUID id,
+            String qrCode,
+            TicketStatus status,
+            Instant issuedAt,
+            Instant usedAt
+    ) {
+    }
+
+    public record EmailNotificationSummary(
+            UUID id,
+            EmailNotificationType emailType,
+            EmailNotificationStatus status,
+            Instant sentAt,
+            Instant createdAt
     ) {
     }
 
@@ -95,6 +141,38 @@ public final class BookingDtos {
             BigDecimal totalAmount,
             Instant expiresAt,
             Instant createdAt
+    ) {
+    }
+
+    public record DevSampleBookingRequest(
+            @NotNull(message = "Amount is required")
+            @Positive(message = "Amount must be positive")
+            BigDecimal amount,
+
+            @Min(value = 1, message = "Quantity must be at least 1")
+            @Max(value = 10, message = "Quantity must not exceed 10")
+            Integer quantity,
+
+            @Min(value = 5, message = "Expiration must be at least 5 minutes")
+            @Max(value = 1440, message = "Expiration must not exceed 1440 minutes")
+            Integer expiresInMinutes
+    ) {
+    }
+
+    public record DevSampleBookingBatchRequest(
+            @NotNull(message = "Amounts are required")
+            List<@Positive(message = "Amount must be positive") BigDecimal> amounts,
+
+            @Min(value = 5, message = "Expiration must be at least 5 minutes")
+            @Max(value = 1440, message = "Expiration must not exceed 1440 minutes")
+            Integer expiresInMinutes
+    ) {
+    }
+
+    public record DevSampleBookingResponse(
+            BookingResponse booking,
+            String paymentPageUrl,
+            String createPaymentApi
     ) {
     }
 }

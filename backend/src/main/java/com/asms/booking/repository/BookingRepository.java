@@ -1,6 +1,7 @@
 package com.asms.booking.repository;
 
 import com.asms.booking.entity.Booking;
+import com.asms.booking.enums.BookingStatus;
 import com.asms.identity.entity.User;
 import org.springframework.data.domain.Page;
 import org.springframework.data.domain.Pageable;
@@ -15,6 +16,8 @@ public interface BookingRepository extends JpaRepository<Booking, UUID> {
     Optional<Booking> findByIdAndUser(UUID id, User user);
 
     List<Booking> findByUserOrderByCreatedAtDesc(User user);
+
+    List<Booking> findByUserAndStatusOrderByCreatedAtDesc(User user, BookingStatus status);
 
     Page<Booking> findByUserOrderByCreatedAtDesc(User user, Pageable pageable);
 

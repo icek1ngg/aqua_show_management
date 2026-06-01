@@ -39,10 +39,21 @@ function UserAvatar({ user, className = 'h-9 w-9' }) {
   );
 }
 
-function NavLinks({ onNavigate }) {
+function hasRole(user, role) {
+  const roles = [user?.role, ...(Array.isArray(user?.roles) ? user.roles : [])]
+    .filter(Boolean)
+    .map((value) => String(value).replace(/^ROLE_/, '').toUpperCase());
+  return roles.includes(role);
+}
+
+function NavLinks({ onNavigate, user }) {
+  const links = hasRole(user, 'STAFF')
+    ? [...navigationLinks, { label: 'Validate QR', to: '/staff/tickets/validate' }]
+    : navigationLinks;
+
   return (
     <>
-      {navigationLinks.map((link) => (
+      {links.map((link) => (
         link.to ? (
           <NavLink
             className={({ isActive }) =>
@@ -191,7 +202,7 @@ export default function Navbar() {
           <Logo />
 
           <nav className="hidden items-center gap-2 md:flex" aria-label="Primary navigation">
-            <NavLinks />
+            <NavLinks user={user} />
           </nav>
 
           <div className="hidden items-center gap-4 md:flex">
@@ -219,7 +230,7 @@ export default function Navbar() {
         {isMobileOpen && (
           <div className="border-t border-cyan-100 bg-white/95 px-4 py-4 shadow-xl backdrop-blur-xl md:hidden">
             <nav className="flex flex-col gap-1" aria-label="Mobile navigation">
-              <NavLinks onNavigate={closeMobileMenu} />
+              <NavLinks onNavigate={closeMobileMenu} user={user} />
             </nav>
 
             <div className="mt-4 flex flex-col gap-3 border-t border-cyan-100 pt-4">
