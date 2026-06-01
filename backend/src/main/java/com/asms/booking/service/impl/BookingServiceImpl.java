@@ -4,7 +4,14 @@ import com.asms.booking.dto.BookingDtos.BookingMessage;
 import com.asms.booking.dto.BookingDtos.BookingResponse;
 import com.asms.booking.dto.BookingDtos.CreateBookingRequest;
 import com.asms.booking.dto.BookingDtos.CreateBookingResponse;
+import com.asms.booking.dto.BookingDtos.DevSampleBookingBatchRequest;
+import com.asms.booking.dto.BookingDtos.DevSampleBookingRequest;
+import com.asms.booking.dto.BookingDtos.DevSampleBookingResponse;
+import com.asms.booking.dto.BookingDtos.EmailNotificationSummary;
 import com.asms.booking.dto.BookingDtos.PageBookingResponse;
+import com.asms.booking.dto.BookingDtos.PaymentSummary;
+import com.asms.booking.dto.BookingDtos.TicketDetail;
+import com.asms.booking.dto.BookingDtos.TicketSummary;
 import com.asms.booking.dto.TicketHoldDtos.HoldResult;
 import com.asms.booking.entity.Booking;
 import com.asms.booking.enums.BookingStatus;
@@ -19,17 +26,27 @@ import com.asms.core.exception.ServiceUnavailableException;
 import com.asms.core.exception.UnauthorizedException;
 import com.asms.identity.entity.User;
 import com.asms.identity.repository.UserRepository;
+import com.asms.notification.entity.EmailNotification;
+import com.asms.notification.repository.EmailNotificationRepository;
+import com.asms.payment.entity.Payment;
+import com.asms.payment.repository.PaymentRepository;
+import com.asms.ticketing.entity.Ticket;
+import com.asms.ticketing.enums.TicketStatus;
+import com.asms.ticketing.repository.TicketRepository;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
+import org.springframework.beans.factory.annotation.Value;
 import org.springframework.data.domain.Page;
 import org.springframework.data.domain.PageRequest;
 import org.springframework.stereotype.Service;
 
 import java.math.BigDecimal;
+import java.math.RoundingMode;
 import java.time.Instant;
 import java.util.List;
 import java.util.Locale;
 import java.util.UUID;
+import java.util.concurrent.ThreadLocalRandom;
 
 @Service
 public class BookingServiceImpl implements BookingService {
@@ -45,17 +62,29 @@ public class BookingServiceImpl implements BookingService {
     private final UserRepository userRepository;
     private final RedisTicketHoldService redisTicketHoldService;
     private final RabbitMQBookingPublisher bookingPublisher;
+    private final PaymentRepository paymentRepository;
+    private final TicketRepository ticketRepository;
+    private final EmailNotificationRepository emailNotificationRepository;
+    private final String frontendBaseUrl;
 
     public BookingServiceImpl(
             BookingRepository bookingRepository,
             UserRepository userRepository,
             RedisTicketHoldService redisTicketHoldService,
-            RabbitMQBookingPublisher bookingPublisher
+            RabbitMQBookingPublisher bookingPublisher,
+            PaymentRepository paymentRepository,
+            TicketRepository ticketRepository,
+            EmailNotificationRepository emailNotificationRepository,
+            @Value("${asms.frontend.base-url}") String frontendBaseUrl
     ) {
         this.bookingRepository = bookingRepository;
         this.userRepository = userRepository;
         this.redisTicketHoldService = redisTicketHoldService;
         this.bookingPublisher = bookingPublisher;
+        this.paymentRepository = paymentRepository;
+        this.ticketRepository = ticketRepository;
+        this.emailNotificationRepository = emailNotificationRepository;
+        this.frontendBaseUrl = frontendBaseUrl;
     }
 
     @Override
@@ -199,6 +228,57 @@ public class BookingServiceImpl implements BookingService {
         return toResponse(expirePendingBookingIfNeeded(booking));
     }
 
+    @Override
+    public DevSampleBookingResponse createDevSampleBooking(DevSampleBookingRequest request, String currentUserEmail) {
+        User user = resolveUser(currentUserEmail);
+        BigDecimal amount = sanitizeAmount(request.amount());
+        int quantity = request.quantity() == null ? 1 : request.quantity();
+        int expiresInMinutes = request.expiresInMinutes() == null ? 60 : request.expiresInMinutes();
+
+        Booking booking = Booking.create();
+        booking.setUser(user);
+        booking.setBookingCode(generateBookingCode());
+        booking.setHoldId("ASMS-DEV-HOLD-" + UUID.randomUUID());
+        booking.setShowId("SHOW-DEMO-AQUA");
+        booking.setScheduleId("SCHEDULE-DEMO-AQUA");
+        booking.setShowName("Midnight Aqua Symphony");
+        booking.setShowDate(java.time.LocalDate.now().plusDays(7));
+        booking.setTicketType("STANDARD");
+        booking.setQuantity(quantity);
+        booking.setTotalAmount(amount);
+        booking.setUnitPrice(amount.divide(BigDecimal.valueOf(quantity), 2, RoundingMode.HALF_UP));
+        booking.setStatus(BookingStatus.PENDING_PAYMENT);
+        booking.setExpiresAt(Instant.now().plusSeconds(expiresInMinutes * 60L));
+
+        return toDevSampleResponse(bookingRepository.save(booking));
+    }
+
+    @Override
+    public List<DevSampleBookingResponse> createDevSampleBookings(DevSampleBookingBatchRequest request, String currentUserEmail) {
+        if (request.amounts() == null || request.amounts().isEmpty()) {
+            throw new BadRequestException("At least one amount is required");
+        }
+        if (request.amounts().size() > 20) {
+            throw new BadRequestException("Cannot create more than 20 sample bookings at once");
+        }
+
+        return request.amounts()
+                .stream()
+                .map((amount) -> createDevSampleBooking(new DevSampleBookingRequest(amount, 1, request.expiresInMinutes()), currentUserEmail))
+                .toList();
+    }
+
+    @Override
+    public List<DevSampleBookingResponse> getMyPendingDevSampleBookings(String currentUserEmail) {
+        User user = resolveUser(currentUserEmail);
+        return bookingRepository.findByUserAndStatusOrderByCreatedAtDesc(user, BookingStatus.PENDING_PAYMENT)
+                .stream()
+                .map(this::expirePendingBookingIfNeeded)
+                .filter((booking) -> booking.getStatus() == BookingStatus.PENDING_PAYMENT)
+                .map(this::toDevSampleResponse)
+                .toList();
+    }
+
     private User resolveUser(String currentUserEmail) {
         if (currentUserEmail == null || currentUserEmail.isBlank()) {
             throw new UnauthorizedException("Authentication required");
@@ -250,8 +330,86 @@ public class BookingServiceImpl implements BookingService {
                 booking.getTotalAmount(),
                 booking.getStatus(),
                 booking.getCreatedAt(),
-                booking.getExpiresAt()
+                booking.getExpiresAt(),
+                toPaymentSummary(booking),
+                toTicketSummary(booking),
+                toEmailNotificationSummary(booking)
         );
+    }
+
+    private DevSampleBookingResponse toDevSampleResponse(Booking booking) {
+        String frontendUrl = frontendBaseUrl == null || frontendBaseUrl.isBlank()
+                ? "http://localhost:5173"
+                : frontendBaseUrl.replaceAll("/+$", "");
+
+        return new DevSampleBookingResponse(
+                toResponse(booking),
+                frontendUrl + "/bookings/" + booking.getId() + "/payment",
+                "POST /api/payments/create { \"bookingId\": \"" + booking.getId() + "\" }"
+        );
+    }
+
+    private BigDecimal sanitizeAmount(BigDecimal amount) {
+        if (amount == null || amount.compareTo(BigDecimal.ZERO) <= 0) {
+            throw new BadRequestException("Amount must be positive");
+        }
+        return amount.setScale(2, RoundingMode.HALF_UP);
+    }
+
+    private String generateBookingCode() {
+        String bookingCode;
+        do {
+            bookingCode = "AQBDEV" + Instant.now().toEpochMilli() + ThreadLocalRandom.current().nextInt(100, 999);
+        } while (bookingRepository.existsByBookingCode(bookingCode));
+        return bookingCode;
+    }
+
+    private PaymentSummary toPaymentSummary(Booking booking) {
+        return paymentRepository.findByBooking_Id(booking.getId())
+                .map((Payment payment) -> new PaymentSummary(
+                        payment.getId(),
+                        payment.getPayosOrderCode(),
+                        payment.getTransactionId(),
+                        payment.getAmount(),
+                        payment.getStatus(),
+                        payment.getPaidAt(),
+                        payment.getCreatedAt()
+                ))
+                .orElse(null);
+    }
+
+    private TicketSummary toTicketSummary(Booking booking) {
+        List<Ticket> tickets = ticketRepository.findByBooking_Id(booking.getId());
+        if (tickets.isEmpty()) {
+            return new TicketSummary(0, 0, 0, 0, List.of());
+        }
+
+        int valid = (int) tickets.stream().filter((ticket) -> ticket.getStatus() == TicketStatus.VALID).count();
+        int used = (int) tickets.stream().filter((ticket) -> ticket.getStatus() == TicketStatus.USED).count();
+        int expired = (int) tickets.stream().filter((ticket) -> ticket.getStatus() == TicketStatus.EXPIRED).count();
+        List<TicketDetail> items = tickets.stream()
+                .map((Ticket ticket) -> new TicketDetail(
+                        ticket.getId(),
+                        ticket.getQrCode(),
+                        ticket.getStatus(),
+                        ticket.getIssuedAt(),
+                        ticket.getUsedAt()
+                ))
+                .toList();
+
+        return new TicketSummary(tickets.size(), valid, used, expired, items);
+    }
+
+    private EmailNotificationSummary toEmailNotificationSummary(Booking booking) {
+        return emailNotificationRepository.findTopByBooking_IdOrderByCreatedAtDesc(booking.getId())
+                .map((EmailNotification notification) -> new EmailNotificationSummary(
+                        notification.getId(),
+                        notification.getEmailType(),
+                        notification.getStatus(),
+                        notification.getSentAt(),
+                        notification.getCreatedAt()
+                ))
+                .orElse(null);
     }
 
     private Booking expirePendingBookingIfNeeded(Booking booking) {

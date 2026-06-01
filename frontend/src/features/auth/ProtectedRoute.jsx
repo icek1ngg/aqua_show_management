@@ -2,9 +2,23 @@ import { Navigate, useLocation } from 'react-router-dom';
 
 import { useAuth } from './AuthContext.jsx';
 
-export default function ProtectedRoute({ children }) {
-  const { isAuthenticated, loading } = useAuth();
+function getUserRoles(user) {
+  const roleValues = [user?.role, ...(Array.isArray(user?.roles) ? user.roles : [])]
+    .filter(Boolean)
+    .map((role) => String(role).replace(/^ROLE_/, '').toUpperCase());
+
+  return [...new Set(roleValues)];
+}
+
+export default function ProtectedRoute({ allowedRoles, children }) {
+  const { isAuthenticated, loading, user } = useAuth();
   const location = useLocation();
+  const isDevMockPaymentRoute =
+    import.meta.env.DEV &&
+    (
+      location.pathname === '/bookings/mock/payment' ||
+      (location.pathname === '/payments/result' && (location.search.includes('mock=true') || location.search.includes('bookingId=mock')))
+    );
 
   if (loading) {
     return (
@@ -17,8 +31,17 @@ export default function ProtectedRoute({ children }) {
     );
   }
 
-  if (!isAuthenticated) {
+  if (!isAuthenticated && !isDevMockPaymentRoute) {
     return <Navigate replace to="/login" state={{ from: location }} />;
+  }
+
+  if (allowedRoles?.length && !isDevMockPaymentRoute) {
+    const userRoles = getUserRoles(user);
+    const canAccess = allowedRoles.some((role) => userRoles.includes(String(role).replace(/^ROLE_/, '').toUpperCase()));
+
+    if (!canAccess) {
+      return <Navigate replace to="/" />;
+    }
   }
 
   return children;

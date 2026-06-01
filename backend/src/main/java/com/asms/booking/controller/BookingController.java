@@ -3,6 +3,9 @@ package com.asms.booking.controller;
 import com.asms.booking.dto.BookingDtos.BookingResponse;
 import com.asms.booking.dto.BookingDtos.CreateBookingRequest;
 import com.asms.booking.dto.BookingDtos.CreateBookingResponse;
+import com.asms.booking.dto.BookingDtos.DevSampleBookingBatchRequest;
+import com.asms.booking.dto.BookingDtos.DevSampleBookingRequest;
+import com.asms.booking.dto.BookingDtos.DevSampleBookingResponse;
 import com.asms.booking.dto.BookingDtos.PageBookingResponse;
 import com.asms.booking.service.BookingService;
 import com.asms.core.exception.UnauthorizedException;
@@ -18,6 +21,7 @@ import org.springframework.web.bind.annotation.RequestMapping;
 import org.springframework.web.bind.annotation.RequestParam;
 import org.springframework.web.bind.annotation.RestController;
 
+import java.util.List;
 import java.util.UUID;
 
 @RestController
@@ -72,6 +76,36 @@ public class BookingController {
         return ApiResponse.success(
                 "Booking fetched successfully",
                 bookingService.getBookingByHoldId(holdId, currentUserEmail(user))
+        );
+    }
+
+    @PostMapping("/dev-samples")
+    public ApiResponse<DevSampleBookingResponse> createDevSampleBooking(
+            @AuthenticationPrincipal User user,
+            @Valid @RequestBody DevSampleBookingRequest request
+    ) {
+        return ApiResponse.success(
+                "Sample booking created",
+                bookingService.createDevSampleBooking(request, currentUserEmail(user))
+        );
+    }
+
+    @PostMapping("/dev-samples/batch")
+    public ApiResponse<List<DevSampleBookingResponse>> createDevSampleBookings(
+            @AuthenticationPrincipal User user,
+            @Valid @RequestBody DevSampleBookingBatchRequest request
+    ) {
+        return ApiResponse.success(
+                "Sample bookings created",
+                bookingService.createDevSampleBookings(request, currentUserEmail(user))
+        );
+    }
+
+    @GetMapping("/dev-samples")
+    public ApiResponse<List<DevSampleBookingResponse>> getMyPendingDevSampleBookings(@AuthenticationPrincipal User user) {
+        return ApiResponse.success(
+                "Pending sample bookings fetched successfully",
+                bookingService.getMyPendingDevSampleBookings(currentUserEmail(user))
         );
     }
 

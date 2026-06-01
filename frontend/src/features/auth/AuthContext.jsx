@@ -56,11 +56,17 @@ function getUserFromToken(token) {
     };
   }
 
+  const role = payload.role || payload.userRole || '';
+  const payloadRoles = payload.roles || payload.authorities || [];
+  const roles = Array.isArray(payloadRoles) ? payloadRoles : [payloadRoles];
+  const normalizedRoles = [...new Set([role, ...roles].filter(Boolean).map((item) => String(item).replace(/^ROLE_/, '')))];
+
   return {
     name: payload.name || payload.fullName || payload.username || payload.email || 'AquaPulse Guest',
     email: payload.email || '',
     avatarUrl: payload.avatarUrl || payload.picture || '',
-    roles: payload.roles || payload.authorities || [],
+    role,
+    roles: normalizedRoles,
   };
 }
 

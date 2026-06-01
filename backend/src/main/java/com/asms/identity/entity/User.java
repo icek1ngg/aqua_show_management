@@ -184,6 +184,10 @@ public class User implements UserDetails {
         return role;
     }
 
+    public void setRole(UserRole role) {
+        this.role = role;
+    }
+
     public UserStatus getStatus() {
         return status;
     }
