@@ -10,7 +10,7 @@ const showDatabase = {
     name: 'Symphony of Lights',
     category: 'Water Show',
     badge: 'Popular',
-    pricePerTicket: 45,
+    pricePerTicket: 2000,
     maxQuantity: 10,
     time: '08:00 PM - 09:30 PM',
     venue: 'Aqua Plaza',
@@ -21,7 +21,7 @@ const showDatabase = {
     name: 'Ocean Dreams',
     category: 'Marine Show',
     badge: 'Trending',
-    pricePerTicket: 35,
+    pricePerTicket: 2000,
     maxQuantity: 10,
     time: '02:00 PM - 03:30 PM',
     venue: 'Marine Amphitheater',
@@ -32,7 +32,7 @@ const showDatabase = {
     name: 'Aqua Parade',
     category: 'Float Parade',
     badge: 'Festive',
-    pricePerTicket: 30,
+    pricePerTicket: 2000,
     maxQuantity: 10,
     time: '04:30 PM - 05:30 PM',
     venue: 'Canal Street',
@@ -43,7 +43,7 @@ const showDatabase = {
     name: 'Mermaid Splash',
     category: 'Underwater Theater',
     badge: 'Magical',
-    pricePerTicket: 50,
+    pricePerTicket: 2000,
     maxQuantity: 10,
     time: '11:00 AM - 12:30 PM',
     venue: 'Deep Ocean Tank',
@@ -53,7 +53,11 @@ const showDatabase = {
 };
 
 function formatCurrency(amount) {
-  return `$${amount.toFixed(2)}`;
+  return new Intl.NumberFormat('vi-VN', {
+    style: 'currency',
+    currency: 'VND',
+    maximumFractionDigits: 0,
+  }).format(Number(amount || 0));
 }
 
 function formatDateString(dateStr) {
@@ -167,9 +171,9 @@ export default function CreateBookingPage() {
   // TEMPORARY: Front-end price estimation only. Not trusted for backend transactions.
   let calculatedPricePerTicket = showData.pricePerTicket;
   if (ticketTypeParam === 'VIP Entry') {
-    calculatedPricePerTicket += 25; // VIP premium fee
+    calculatedPricePerTicket = 5000;
   } else if (ticketTypeParam === 'Family Package') {
-    calculatedPricePerTicket *= 0.8; // 20% bundle discount
+    calculatedPricePerTicket = 3000;
   }
 
   const totalAmount = quantity * calculatedPricePerTicket;
@@ -207,7 +211,7 @@ export default function CreateBookingPage() {
       try {
         const booking = await getBookingByHoldId(holdId);
         if (booking?.id) {
-          navigate(`/bookings/${booking.id}/pending`);
+          navigate(`/bookings/${booking.id}/payment`);
           return true;
         }
       } catch (error) {
