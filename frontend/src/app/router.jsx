@@ -9,7 +9,6 @@ import RegisterPage from '../features/auth/RegisterPage.jsx';
 import ResetPasswordPage from '../features/auth/ResetPasswordPage.jsx';
 import BookingDetailPage from '../features/booking/BookingDetailPage.jsx';
 import BookingHistoryPage from '../features/booking/BookingHistoryPage.jsx';
-import BookingPendingPage from '../features/booking/BookingPendingPage.jsx';
 import CreateBookingPage from '../features/booking/CreateBookingPage.jsx';
 import MockPayosCheckoutPage from '../features/payment/MockPayosCheckoutPage.jsx';
 import PaymentPage from '../features/payment/PaymentPage.jsx';
@@ -69,14 +68,6 @@ export const router = createBrowserRouter([
         element: (
           <ProtectedRoute>
             <CreateBookingPage />
-          </ProtectedRoute>
-        ),
-      },
-      {
-        path: 'bookings/:id/pending',
-        element: (
-          <ProtectedRoute>
-            <BookingPendingPage />
           </ProtectedRoute>
         ),
       },

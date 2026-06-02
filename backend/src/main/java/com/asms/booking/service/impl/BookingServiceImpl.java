@@ -52,9 +52,9 @@ import java.util.concurrent.ThreadLocalRandom;
 public class BookingServiceImpl implements BookingService {
 
     private static final Logger log = LoggerFactory.getLogger(BookingServiceImpl.class);
-    private static final BigDecimal STANDARD_PRICE = new BigDecimal("45.00");
-    private static final BigDecimal VIP_PRICE = new BigDecimal("70.00");
-    private static final BigDecimal FAMILY_PRICE = new BigDecimal("36.00");
+    private static final BigDecimal STANDARD_PRICE = new BigDecimal("2000");
+    private static final BigDecimal VIP_PRICE = new BigDecimal("5000");
+    private static final BigDecimal FAMILY_PRICE = new BigDecimal("3000");
     private static final int DEFAULT_MY_BOOKINGS_PAGE_SIZE = 5;
     private static final int MAX_MY_BOOKINGS_PAGE_SIZE = 5;
 
