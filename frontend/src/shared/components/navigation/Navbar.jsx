@@ -7,10 +7,8 @@ import TicketSearchDrawer from './TicketSearchDrawer.jsx';
 
 const navigationLinks = [
   { label: 'Home', to: '/' },
-  // TODO: Replace with /shows when the Shows page exists.
-  { label: 'Shows', href: '#' },
-  // TODO: Replace with /schedules when the Schedules page exists.
-  { label: 'Schedules', href: '#' },
+  { label: 'Shows', to: '/shows' },
+  { label: 'Schedules', href: '/#schedules' },
   { label: 'My Bookings', to: '/bookings/my' },
 ];
 
@@ -48,7 +46,7 @@ function hasRole(user, role) {
 
 function NavLinks({ onNavigate, user }) {
   const links = hasRole(user, 'STAFF')
-    ? [...navigationLinks, { label: 'Validate QR', to: '/staff/tickets/validate' }]
+    ? [...navigationLinks, { label: 'Check-in', to: '/staff/check-in' }]
     : navigationLinks;
 
   return (

@@ -6,40 +6,46 @@ server:
       persistent: false
 
 spring:
+  config:
+    import:
+      - optional:file:../.env[.properties]
+      - optional:file:.env[.properties]
+
   application:
     name: asms-backend
 
   datasource:
-    url: ${DB_URL:jdbc:postgresql://localhost:5432/asms_db}
-    username: ${DB_USERNAME:asms_user}
-    password: ${DB_PASSWORD:asms_password}
+    url: "${DB_URL:jdbc:postgresql://localhost:5432/asms_db}"
+    username: "${DB_USERNAME:asms_user}"
+    password: "${DB_PASSWORD:asms_password}"
     driver-class-name: org.postgresql.Driver
 
   jpa:
     hibernate:
-      ddl-auto: update
+      ddl-auto: "${JPA_DDL_AUTO:update}"
     open-in-view: false
+    show-sql: "${JPA_SHOW_SQL:false}"
     properties:
       hibernate:
-        format_sql: true
+        format_sql: "${JPA_FORMAT_SQL:true}"
 
   data:
     redis:
-      host: ${REDIS_HOST:localhost}
-      port: ${REDIS_PORT:6379}
-      password: ${REDIS_PASSWORD:}
+      host: "${REDIS_HOST:localhost}"
+      port: "${REDIS_PORT:6379}"
+      password: "${REDIS_PASSWORD:}"
 
   rabbitmq:
-    host: ${RABBITMQ_HOST:localhost}
-    port: ${RABBITMQ_PORT:5672}
-    username: ${RABBITMQ_USERNAME:asms_user}
-    password: ${RABBITMQ_PASSWORD:asms_password}
+    host: "${RABBITMQ_HOST:localhost}"
+    port: "${RABBITMQ_PORT:5672}"
+    username: "${RABBITMQ_USERNAME:asms_user}"
+    password: "${RABBITMQ_PASSWORD:asms_password}"
 
   mail:
-    host: ${GMAIL_HOST:smtp.gmail.com}
-    port: ${GMAIL_PORT:587}
-    username: ${GMAIL_USERNAME:}
-    password: ${GMAIL_APP_PASSWORD:}
+    host: "${GMAIL_HOST:smtp.gmail.com}"
+    port: "${GMAIL_PORT:587}"
+    username: "${GMAIL_USERNAME:}"
+    password: "${GMAIL_APP_PASSWORD:}"
     properties:
       mail:
         smtp:
@@ -52,23 +58,23 @@ spring:
       client:
         registration:
           google:
-            client-id: ${GOOGLE_CLIENT_ID:}
-            client-secret: ${GOOGLE_CLIENT_SECRET:}
+            client-id: "${GOOGLE_CLIENT_ID:}"
+            client-secret: "${GOOGLE_CLIENT_SECRET:}"
             scope:
               - openid
               - profile
               - email
-            redirect-uri: ${GOOGLE_REDIRECT_URI:http://localhost:8080/login/oauth2/code/google}
+            redirect-uri: "${GOOGLE_REDIRECT_URI:http://localhost:8080/login/oauth2/code/google}"
 
 asms:
   frontend:
-    base-url: ${FRONTEND_BASE_URL:}
+    base-url: "${FRONTEND_BASE_URL:http://localhost:5173}"
   backend:
-    base-url: ${BACKEND_BASE_URL:}
+    base-url: "${BACKEND_BASE_URL:http://localhost:8080}"
   jwt:
-    secret: ${JWT_SECRET:}
-    expiration-ms: ${JWT_EXPIRATION:86400000}
+    secret: "${JWT_SECRET:YOUR_LOCAL_JWT_SECRET}"
+    expiration-ms: "${JWT_EXPIRATION:86400000}"
   payos:
-    client-id: ${PAYOS_CLIENT_ID:}
-    api-key: ${PAYOS_API_KEY:}
-    checksum-key: ${PAYOS_CHECKSUM_KEY:}
+    client-id: "${PAYOS_CLIENT_ID:}"
+    api-key: "${PAYOS_API_KEY:}"
+    checksum-key: "${PAYOS_CHECKSUM_KEY:}"

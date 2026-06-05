@@ -1,0 +1,551 @@
+<!DOCTYPE html>
+
+<html class="light" lang="en"><head>
+<meta charset="utf-8"/>
+<meta content="width=device-width, initial-scale=1.0" name="viewport"/>
+<title>Manage Users | AquaShow MS</title>
+<script src="https://cdn.tailwindcss.com?plugins=forms,container-queries"></script>
+<link href="https://fonts.googleapis.com/css2?family=Plus+Jakarta+Sans:wght@400;600;700;800&amp;family=Material+Symbols+Outlined:wght,FILL@100..700,0..1&amp;display=swap" rel="stylesheet"/>
+<link href="https://fonts.googleapis.com/css2?family=Material+Symbols+Outlined:wght,FILL@100..700,0..1&amp;display=swap" rel="stylesheet"/>
+<link href="https://fonts.googleapis.com/css2?family=Plus+Jakarta+Sans:wght@100..900&amp;display=swap" rel="stylesheet"/>
+<style>
+        .material-symbols-outlined {
+            font-variation-settings: 'FILL' 0, 'wght' 400, 'GRAD' 0, 'opsz' 24;
+        }
+        .glass-card {
+            background: rgba(255, 255, 255, 0.7);
+            backdrop-filter: blur(20px);
+            border: 1px solid rgba(255, 255, 255, 0.2);
+        }
+        .sidebar-active {
+            border-left-width: 4px;
+        }
+        ::-webkit-scrollbar {
+            width: 6px;
+        }
+        ::-webkit-scrollbar-track {
+            background: transparent;
+        }
+        ::-webkit-scrollbar-thumb {
+            background: #bac9c9;
+            border-radius: 10px;
+        }
+    </style>
+<script id="tailwind-config">
+        tailwind.config = {
+            darkMode: "class",
+            theme: {
+                extend: {
+                    "colors": {
+                        "on-tertiary": "#ffffff",
+                        "on-tertiary-fixed": "#2f1500",
+                        "on-tertiary-container": "#723c00",
+                        "inverse-surface": "#293232",
+                        "inverse-on-surface": "#e9f3f3",
+                        "surface-container-highest": "#dae4e4",
+                        "error-container": "#ffdad6",
+                        "surface-dim": "#d2dcdc",
+                        "surface-container-high": "#e0eaea",
+                        "on-error-container": "#93000a",
+                        "outline-variant": "#bac9c9",
+                        "on-surface": "#141d1e",
+                        "on-primary-fixed": "#002020",
+                        "primary": "#00696b",
+                        "on-error": "#ffffff",
+                        "tertiary-fixed-dim": "#ffb77d",
+                        "primary-fixed": "#5af8fb",
+                        "on-surface-variant": "#3b4949",
+                        "primary-container": "#00ced1",
+                        "error": "#ba1a1a",
+                        "surface-tint": "#00696b",
+                        "secondary": "#356476",
+                        "on-primary": "#ffffff",
+                        "secondary-fixed": "#baeafe",
+                        "background": "#f1fbfb",
+                        "on-secondary": "#ffffff",
+                        "secondary-container": "#b7e7fb",
+                        "tertiary-fixed": "#ffdcc3",
+                        "tertiary": "#904d00",
+                        "surface-container-lowest": "#ffffff",
+                        "surface": "#f1fbfb",
+                        "on-secondary-fixed-variant": "#194d5d",
+                        "surface-container": "#e6f0f0",
+                        "surface-bright": "#f1fbfb",
+                        "primary-fixed-dim": "#2ddbde",
+                        "on-secondary-fixed": "#001f28",
+                        "on-background": "#141d1e",
+                        "surface-container-low": "#ecf6f6",
+                        "on-secondary-container": "#39697a",
+                        "on-primary-fixed-variant": "#004f51",
+                        "on-tertiary-fixed-variant": "#6e3900",
+                        "outline": "#6b7a7a",
+                        "tertiary-container": "#ffa557",
+                        "on-primary-container": "#005354",
+                        "inverse-primary": "#2ddbde",
+                        "secondary-fixed-dim": "#9ecee1",
+                        "surface-variant": "#dae4e4"
+                    },
+                    "borderRadius": {
+                        "DEFAULT": "1rem",
+                        "lg": "2rem",
+                        "xl": "3rem",
+                        "full": "9999px"
+                    },
+                    "spacing": {
+                        "unit-xs": "4px",
+                        "sidebar-collapsed": "80px",
+                        "unit-xl": "32px",
+                        "unit-sm": "8px",
+                        "unit-md": "16px",
+                        "margin-mobile": "16px",
+                        "gutter": "24px",
+                        "unit-lg": "24px",
+                        "sidebar-width": "280px",
+                        "margin-desktop": "40px"
+                    },
+                    "fontFamily": {
+                        "headline-md": ["Plus Jakarta Sans"],
+                        "label-lg": ["Plus Jakarta Sans"],
+                        "headline-2xl": ["Plus Jakarta Sans"],
+                        "body-lg": ["Plus Jakarta Sans"],
+                        "headline-lg": ["Plus Jakarta Sans"],
+                        "headline-xl": ["Plus Jakarta Sans"],
+                        "headline-lg-mobile": ["Plus Jakarta Sans"],
+                        "body-sm": ["Plus Jakarta Sans"],
+                        "label-md": ["Plus Jakarta Sans"],
+                        "body-md": ["Plus Jakarta Sans"]
+                    },
+                    "fontSize": {
+                        "headline-md": ["24px", {"lineHeight": "32px", "fontWeight": "600"}],
+                        "label-lg": ["14px", {"lineHeight": "20px", "letterSpacing": "0.05em", "fontWeight": "600"}],
+                        "headline-2xl": ["48px", {"lineHeight": "56px", "letterSpacing": "-0.02em", "fontWeight": "700"}],
+                        "body-lg": ["18px", {"lineHeight": "28px", "fontWeight": "400"}],
+                        "headline-lg": ["28px", {"lineHeight": "36px", "fontWeight": "600"}],
+                        "headline-xl": ["36px", {"lineHeight": "44px", "letterSpacing": "-0.02em", "fontWeight": "700"}],
+                        "headline-lg-mobile": ["24px", {"lineHeight": "32px", "fontWeight": "600"}],
+                        "body-sm": ["14px", {"lineHeight": "20px", "fontWeight": "400"}],
+                        "label-md": ["12px", {"lineHeight": "16px", "letterSpacing": "0.05em", "fontWeight": "600"}],
+                        "body-md": ["16px", {"lineHeight": "24px", "fontWeight": "400"}]
+                    }
+                },
+            },
+        }
+    </script>
+</head>
+<body class="bg-background font-body-md text-on-background selection:bg-primary-container selection:text-on-primary-container">
+<!-- SideNavBar -->
+<aside class="fixed left-0 top-0 h-full w-sidebar-width bg-on-secondary-fixed shadow-lg flex flex-col h-full py-unit-lg z-50">
+<div class="px-unit-lg mb-unit-xl">
+<h1 class="font-headline-md text-headline-md font-bold text-primary-fixed">AquaShow MS</h1>
+<p class="font-label-md text-label-md text-primary-fixed-dim/70">Management System</p>
+</div>
+<nav class="flex-1 flex flex-col gap-unit-xs">
+<!-- Nav Items -->
+<a class="flex items-center gap-unit-md text-on-secondary-fixed-variant px-unit-lg py-unit-md hover:text-primary-fixed hover:bg-on-secondary-fixed-variant/20 transition-all" href="#">
+<span class="material-symbols-outlined">dashboard</span>
+<span class="font-body-md text-body-md">Dashboard</span>
+</a>
+<a class="flex items-center gap-unit-md text-on-secondary-fixed-variant px-unit-lg py-unit-md hover:text-primary-fixed hover:bg-on-secondary-fixed-variant/20 transition-all" href="#">
+<span class="material-symbols-outlined">theater_comedy</span>
+<span class="font-body-md text-body-md">Shows</span>
+</a>
+<a class="flex items-center gap-unit-md text-on-secondary-fixed-variant px-unit-lg py-unit-md hover:text-primary-fixed hover:bg-on-secondary-fixed-variant/20 transition-all" href="#">
+<span class="material-symbols-outlined">water_drop</span>
+<span class="font-body-md text-body-md">Venues</span>
+</a>
+<a class="flex items-center gap-unit-md text-on-secondary-fixed-variant px-unit-lg py-unit-md hover:text-primary-fixed hover:bg-on-secondary-fixed-variant/20 transition-all" href="#">
+<span class="material-symbols-outlined">calendar_month</span>
+<span class="font-body-md text-body-md">Schedules</span>
+</a>
+<a class="flex items-center gap-unit-md text-on-secondary-fixed-variant px-unit-lg py-unit-md hover:text-primary-fixed hover:bg-on-secondary-fixed-variant/20 transition-all" href="#">
+<span class="material-symbols-outlined">event_seat</span>
+<span class="font-body-md text-body-md">Bookings</span>
+</a>
+<a class="flex items-center gap-unit-md text-on-secondary-fixed-variant px-unit-lg py-unit-md hover:text-primary-fixed hover:bg-on-secondary-fixed-variant/20 transition-all" href="#">
+<span class="material-symbols-outlined">analytics</span>
+<span class="font-body-md text-body-md">Reports</span>
+</a>
+<a class="flex items-center gap-unit-md text-primary-fixed border-l-4 border-primary-fixed bg-on-secondary-fixed-variant/30 px-unit-lg py-unit-md transition-all" href="#">
+<span class="material-symbols-outlined">group</span>
+<span class="font-body-md text-body-md">Users</span>
+</a>
+<a class="flex items-center gap-unit-md text-on-secondary-fixed-variant px-unit-lg py-unit-md hover:text-primary-fixed hover:bg-on-secondary-fixed-variant/20 transition-all" href="#">
+<span class="material-symbols-outlined">admin_panel_settings</span>
+<span class="font-body-md text-body-md">Roles</span>
+</a>
+</nav>
+<div class="px-unit-lg mt-auto pt-unit-lg border-t border-on-secondary-fixed-variant/10">
+<button class="w-full bg-primary-fixed text-on-primary-fixed font-label-lg text-label-lg py-unit-md rounded-lg flex items-center justify-center gap-unit-sm hover:scale-[1.02] transition-transform active:scale-[0.98]">
+<span class="material-symbols-outlined" style="font-variation-settings: 'FILL' 1;">add_circle</span>
+                Quick Schedule
+            </button>
+</div>
+</aside>
+<!-- Main Content Shell -->
+<div class="ml-sidebar-width min-h-screen flex flex-col">
+<!-- TopAppBar -->
+<header class="flex justify-between items-center px-unit-lg py-unit-sm sticky top-0 z-40 bg-surface/70 backdrop-blur-md border-b border-outline-variant/20 shadow-sm">
+<div class="flex items-center gap-unit-lg flex-1">
+<div class="relative w-full max-w-md">
+<span class="material-symbols-outlined absolute left-unit-md top-1/2 -translate-y-1/2 text-on-surface-variant">search</span>
+<input class="w-full pl-unit-xl pr-unit-md py-unit-sm bg-surface-container-low border-none rounded-full font-body-sm text-body-sm focus:ring-2 focus:ring-primary/20 transition-all" placeholder="Search management..." type="text"/>
+</div>
+</div>
+<div class="flex items-center gap-unit-md">
+<button class="p-unit-sm hover:bg-surface-container-high/50 rounded-full transition-colors relative">
+<span class="material-symbols-outlined">notifications</span>
+<span class="absolute top-1 right-1 w-2 h-2 bg-error rounded-full"></span>
+</button>
+<button class="p-unit-sm hover:bg-surface-container-high/50 rounded-full transition-colors">
+<span class="material-symbols-outlined">help_outline</span>
+</button>
+<button class="p-unit-sm hover:bg-surface-container-high/50 rounded-full transition-colors">
+<span class="material-symbols-outlined">settings</span>
+</button>
+<div class="h-8 w-[1px] bg-outline-variant/30 mx-unit-sm"></div>
+<div class="flex items-center gap-unit-sm">
+<div class="text-right">
+<p class="font-label-lg text-label-lg text-on-surface">Alex River</p>
+<p class="font-label-md text-label-md text-on-surface-variant">System Admin</p>
+</div>
+<img alt="AquaShow Admin Profile" class="w-10 h-10 rounded-full border-2 border-primary/20 object-cover" data-alt="A professional headshot of a smiling male administrator in a clean modern office setting. He is wearing a sharp, dark professional suit that contrasts with the bright, high-key lighting of the aquatic-themed management center. The atmosphere is professional, serene, and reflects a high-end technological workspace with soft cyan and white accents." src="https://lh3.googleusercontent.com/aida-public/AB6AXuBcrKCf_oLg-05-K8tU2FOtrtoGiH9r3FTipUI8EV1IRful9dWFDr3RGMuCk7iLIGmFWvgMML4Q3MItKEbcHCXKIv02clS6qkMBQl4-EcPVhtSdxrWs9-iVQJWnCmYKgo51GpTm3i0QtSdx5yQ4UyFgX9LeqBlSwfmz3Q8TfRm5BaIZLCH3wIttTGso14chvT9H1n83zXHPrxpc-V4pAK5LvfOBLp_HVE67NjPuZlsedAe-6DFpPJaf_3UPMQXEGYIZcoQZVyxqFjS8"/>
+</div>
+</div>
+</header>
+<!-- Page Content -->
+<main class="p-unit-lg flex-1">
+<div class="max-w-[1440px] mx-auto">
+<!-- Page Header & Filters -->
+<div class="flex flex-col md:flex-row md:items-end justify-between gap-unit-lg mb-unit-xl">
+<div>
+<h2 class="font-headline-xl text-headline-xl text-on-surface">Manage Users</h2>
+<p class="font-body-md text-body-md text-on-surface-variant mt-unit-xs">Oversee staff access and account permissions for the AquaShow ecosystem.</p>
+</div>
+<div class="flex flex-wrap gap-unit-md">
+<div class="flex items-center bg-surface-container-lowest rounded-xl p-unit-xs border border-outline-variant/30">
+<button class="px-unit-md py-unit-sm rounded-lg bg-primary-container text-on-primary-container font-label-lg text-label-lg transition-all">All Users</button>
+<button class="px-unit-md py-unit-sm rounded-lg text-on-surface-variant font-label-lg text-label-lg hover:bg-surface-container transition-all">Staff</button>
+<button class="px-unit-md py-unit-sm rounded-lg text-on-surface-variant font-label-lg text-label-lg hover:bg-surface-container transition-all">Managers</button>
+</div>
+<button class="flex items-center gap-unit-sm bg-primary text-on-primary px-unit-lg py-unit-md rounded-full font-label-lg text-label-lg hover:shadow-lg transition-all active:scale-95" onclick="toggleModal('userModal')">
+<span class="material-symbols-outlined">person_add</span>
+                            Add New User
+                        </button>
+</div>
+</div>
+<!-- Metrics Bento Grid -->
+<div class="grid grid-cols-1 md:grid-cols-4 gap-unit-lg mb-unit-xl">
+<div class="glass-card p-unit-lg rounded-lg shadow-sm border-l-4 border-primary">
+<div class="flex justify-between items-start mb-unit-md">
+<span class="p-unit-sm bg-primary/10 text-primary rounded-lg material-symbols-outlined">group</span>
+<span class="text-primary font-label-md text-label-md">+12%</span>
+</div>
+<h3 class="text-on-surface-variant font-label-lg text-label-lg">Total Users</h3>
+<p class="font-headline-md text-headline-md text-on-surface mt-unit-xs">1,284</p>
+</div>
+<div class="glass-card p-unit-lg rounded-lg shadow-sm border-l-4 border-secondary">
+<div class="flex justify-between items-start mb-unit-md">
+<span class="p-unit-sm bg-secondary/10 text-secondary rounded-lg material-symbols-outlined">verified_user</span>
+<span class="text-secondary font-label-md text-label-md">Active</span>
+</div>
+<h3 class="text-on-surface-variant font-label-lg text-label-lg">Active Now</h3>
+<p class="font-headline-md text-headline-md text-on-surface mt-unit-xs">92%</p>
+</div>
+<div class="glass-card p-unit-lg rounded-lg shadow-sm border-l-4 border-tertiary">
+<div class="flex justify-between items-start mb-unit-md">
+<span class="p-unit-sm bg-tertiary/10 text-tertiary rounded-lg material-symbols-outlined">pending_actions</span>
+<span class="text-tertiary font-label-md text-label-md">Pending</span>
+</div>
+<h3 class="text-on-surface-variant font-label-lg text-label-lg">New Requests</h3>
+<p class="font-headline-md text-headline-md text-on-surface mt-unit-xs">18</p>
+</div>
+<div class="glass-card p-unit-lg rounded-lg shadow-sm border-l-4 border-error">
+<div class="flex justify-between items-start mb-unit-md">
+<span class="p-unit-sm bg-error/10 text-error rounded-lg material-symbols-outlined">person_off</span>
+<span class="text-error font-label-md text-label-md">Inactive</span>
+</div>
+<h3 class="text-on-surface-variant font-label-lg text-label-lg">Disabled Accounts</h3>
+<p class="font-headline-md text-headline-md text-on-surface mt-unit-xs">42</p>
+</div>
+</div>
+<!-- Table Container -->
+<div class="glass-card rounded-lg shadow-sm overflow-hidden border border-outline-variant/20">
+<div class="p-unit-lg border-b border-outline-variant/20 flex flex-wrap items-center justify-between gap-unit-md">
+<div class="flex items-center gap-unit-md flex-1 min-w-[300px]">
+<div class="relative flex-1 max-w-sm">
+<span class="material-symbols-outlined absolute left-unit-md top-1/2 -translate-y-1/2 text-on-surface-variant text-sm">search</span>
+<input class="w-full pl-unit-xl pr-unit-md py-2 bg-surface-container-lowest border border-outline-variant/40 rounded-lg font-body-sm text-body-sm focus:border-primary transition-all outline-none" placeholder="Filter by name, email..." type="text"/>
+</div>
+<select class="bg-surface-container-lowest border border-outline-variant/40 rounded-lg px-unit-md py-2 font-body-sm text-body-sm outline-none focus:border-primary transition-all">
+<option>All Roles</option>
+<option>Admin</option>
+<option>Show Manager</option>
+<option>Ticket Agent</option>
+<option>Trainer</option>
+</select>
+<select class="bg-surface-container-lowest border border-outline-variant/40 rounded-lg px-unit-md py-2 font-body-sm text-body-sm outline-none focus:border-primary transition-all">
+<option>All Status</option>
+<option>Active</option>
+<option>Pending</option>
+<option>Disabled</option>
+</select>
+</div>
+<div class="flex items-center gap-unit-sm">
+<button class="p-2 hover:bg-surface-container rounded-lg transition-colors text-on-surface-variant">
+<span class="material-symbols-outlined">filter_list</span>
+</button>
+<button class="p-2 hover:bg-surface-container rounded-lg transition-colors text-on-surface-variant">
+<span class="material-symbols-outlined">download</span>
+</button>
+</div>
+</div>
+<div class="overflow-x-auto">
+<table class="w-full text-left border-collapse">
+<thead>
+<tr class="bg-surface-container-low">
+<th class="px-unit-lg py-unit-md font-label-lg text-label-lg text-on-surface-variant uppercase tracking-wider">User</th>
+<th class="px-unit-lg py-unit-md font-label-lg text-label-lg text-on-surface-variant uppercase tracking-wider">Email</th>
+<th class="px-unit-lg py-unit-md font-label-lg text-label-lg text-on-surface-variant uppercase tracking-wider">Role</th>
+<th class="px-unit-lg py-unit-md font-label-lg text-label-lg text-on-surface-variant uppercase tracking-wider">Status</th>
+<th class="px-unit-lg py-unit-md font-label-lg text-label-lg text-on-surface-variant uppercase tracking-wider">Created At</th>
+<th class="px-unit-lg py-unit-md font-label-lg text-label-lg text-on-surface-variant uppercase tracking-wider text-right">Actions</th>
+</tr>
+</thead>
+<tbody class="divide-y divide-outline-variant/10">
+<!-- Row 1 -->
+<tr class="hover:bg-surface-container-low transition-colors group">
+<td class="px-unit-lg py-unit-md">
+<div class="flex items-center gap-unit-md">
+<img alt="Marina Coast" class="w-10 h-10 rounded-full object-cover border-2 border-transparent group-hover:border-primary/40 transition-all" data-alt="A portrait of a cheerful female professional with long brown hair, wearing a stylish light teal blouse. The background is a blurred high-end office with soft turquoise lighting and aquatic motifs, suggesting a modern and efficient workspace. The light-mode aesthetic is bright, clean, and professional." src="https://lh3.googleusercontent.com/aida-public/AB6AXuBvT39PKx5UiuqVvOQ6atJG9NLNHgR3pWnbtCEibinK4VV5_jHDGkGDeUEbYMSuDd1X--0aXWLmEjXpFOPDOTtXeJFkH0yYHy3QntBGc2vhZMRC9ExFF7Nj34qCCYbtxmER04DIPXolwJQjE4J5u3p1lQzCP1x63pDW6KMRhyIHKwZnRDekNhhG0d1QWjewYrheoPQsim9zJBJwJL9-BEDHa9ajROgOGH-eDLhbldCXDCUBgjjxVmoaKhbbbeWgfhS6NcrDOtU5S9jd"/>
+<div>
+<p class="font-body-md text-body-md font-bold text-on-surface">Marina Coast</p>
+<p class="font-label-md text-label-md text-on-surface-variant">+1 (555) 012-3456</p>
+</div>
+</div>
+</td>
+<td class="px-unit-lg py-unit-md text-on-surface-variant font-body-sm">marina.c@aquashow.com</td>
+<td class="px-unit-lg py-unit-md">
+<span class="px-unit-md py-unit-xs bg-secondary-container text-on-secondary-container rounded-full text-label-md font-label-md">Show Manager</span>
+</td>
+<td class="px-unit-lg py-unit-md">
+<div class="flex items-center gap-unit-xs">
+<span class="w-2 h-2 rounded-full bg-primary animate-pulse"></span>
+<span class="text-on-surface font-label-md">Active</span>
+</div>
+</td>
+<td class="px-unit-lg py-unit-md text-on-surface-variant font-body-sm">Oct 12, 2023</td>
+<td class="px-unit-lg py-unit-md text-right">
+<div class="flex justify-end gap-unit-sm">
+<button class="p-unit-sm hover:bg-primary/10 text-primary rounded-full transition-colors" onclick="toggleModal('userModal')" title="Edit">
+<span class="material-symbols-outlined">edit</span>
+</button>
+<button class="p-unit-sm hover:bg-error/10 text-error rounded-full transition-colors" title="Disable">
+<span class="material-symbols-outlined">block</span>
+</button>
+</div>
+</td>
+</tr>
+<!-- Row 2 -->
+<tr class="hover:bg-surface-container-low transition-colors group">
+<td class="px-unit-lg py-unit-md">
+<div class="flex items-center gap-unit-md">
+<img alt="Julian Reed" class="w-10 h-10 rounded-full object-cover border-2 border-transparent group-hover:border-primary/40 transition-all" data-alt="A portrait of a male professional with short dark hair and spectacles, wearing a modern charcoal grey shirt. He is looking at the camera with a confident expression. The background features a blurred marine-inspired interior with clean lines and soft ambient lighting, maintaining a premium aquatic management system aesthetic." src="https://lh3.googleusercontent.com/aida-public/AB6AXuAOK3o767api7Ctk2JJsRYLHNFJp_6J_0eyn2U3jFYRWbNNTYCwVBxyCkrZoVDWu3bWDnJ2n2RtY71bfXhERZkTGSQ9jrAfjWrluohAlFPr2_gGgp5O-WfYfh8PWJAbSLqhaIHZ8LZxizgpKw8b5mpINiygos6V0cjreKfXt4tffPRSkXwDDpITHUhYVFV-JDz6-3vGtaJHZoiPtNT07JFEvK5RVMP-acM1HQD6JDxKWDdliCNWeiokxdbEELn2bTPkX39BtBxZhn88"/>
+<div>
+<p class="font-body-md text-body-md font-bold text-on-surface">Julian Reed</p>
+<p class="font-label-md text-label-md text-on-surface-variant">+1 (555) 987-6543</p>
+</div>
+</div>
+</td>
+<td class="px-unit-lg py-unit-md text-on-surface-variant font-body-sm">j.reed@aquashow.com</td>
+<td class="px-unit-lg py-unit-md">
+<span class="px-unit-md py-unit-xs bg-tertiary-container text-on-tertiary-container rounded-full text-label-md font-label-md">Trainer</span>
+</td>
+<td class="px-unit-lg py-unit-md">
+<div class="flex items-center gap-unit-xs text-on-surface-variant">
+<span class="w-2 h-2 rounded-full bg-outline"></span>
+<span class="font-label-md">Offline</span>
+</div>
+</td>
+<td class="px-unit-lg py-unit-md text-on-surface-variant font-body-sm">Nov 05, 2023</td>
+<td class="px-unit-lg py-unit-md text-right">
+<div class="flex justify-end gap-unit-sm">
+<button class="p-unit-sm hover:bg-primary/10 text-primary rounded-full transition-colors">
+<span class="material-symbols-outlined">edit</span>
+</button>
+<button class="p-unit-sm hover:bg-error/10 text-error rounded-full transition-colors">
+<span class="material-symbols-outlined">block</span>
+</button>
+</div>
+</td>
+</tr>
+<!-- Row 3 -->
+<tr class="hover:bg-surface-container-low transition-colors group">
+<td class="px-unit-lg py-unit-md">
+<div class="flex items-center gap-unit-md">
+<div class="w-10 h-10 rounded-full bg-primary-container text-on-primary-container flex items-center justify-center font-bold text-headline-md border-2 border-transparent group-hover:border-primary/40 transition-all">SH</div>
+<div>
+<p class="font-body-md text-body-md font-bold text-on-surface">Sarah Hellsing</p>
+<p class="font-label-md text-label-md text-on-surface-variant">+1 (555) 443-2211</p>
+</div>
+</div>
+</td>
+<td class="px-unit-lg py-unit-md text-on-surface-variant font-body-sm">sarah.h@aquashow.com</td>
+<td class="px-unit-lg py-unit-md">
+<span class="px-unit-md py-unit-xs bg-surface-variant text-on-surface-variant rounded-full text-label-md font-label-md">Ticket Agent</span>
+</td>
+<td class="px-unit-lg py-unit-md">
+<div class="flex items-center gap-unit-xs text-error">
+<span class="w-2 h-2 rounded-full bg-error"></span>
+<span class="font-label-md">Disabled</span>
+</div>
+</td>
+<td class="px-unit-lg py-unit-md text-on-surface-variant font-body-sm">Dec 20, 2023</td>
+<td class="px-unit-lg py-unit-md text-right">
+<div class="flex justify-end gap-unit-sm">
+<button class="p-unit-sm hover:bg-primary/10 text-primary rounded-full transition-colors">
+<span class="material-symbols-outlined">edit</span>
+</button>
+<button class="p-unit-sm bg-error/10 text-error rounded-full transition-colors" title="Enable">
+<span class="material-symbols-outlined">check_circle</span>
+</button>
+</div>
+</td>
+</tr>
+</tbody>
+</table>
+</div>
+<!-- Pagination -->
+<div class="p-unit-lg border-t border-outline-variant/20 flex items-center justify-between">
+<p class="font-label-md text-label-md text-on-surface-variant">Showing 1 to 3 of 1,284 users</p>
+<div class="flex items-center gap-unit-sm">
+<button class="p-2 border border-outline-variant/30 rounded-lg hover:bg-surface-container transition-all disabled:opacity-50" disabled="">
+<span class="material-symbols-outlined">chevron_left</span>
+</button>
+<button class="w-10 h-10 bg-primary text-on-primary rounded-lg font-label-lg shadow-sm">1</button>
+<button class="w-10 h-10 hover:bg-surface-container rounded-lg font-label-lg transition-all">2</button>
+<button class="w-10 h-10 hover:bg-surface-container rounded-lg font-label-lg transition-all">3</button>
+<span class="mx-unit-sm text-on-surface-variant">...</span>
+<button class="w-10 h-10 hover:bg-surface-container rounded-lg font-label-lg transition-all">42</button>
+<button class="p-2 border border-outline-variant/30 rounded-lg hover:bg-surface-container transition-all">
+<span class="material-symbols-outlined">chevron_right</span>
+</button>
+</div>
+</div>
+</div>
+</div>
+</main>
+</div>
+<!-- User Detail Modal -->
+<div class="fixed inset-0 z-[60] hidden flex items-center justify-center p-unit-md" id="userModal">
+<div class="absolute inset-0 bg-on-secondary-fixed/40 backdrop-blur-sm" onclick="toggleModal('userModal')"></div>
+<div class="relative w-full max-w-2xl bg-surface rounded-lg shadow-2xl overflow-hidden scale-95 transition-transform duration-300" id="modalContent">
+<div class="p-unit-lg bg-primary text-on-primary flex justify-between items-center">
+<div>
+<h3 class="font-headline-md text-headline-md">Edit User Profile</h3>
+<p class="font-label-md text-label-md opacity-80">Update account settings and permissions.</p>
+</div>
+<button class="p-unit-sm hover:bg-white/10 rounded-full transition-colors" onclick="toggleModal('userModal')">
+<span class="material-symbols-outlined">close</span>
+</button>
+</div>
+<div class="p-unit-lg space-y-unit-lg overflow-y-auto max-h-[716px]">
+<!-- Profile Image Edit -->
+<div class="flex items-center gap-unit-lg">
+<div class="relative">
+<img alt="Profile" class="w-24 h-24 rounded-full object-cover border-4 border-surface-container" src="https://lh3.googleusercontent.com/aida-public/AB6AXuBGJwbi4FKQFsCFrhzbPFDbyiPfWpAWoVP2uW9MM-SYvwiHYMt1xMRd7QFJBiZqyhAOeTO_abRezw_6MqmJJqQb81bFQxD58vBAhrIeaPiycqdu-cvB9IMDY9IlJWca-fROCTs7_42BNIPQ4sQp7YnX6IIj-OyCp4wzVa03o33zrPOpfOdTvI8SJ_55T_vrs_uC1pSauZNyOJXTXpm1AWVjhr8goxIza03bCGPByL90N76HMUMPTiKa769GlQPrw1-pd9iLdATbGBdV"/>
+<button class="absolute bottom-0 right-0 p-unit-sm bg-primary text-on-primary rounded-full shadow-lg border-2 border-surface">
+<span class="material-symbols-outlined text-sm">photo_camera</span>
+</button>
+</div>
+<div class="flex-1">
+<p class="font-label-lg text-label-lg text-on-surface">Profile Picture</p>
+<p class="font-body-sm text-body-sm text-on-surface-variant">JPG, GIF or PNG. Max size of 2MB.</p>
+<div class="mt-unit-sm flex gap-unit-sm">
+<button class="font-label-md text-label-md text-primary hover:underline">Change</button>
+<button class="font-label-md text-label-md text-error hover:underline">Remove</button>
+</div>
+</div>
+</div>
+<!-- Form Grid -->
+<div class="grid grid-cols-1 md:grid-cols-2 gap-unit-lg">
+<div class="space-y-unit-xs">
+<label class="font-label-lg text-label-lg text-on-surface">Full Name</label>
+<input class="w-full bg-surface-container-low border border-outline-variant/40 rounded-lg px-unit-md py-unit-sm outline-none focus:border-primary transition-all" type="text" value="Marina Coast"/>
+</div>
+<div class="space-y-unit-xs">
+<label class="font-label-lg text-label-lg text-on-surface">Email Address</label>
+<input class="w-full bg-surface-container-low border border-outline-variant/40 rounded-lg px-unit-md py-unit-sm outline-none focus:border-primary transition-all" type="email" value="marina.c@aquashow.com"/>
+</div>
+<div class="space-y-unit-xs">
+<label class="font-label-lg text-label-lg text-on-surface">Phone Number</label>
+<input class="w-full bg-surface-container-low border border-outline-variant/40 rounded-lg px-unit-md py-unit-sm outline-none focus:border-primary transition-all" type="tel" value="+1 (555) 012-3456"/>
+</div>
+<div class="space-y-unit-xs">
+<label class="font-label-lg text-label-lg text-on-surface">Role</label>
+<select class="w-full bg-surface-container-low border border-outline-variant/40 rounded-lg px-unit-md py-unit-sm outline-none focus:border-primary transition-all">
+<option selected="">Show Manager</option>
+<option>Admin</option>
+<option>Ticket Agent</option>
+<option>Trainer</option>
+</select>
+</div>
+</div>
+<div class="space-y-unit-sm">
+<label class="font-label-lg text-label-lg text-on-surface">Permissions</label>
+<div class="grid grid-cols-1 md:grid-cols-2 gap-unit-sm">
+<label class="flex items-center gap-unit-sm p-unit-md bg-surface-container-low rounded-lg cursor-pointer hover:bg-surface-container transition-all">
+<input checked="" class="w-5 h-5 rounded border-outline-variant text-primary focus:ring-primary" type="checkbox"/>
+<div class="flex-1">
+<p class="font-label-lg text-label-lg">Manage Schedules</p>
+<p class="font-label-md text-label-md text-on-surface-variant">Edit show timings and rosters</p>
+</div>
+</label>
+<label class="flex items-center gap-unit-sm p-unit-md bg-surface-container-low rounded-lg cursor-pointer hover:bg-surface-container transition-all">
+<input checked="" class="w-5 h-5 rounded border-outline-variant text-primary focus:ring-primary" type="checkbox"/>
+<div class="flex-1">
+<p class="font-label-lg text-label-lg">Financial Reports</p>
+<p class="font-label-md text-label-md text-on-surface-variant">Access ticket revenue data</p>
+</div>
+</label>
+</div>
+</div>
+</div>
+<div class="p-unit-lg bg-surface-container-low border-t border-outline-variant/20 flex justify-between gap-unit-md">
+<button class="px-unit-lg py-unit-md rounded-full font-label-lg text-label-lg text-on-surface-variant hover:bg-surface-container transition-all" onclick="toggleModal('userModal')">Cancel</button>
+<div class="flex gap-unit-md">
+<button class="px-unit-lg py-unit-md rounded-full font-label-lg text-label-lg border border-error text-error hover:bg-error/5 transition-all">Disable Account</button>
+<button class="px-unit-lg py-unit-md bg-primary text-on-primary rounded-full font-label-lg text-label-lg hover:shadow-lg hover:scale-105 active:scale-95 transition-all">Save Changes</button>
+</div>
+</div>
+</div>
+</div>
+<script>
+        function toggleModal(modalId) {
+            const modal = document.getElementById(modalId);
+            const content = modal.querySelector('#modalContent');
+            
+            if (modal.classList.contains('hidden')) {
+                modal.classList.remove('hidden');
+                setTimeout(() => {
+                    content.classList.remove('scale-95', 'opacity-0');
+                    content.classList.add('scale-100', 'opacity-100');
+                }, 10);
+            } else {
+                content.classList.remove('scale-100', 'opacity-100');
+                content.classList.add('scale-95', 'opacity-0');
+                setTimeout(() => {
+                    modal.classList.add('hidden');
+                }, 300);
+            }
+        }
+
+        // Search highlight micro-interaction
+        const searchInput = document.querySelector('header input');
+        searchInput.addEventListener('focus', () => {
+            searchInput.parentElement.classList.add('scale-[1.02]');
+        });
+        searchInput.addEventListener('blur', () => {
+            searchInput.parentElement.classList.remove('scale-[1.02]');
+        });
+    </script>
+</body></html>

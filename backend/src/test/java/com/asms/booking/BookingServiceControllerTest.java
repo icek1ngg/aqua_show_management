@@ -19,6 +19,9 @@ import com.asms.core.exception.UnauthorizedException;
 import com.asms.core.response.ApiResponse;
 import com.asms.identity.entity.User;
 import com.asms.identity.repository.UserRepository;
+import com.asms.notification.repository.EmailNotificationRepository;
+import com.asms.payment.repository.PaymentRepository;
+import com.asms.ticketing.repository.TicketRepository;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 import org.mockito.ArgumentCaptor;
@@ -49,6 +52,9 @@ class BookingServiceControllerTest {
     private UserRepository userRepository;
     private RedisTicketHoldService redisTicketHoldService;
     private RabbitMQBookingPublisher bookingPublisher;
+    private PaymentRepository paymentRepository;
+    private TicketRepository ticketRepository;
+    private EmailNotificationRepository emailNotificationRepository;
     private BookingService bookingService;
 
     @BeforeEach
@@ -57,11 +63,21 @@ class BookingServiceControllerTest {
         userRepository = mock(UserRepository.class);
         redisTicketHoldService = mock(RedisTicketHoldService.class);
         bookingPublisher = mock(RabbitMQBookingPublisher.class);
+        paymentRepository = mock(PaymentRepository.class);
+        ticketRepository = mock(TicketRepository.class);
+        emailNotificationRepository = mock(EmailNotificationRepository.class);
+        when(paymentRepository.findByBooking_Id(any())).thenReturn(Optional.empty());
+        when(ticketRepository.findByBooking_Id(any())).thenReturn(List.of());
+        when(emailNotificationRepository.findTopByBooking_IdOrderByCreatedAtDesc(any())).thenReturn(Optional.empty());
         bookingService = new com.asms.booking.service.impl.BookingServiceImpl(
                 bookingRepository,
                 userRepository,
                 redisTicketHoldService,
-                bookingPublisher
+                bookingPublisher,
+                paymentRepository,
+                ticketRepository,
+                emailNotificationRepository,
+                "http://localhost:5173"
         );
     }
 
