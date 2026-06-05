@@ -1,6 +1,7 @@
 import { useEffect, useRef } from 'react';
 import { useNavigate, useSearchParams } from 'react-router-dom';
 import { useAuth } from './AuthContext.jsx';
+import { getRedirectPathAfterLogin } from './authRedirect.js';
 
 export default function OAuthSuccessPage() {
   const [searchParams] = useSearchParams();
@@ -23,8 +24,8 @@ export default function OAuthSuccessPage() {
 
     async function handleOAuth() {
       try {
-        await completeOAuthLogin(accessToken, expiresIn);
-        navigate('/', { replace: true });
+        const user = await completeOAuthLogin(accessToken, expiresIn);
+        navigate(getRedirectPathAfterLogin(user), { replace: true });
       } catch (error) {
         console.error('OAuth success token exchange or profile loading failed:', error);
         navigate('/login?oauthError=true', { replace: true });

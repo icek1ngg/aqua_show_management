@@ -208,7 +208,7 @@ export default function PaymentResultPage() {
                   <p className="text-xs font-black uppercase tracking-[0.18em] text-cyan-700">UC-13 QR tickets</p>
                   <h2 className="mt-2 text-2xl font-black text-slate-950">Scan these tickets at the gate</h2>
                 </div>
-                <Link className="inline-flex items-center justify-center gap-2 rounded-full border border-cyan-200 bg-cyan-50 px-5 py-3 text-sm font-black text-cyan-700 hover:bg-cyan-100" to="/staff/tickets/validate">
+                <Link className="inline-flex items-center justify-center gap-2 rounded-full border border-cyan-200 bg-cyan-50 px-5 py-3 text-sm font-black text-cyan-700 hover:bg-cyan-100" to="/staff/check-in">
                   <span className="material-symbols-outlined">qr_code_scanner</span>
                   Staff validation
                 </Link>

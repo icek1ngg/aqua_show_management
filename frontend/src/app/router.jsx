@@ -17,6 +17,14 @@ import HomePage from '../features/home/HomePage.jsx';
 import EditProfilePage from '../features/profile/EditProfilePage.jsx';
 import ProfilePage from '../features/profile/ProfilePage.jsx';
 import StaffTicketValidationPage from '../features/staff/StaffTicketValidationPage.jsx';
+import ManageBookingsPage from '../stitch-react/ManageBookingsPage.jsx';
+import ManageRolesPage from '../stitch-react/ManageRolesPage.jsx';
+import ManageSchedulesPage from '../stitch-react/ManageSchedulesPage.jsx';
+import ManageShowsPage from '../stitch-react/ManageShowsPage.jsx';
+import ManageUsersPage from '../stitch-react/ManageUsersPage.jsx';
+import ManageVenuesPage from '../stitch-react/ManageVenuesPage.jsx';
+import ReportsAndAnalyticsPage from '../stitch-react/ReportsAndAnalyticsPage.jsx';
+import ShowDetailPage from '../stitch-react/ShowDetailPage.jsx';
 
 export const router = createBrowserRouter([
   {
@@ -46,6 +54,22 @@ export const router = createBrowserRouter([
       {
         path: 'oauth2/success',
         element: <OAuthSuccessPage />,
+      },
+      {
+        path: 'public/shows',
+        element: <HomePage />,
+      },
+      {
+        path: 'shows',
+        element: <HomePage />,
+      },
+      {
+        path: 'shows/:showId',
+        element: <ShowDetailPage />,
+      },
+      {
+        path: 'public/shows/:showId',
+        element: <ShowDetailPage />,
       },
       {
         path: 'profile',
@@ -92,6 +116,22 @@ export const router = createBrowserRouter([
         ),
       },
       {
+        path: 'staff/check-in',
+        element: (
+          <ProtectedRoute allowedRoles={['STAFF']}>
+            <StaffTicketValidationPage />
+          </ProtectedRoute>
+        ),
+      },
+      {
+        path: 'staff/validate-ticket',
+        element: (
+          <ProtectedRoute allowedRoles={['STAFF']}>
+            <StaffTicketValidationPage />
+          </ProtectedRoute>
+        ),
+      },
+      {
         path: 'staff/tickets/validate',
         element: (
           <ProtectedRoute allowedRoles={['STAFF']}>
@@ -112,6 +152,78 @@ export const router = createBrowserRouter([
         element: (
           <ProtectedRoute>
             <BookingDetailPage />
+          </ProtectedRoute>
+        ),
+      },
+      {
+        path: 'manager/dashboard',
+        element: (
+          <ProtectedRoute allowedRoles={['ADMIN', 'MANAGER']}>
+            <ReportsAndAnalyticsPage />
+          </ProtectedRoute>
+        ),
+      },
+      {
+        path: 'manager/shows',
+        element: (
+          <ProtectedRoute allowedRoles={['ADMIN', 'MANAGER']}>
+            <ManageShowsPage />
+          </ProtectedRoute>
+        ),
+      },
+      {
+        path: 'manager/venues',
+        element: (
+          <ProtectedRoute allowedRoles={['ADMIN', 'MANAGER']}>
+            <ManageVenuesPage />
+          </ProtectedRoute>
+        ),
+      },
+      {
+        path: 'manager/schedules',
+        element: (
+          <ProtectedRoute allowedRoles={['ADMIN', 'MANAGER']}>
+            <ManageSchedulesPage />
+          </ProtectedRoute>
+        ),
+      },
+      {
+        path: 'manager/bookings',
+        element: (
+          <ProtectedRoute allowedRoles={['ADMIN', 'MANAGER']}>
+            <ManageBookingsPage />
+          </ProtectedRoute>
+        ),
+      },
+      {
+        path: 'manager/reports',
+        element: (
+          <ProtectedRoute allowedRoles={['ADMIN', 'MANAGER']}>
+            <ReportsAndAnalyticsPage />
+          </ProtectedRoute>
+        ),
+      },
+      {
+        path: 'admin/dashboard',
+        element: (
+          <ProtectedRoute allowedRoles={['ADMIN']}>
+            <ManageUsersPage />
+          </ProtectedRoute>
+        ),
+      },
+      {
+        path: 'admin/users',
+        element: (
+          <ProtectedRoute allowedRoles={['ADMIN']}>
+            <ManageUsersPage />
+          </ProtectedRoute>
+        ),
+      },
+      {
+        path: 'admin/roles',
+        element: (
+          <ProtectedRoute allowedRoles={['ADMIN']}>
+            <ManageRolesPage />
           </ProtectedRoute>
         ),
       },
