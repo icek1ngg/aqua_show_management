@@ -1,0 +1,498 @@
+<!DOCTYPE html>
+
+<html class="light" lang="en"><head>
+<meta charset="utf-8"/>
+<meta content="width=device-width, initial-scale=1.0" name="viewport"/>
+<title>AquaShow MS - Manage Show Schedules</title>
+<script src="https://cdn.tailwindcss.com?plugins=forms,container-queries"></script>
+<link href="https://fonts.googleapis.com/css2?family=Plus+Jakarta+Sans:wght@400;500;600;700;800&amp;family=Material+Symbols+Outlined:wght,FILL@100..700,0..1&amp;display=swap" rel="stylesheet"/>
+<link href="https://fonts.googleapis.com/css2?family=Material+Symbols+Outlined:wght,FILL@100..700,0..1&amp;display=swap" rel="stylesheet"/>
+<link href="https://fonts.googleapis.com/css2?family=Plus+Jakarta+Sans:wght@100..900&amp;display=swap" rel="stylesheet"/>
+<script id="tailwind-config">
+      tailwind.config = {
+        darkMode: "class",
+        theme: {
+          extend: {
+            "colors": {
+                "on-tertiary": "#ffffff",
+                "on-tertiary-fixed": "#2f1500",
+                "on-tertiary-container": "#723c00",
+                "inverse-surface": "#293232",
+                "inverse-on-surface": "#e9f3f3",
+                "surface-container-highest": "#dae4e4",
+                "error-container": "#ffdad6",
+                "surface-dim": "#d2dcdc",
+                "surface-container-high": "#e0eaea",
+                "on-error-container": "#93000a",
+                "outline-variant": "#bac9c9",
+                "on-surface": "#141d1e",
+                "on-primary-fixed": "#002020",
+                "primary": "#00696b",
+                "on-error": "#ffffff",
+                "tertiary-fixed-dim": "#ffb77d",
+                "primary-fixed": "#5af8fb",
+                "on-surface-variant": "#3b4949",
+                "primary-container": "#00ced1",
+                "error": "#ba1a1a",
+                "surface-tint": "#00696b",
+                "secondary": "#356476",
+                "on-primary": "#ffffff",
+                "secondary-fixed": "#baeafe",
+                "background": "#f1fbfb",
+                "on-secondary": "#ffffff",
+                "secondary-container": "#b7e7fb",
+                "tertiary-fixed": "#ffdcc3",
+                "tertiary": "#904d00",
+                "surface-container-lowest": "#ffffff",
+                "surface": "#f1fbfb",
+                "on-secondary-fixed-variant": "#194d5d",
+                "surface-container": "#e6f0f0",
+                "surface-bright": "#f1fbfb",
+                "primary-fixed-dim": "#2ddbde",
+                "on-secondary-fixed": "#001f28",
+                "on-background": "#141d1e",
+                "surface-container-low": "#ecf6f6",
+                "on-secondary-container": "#39697a",
+                "on-primary-fixed-variant": "#004f51",
+                "on-tertiary-fixed-variant": "#6e3900",
+                "outline": "#6b7a7a",
+                "tertiary-container": "#ffa557",
+                "on-primary-container": "#005354",
+                "inverse-primary": "#2ddbde",
+                "secondary-fixed-dim": "#9ecee1",
+                "surface-variant": "#dae4e4"
+            },
+            "borderRadius": {
+                "DEFAULT": "1rem",
+                "lg": "2rem",
+                "xl": "3rem",
+                "full": "9999px"
+            },
+            "spacing": {
+                "unit-xs": "4px",
+                "sidebar-collapsed": "80px",
+                "unit-xl": "32px",
+                "unit-sm": "8px",
+                "unit-md": "16px",
+                "margin-mobile": "16px",
+                "gutter": "24px",
+                "unit-lg": "24px",
+                "sidebar-width": "280px",
+                "margin-desktop": "40px"
+            },
+            "fontFamily": {
+                "headline-md": ["Plus Jakarta Sans"],
+                "label-lg": ["Plus Jakarta Sans"],
+                "headline-2xl": ["Plus Jakarta Sans"],
+                "body-lg": ["Plus Jakarta Sans"],
+                "headline-lg": ["Plus Jakarta Sans"],
+                "headline-xl": ["Plus Jakarta Sans"],
+                "headline-lg-mobile": ["Plus Jakarta Sans"],
+                "body-sm": ["Plus Jakarta Sans"],
+                "label-md": ["Plus Jakarta Sans"],
+                "body-md": ["Plus Jakarta Sans"]
+            },
+            "fontSize": {
+                "headline-md": ["24px", {"lineHeight": "32px", "fontWeight": "600"}],
+                "label-lg": ["14px", {"lineHeight": "20px", "letterSpacing": "0.05em", "fontWeight": "600"}],
+                "headline-2xl": ["48px", {"lineHeight": "56px", "letterSpacing": "-0.02em", "fontWeight": "700"}],
+                "body-lg": ["18px", {"lineHeight": "28px", "fontWeight": "400"}],
+                "headline-lg": ["28px", {"lineHeight": "36px", "fontWeight": "600"}],
+                "headline-xl": ["36px", {"lineHeight": "44px", "letterSpacing": "-0.02em", "fontWeight": "700"}],
+                "headline-lg-mobile": ["24px", {"lineHeight": "32px", "fontWeight": "600"}],
+                "body-sm": ["14px", {"lineHeight": "20px", "fontWeight": "400"}],
+                "label-md": ["12px", {"lineHeight": "16px", "letterSpacing": "0.05em", "fontWeight": "600"}],
+                "body-md": ["16px", {"lineHeight": "24px", "fontWeight": "400"}]
+            }
+          },
+        },
+      }
+    </script>
+<style>
+        .material-symbols-outlined {
+            font-variation-settings: 'FILL' 0, 'wght' 400, 'GRAD' 0, 'opsz' 24;
+        }
+        .glass-card {
+            background: rgba(255, 255, 255, 0.7);
+            backdrop-filter: blur(20px);
+            border: 1px solid rgba(255, 255, 255, 0.2);
+            box-shadow: 0 8px 32px 0 rgba(0, 105, 107, 0.08);
+        }
+        .sidebar-active-indicator {
+            position: absolute;
+            left: 0;
+            width: 4px;
+            height: 100%;
+            background-color: theme('colors.primary-fixed');
+        }
+    </style>
+</head>
+<body class="bg-background font-body-md text-on-background min-h-screen">
+<!-- SideNavBar Shell -->
+<aside class="fixed left-0 top-0 h-full w-sidebar-width bg-on-secondary-fixed shadow-lg flex flex-col py-unit-lg z-50">
+<div class="px-unit-lg mb-unit-xl">
+<h1 class="font-headline-md text-headline-md font-bold text-primary-fixed">AquaShow MS</h1>
+<p class="font-body-sm text-body-sm text-on-secondary-fixed-variant opacity-70">Management System</p>
+</div>
+<nav class="flex-1 space-y-unit-xs">
+<a class="flex items-center gap-unit-md text-on-secondary-fixed-variant px-unit-lg py-unit-md hover:text-primary-fixed hover:bg-on-secondary-fixed-variant/20 transition-all" href="#">
+<span class="material-symbols-outlined" data-icon="dashboard">dashboard</span>
+<span>Dashboard</span>
+</a>
+<a class="flex items-center gap-unit-md text-on-secondary-fixed-variant px-unit-lg py-unit-md hover:text-primary-fixed hover:bg-on-secondary-fixed-variant/20 transition-all" href="#">
+<span class="material-symbols-outlined" data-icon="theater_comedy">theater_comedy</span>
+<span>Shows</span>
+</a>
+<a class="flex items-center gap-unit-md text-on-secondary-fixed-variant px-unit-lg py-unit-md hover:text-primary-fixed hover:bg-on-secondary-fixed-variant/20 transition-all" href="#">
+<span class="material-symbols-outlined" data-icon="water_drop">water_drop</span>
+<span>Venues</span>
+</a>
+<!-- Active Navigation: Schedules -->
+<a class="flex items-center gap-unit-md text-primary-fixed border-l-4 border-primary-fixed bg-on-secondary-fixed-variant/30 px-unit-lg py-unit-md transition-all" href="#">
+<span class="material-symbols-outlined" data-icon="calendar_month">calendar_month</span>
+<span>Schedules</span>
+</a>
+<a class="flex items-center gap-unit-md text-on-secondary-fixed-variant px-unit-lg py-unit-md hover:text-primary-fixed hover:bg-on-secondary-fixed-variant/20 transition-all" href="#">
+<span class="material-symbols-outlined" data-icon="event_seat">event_seat</span>
+<span>Bookings</span>
+</a>
+<a class="flex items-center gap-unit-md text-on-secondary-fixed-variant px-unit-lg py-unit-md hover:text-primary-fixed hover:bg-on-secondary-fixed-variant/20 transition-all" href="#">
+<span class="material-symbols-outlined" data-icon="analytics">analytics</span>
+<span>Reports</span>
+</a>
+<a class="flex items-center gap-unit-md text-on-secondary-fixed-variant px-unit-lg py-unit-md hover:text-primary-fixed hover:bg-on-secondary-fixed-variant/20 transition-all" href="#">
+<span class="material-symbols-outlined" data-icon="group">group</span>
+<span>Users</span>
+</a>
+<a class="flex items-center gap-unit-md text-on-secondary-fixed-variant px-unit-lg py-unit-md hover:text-primary-fixed hover:bg-on-secondary-fixed-variant/20 transition-all" href="#">
+<span class="material-symbols-outlined" data-icon="admin_panel_settings">admin_panel_settings</span>
+<span>Roles</span>
+</a>
+</nav>
+<div class="px-unit-lg mt-auto">
+<button class="w-full bg-primary-container text-on-primary-container py-unit-md rounded-lg font-label-lg flex items-center justify-center gap-unit-sm hover:opacity-90 active:scale-[0.99] transition-all" onclick="openModal()">
+<span class="material-symbols-outlined" data-icon="add">add</span>
+                Quick Schedule
+            </button>
+</div>
+</aside>
+<!-- Main Content Area -->
+<main class="ml-sidebar-width min-h-screen flex flex-col">
+<!-- TopAppBar -->
+<header class="flex justify-between items-center px-unit-lg py-unit-sm sticky top-0 z-40 bg-surface/70 backdrop-blur-md border-b border-outline-variant/20 shadow-sm">
+<div class="flex items-center gap-unit-lg">
+<h2 class="font-headline-md text-headline-md font-extrabold text-primary">Manage Show Schedules</h2>
+<div class="hidden md:flex bg-surface-container rounded-full px-unit-md py-unit-xs items-center gap-unit-sm w-96">
+<span class="material-symbols-outlined text-on-surface-variant" data-icon="search">search</span>
+<input class="bg-transparent border-none focus:ring-0 text-body-sm w-full" placeholder="Search schedules..." type="text"/>
+</div>
+</div>
+<div class="flex items-center gap-unit-md">
+<button class="p-unit-sm hover:bg-surface-container-high/50 rounded-full transition-colors active:scale-95 duration-150">
+<span class="material-symbols-outlined" data-icon="notifications">notifications</span>
+</button>
+<button class="p-unit-sm hover:bg-surface-container-high/50 rounded-full transition-colors active:scale-95 duration-150">
+<span class="material-symbols-outlined" data-icon="settings">settings</span>
+</button>
+<div class="w-10 h-10 rounded-full overflow-hidden border-2 border-primary-container">
+<img alt="AquaShow Admin Profile" data-alt="A professional headshot of a marine park manager in a clean, high-key office environment. The person has a friendly but authoritative expression, wearing a smart-casual uniform. The background is softly blurred with hints of aquatic-themed decor and modern office architecture. The lighting is bright and airy, consistent with a premium management software profile." src="https://lh3.googleusercontent.com/aida-public/AB6AXuC1cLKGGgumY00LTFBZbhr92m2Lv2x6g9m6RC999hJ80ltkdaVSFGrNM55XvsWWeH3JcGWCQSZqvE2EsonCmGQ9l8-KFAAHXTeh3fK4xFbpM8WkLfMuF2WRkqZyX5v0ndyU-l2VhdPSuXFOvc5QYxVODVfpkNhHJYdZ83G7MeTR8m4ybQaElnIhDdE-xhCccLZrC7CHyZnYL5a7q6vZkvmRsp7jfNnCeLi0DPaaKqj_3yHSw1WnXqgYIo1kP_igj4kA82V5bxpiTUiU"/>
+</div>
+</div>
+</header>
+<!-- Page Content -->
+<div class="p-unit-lg space-y-unit-lg">
+<!-- Filters & View Toggle -->
+<div class="glass-card p-unit-md rounded-lg flex flex-wrap items-end gap-unit-md">
+<div class="flex-1 min-w-[200px] space-y-unit-xs">
+<label class="text-label-md text-on-surface-variant uppercase">Show</label>
+<select class="w-full bg-surface-container-low border-none rounded-md text-body-sm focus:ring-2 focus:ring-primary">
+<option>All Shows</option>
+<option>Dolphin Symphony</option>
+<option>The Orca Tale</option>
+<option>Deep Sea bioluminescence</option>
+</select>
+</div>
+<div class="flex-1 min-w-[200px] space-y-unit-xs">
+<label class="text-label-md text-on-surface-variant uppercase">Venue</label>
+<select class="w-full bg-surface-container-low border-none rounded-md text-body-sm focus:ring-2 focus:ring-primary">
+<option>All Venues</option>
+<option>Main Lagoon</option>
+<option>Sunset Arena</option>
+<option>Ocean Dome</option>
+</select>
+</div>
+<div class="flex-1 min-w-[150px] space-y-unit-xs">
+<label class="text-label-md text-on-surface-variant uppercase">Status</label>
+<select class="w-full bg-surface-container-low border-none rounded-md text-body-sm focus:ring-2 focus:ring-primary">
+<option>All Statuses</option>
+<option>ACTIVE</option>
+<option>INACTIVE</option>
+<option>COMPLETED</option>
+</select>
+</div>
+<div class="flex-1 min-w-[200px] space-y-unit-xs">
+<label class="text-label-md text-on-surface-variant uppercase">Date Range</label>
+<div class="flex items-center bg-surface-container-low rounded-md px-unit-sm">
+<input class="bg-transparent border-none text-body-sm focus:ring-0" type="date"/>
+<span class="text-on-surface-variant px-unit-xs">-</span>
+<input class="bg-transparent border-none text-body-sm focus:ring-0" type="date"/>
+</div>
+</div>
+<div class="flex items-center gap-unit-xs bg-surface-container-high p-1 rounded-lg">
+<button class="p-unit-sm rounded-md bg-surface-container-lowest text-primary shadow-sm">
+<span class="material-symbols-outlined" data-icon="table_rows">table_rows</span>
+</button>
+<button class="p-unit-sm rounded-md text-on-surface-variant hover:bg-surface-container-lowest transition-colors">
+<span class="material-symbols-outlined" data-icon="calendar_view_day">calendar_view_day</span>
+</button>
+</div>
+</div>
+<!-- Dashboard Statistics Quick Cards -->
+<div class="grid grid-cols-1 md:grid-cols-4 gap-unit-lg">
+<div class="glass-card p-unit-lg rounded-lg border-l-4 border-primary">
+<p class="text-label-md text-on-surface-variant">Scheduled Today</p>
+<h3 class="text-headline-lg font-bold text-primary mt-1">12 Shows</h3>
+</div>
+<div class="glass-card p-unit-lg rounded-lg border-l-4 border-secondary">
+<p class="text-label-md text-on-surface-variant">Avg. Occupancy</p>
+<h3 class="text-headline-lg font-bold text-secondary mt-1">84%</h3>
+</div>
+<div class="glass-card p-unit-lg rounded-lg border-l-4 border-tertiary-container">
+<p class="text-label-md text-on-surface-variant">Active Warnings</p>
+<h3 class="text-headline-lg font-bold text-tertiary mt-1">2 Conflicts</h3>
+</div>
+<div class="glass-card p-unit-lg rounded-lg border-l-4 border-primary-container">
+<p class="text-label-md text-on-surface-variant">Tickets Sold</p>
+<h3 class="text-headline-lg font-bold text-on-primary-container mt-1">4.2k</h3>
+</div>
+</div>
+<!-- Schedule Table Section -->
+<div class="glass-card rounded-lg overflow-hidden">
+<table class="w-full text-left border-collapse">
+<thead>
+<tr class="bg-surface-container text-on-surface-variant font-label-lg">
+<th class="px-unit-lg py-unit-md">Show</th>
+<th class="px-unit-lg py-unit-md">Venue</th>
+<th class="px-unit-lg py-unit-md">Start Time</th>
+<th class="px-unit-lg py-unit-md">End Time</th>
+<th class="px-unit-lg py-unit-md text-center">Capacity</th>
+<th class="px-unit-lg py-unit-md text-center">Tickets</th>
+<th class="px-unit-lg py-unit-md">Price</th>
+<th class="px-unit-lg py-unit-md">Status</th>
+<th class="px-unit-lg py-unit-md text-right">Actions</th>
+</tr>
+</thead>
+<tbody class="divide-y divide-outline-variant/10">
+<!-- Table Row 1 -->
+<tr class="hover:bg-surface-container-low transition-colors group">
+<td class="px-unit-lg py-unit-md">
+<div class="flex items-center gap-unit-md">
+<div class="w-12 h-12 rounded-lg overflow-hidden flex-shrink-0">
+<img alt="Dolphin Symphony" data-alt="A spectacular underwater photograph showing two dolphins jumping in perfect synchronization against a bright blue lagoon backdrop. The water is crystalline, with sparkling surface reflections and soft teal tones. The overall atmosphere is energetic, clean, and representative of a premium marine show. Lighting is cinematic and bright." src="https://lh3.googleusercontent.com/aida-public/AB6AXuANM6rgOqgnBIK1LoKg_8wEzuUgRV76L55lB7ATaBCjZye3GmdzC2452tyqTL_z39BTzZam_QgtV-Chlnz5wKpgOxmqCk4J88VT9scUUAXI2nw5mcNzW5TgDKu-SDQIxmvExgWDD4mY2i7cejaxPyF0CQHqtMl4yyeMfA36w9OeZhtyzplzT4x6_o46Dd5FFG94xovjRwakJuLHskrj3liAwCuAA2fn4DzrEsxKp57fAnOH6QzkRbfNYUgglDrTTNhzggHEniPMvQE3"/>
+</div>
+<span class="font-bold text-primary">Dolphin Symphony</span>
+</div>
+</td>
+<td class="px-unit-lg py-unit-md text-on-surface-variant">Main Lagoon</td>
+<td class="px-unit-lg py-unit-md font-medium">10:00 AM</td>
+<td class="px-unit-lg py-unit-md text-on-surface-variant">11:15 AM</td>
+<td class="px-unit-lg py-unit-md text-center">450</td>
+<td class="px-unit-lg py-unit-md">
+<div class="flex flex-col items-center gap-1">
+<span class="text-body-sm font-bold">120/450</span>
+<div class="w-24 h-1.5 bg-surface-container-highest rounded-full overflow-hidden">
+<div class="h-full bg-primary" style="width: 26%"></div>
+</div>
+</div>
+</td>
+<td class="px-unit-lg py-unit-md font-bold">$45.00</td>
+<td class="px-unit-lg py-unit-md">
+<span class="bg-primary/10 text-primary px-3 py-1 rounded-full text-label-md font-bold uppercase">ACTIVE</span>
+</td>
+<td class="px-unit-lg py-unit-md text-right">
+<div class="flex justify-end gap-unit-sm opacity-0 group-hover:opacity-100 transition-opacity">
+<button class="p-2 hover:bg-primary/10 text-primary rounded-full"><span class="material-symbols-outlined" data-icon="edit">edit</span></button>
+<button class="p-2 hover:bg-error/10 text-error rounded-full"><span class="material-symbols-outlined" data-icon="delete">delete</span></button>
+</div>
+</td>
+</tr>
+<!-- Table Row 2 -->
+<tr class="hover:bg-surface-container-low transition-colors group">
+<td class="px-unit-lg py-unit-md">
+<div class="flex items-center gap-unit-md">
+<div class="w-12 h-12 rounded-lg overflow-hidden flex-shrink-0">
+<img alt="The Orca Tale" data-alt="A powerful and majestic Orca leaping out of a deep indigo ocean, splashing white foam against a sunset sky with orange and purple hues. The composition is dramatic and evokes a sense of awe. The lighting is warm and evocative, symbolizing a grand evening performance in a high-end marine park." src="https://lh3.googleusercontent.com/aida-public/AB6AXuCT46Pmdqhv7aLip-fChIVax42KvlFqM2IZha7xymvGw5jB6bwcLIufB0sH7zU04_mEPKcdzXEMMUa7FpfgVTrIuUyL-nZOrKV0T1O7u0CiCZlswGS1gTsf_W0h1AvurYQZN20xaBfLnIOcEX9kRx1MGCyLOyt5s7If1vAbrn9wlupoKiFNGgcUOnQagE4AhtyhHE_W501JAVJNNiBRSy5E_bUV8f4wVtaB6TbmgDTmpPtMQelbOXEgNm-G-eS8rRBpqX4-gK9KZP8V"/>
+</div>
+<span class="font-bold text-primary">The Orca Tale</span>
+</div>
+</td>
+<td class="px-unit-lg py-unit-md text-on-surface-variant">Sunset Arena</td>
+<td class="px-unit-lg py-unit-md font-medium">02:30 PM</td>
+<td class="px-unit-lg py-unit-md text-on-surface-variant">04:00 PM</td>
+<td class="px-unit-lg py-unit-md text-center">800</td>
+<td class="px-unit-lg py-unit-md">
+<div class="flex flex-col items-center gap-1">
+<span class="text-body-sm font-bold">780/800</span>
+<div class="w-24 h-1.5 bg-surface-container-highest rounded-full overflow-hidden">
+<div class="h-full bg-tertiary-container" style="width: 97%"></div>
+</div>
+</div>
+</td>
+<td class="px-unit-lg py-unit-md font-bold">$65.00</td>
+<td class="px-unit-lg py-unit-md">
+<span class="bg-primary/10 text-primary px-3 py-1 rounded-full text-label-md font-bold uppercase">ACTIVE</span>
+</td>
+<td class="px-unit-lg py-unit-md text-right">
+<div class="flex justify-end gap-unit-sm opacity-0 group-hover:opacity-100 transition-opacity">
+<button class="p-2 hover:bg-primary/10 text-primary rounded-full"><span class="material-symbols-outlined" data-icon="edit">edit</span></button>
+<button class="p-2 hover:bg-error/10 text-error rounded-full"><span class="material-symbols-outlined" data-icon="delete">delete</span></button>
+</div>
+</td>
+</tr>
+<!-- Table Row 3 -->
+<tr class="hover:bg-surface-container-low transition-colors group">
+<td class="px-unit-lg py-unit-md">
+<div class="flex items-center gap-unit-md">
+<div class="w-12 h-12 rounded-lg overflow-hidden flex-shrink-0">
+<img alt="Jellyfish Glow" data-alt="A magical scene of glowing bioluminescent jellyfish floating in a dark oceanic abyss. Vivid neon blues, pinks, and purples contrast against the deep black water. The lighting is surreal and ethereal, capturing the quiet beauty of a specialized marine dome attraction. Minimalist and ultra-modern aesthetic." src="https://lh3.googleusercontent.com/aida-public/AB6AXuAacnVbHAmObUmsKMTCjaXz8M8aRjIuqivvKqIZyV5BotE3bBPBOQFeLj7HHp3jfXcCcp8A8kokN9Vr580spc3AZZdR0tOqEQwdwJiaqc_2ZrKV0H0BsKhlJMKmVkzabeIkxmrHFTJukZtBQjhedC3tQBOHUlnHsxfo9wumFF3rBHPS-OGdKRlznxFLWy9vWvVn3l79ClH6rEzTqJ3u9tVE1CJbyag7xGXe-Oiu0nJ5dwUaeFxvVqLrk3N5HmTYXmgYyaAXm4KCnQ2K"/>
+</div>
+<span class="font-bold text-primary text-opacity-50 line-through">Jellyfish Glow</span>
+</div>
+</td>
+<td class="px-unit-lg py-unit-md text-on-surface-variant">Ocean Dome</td>
+<td class="px-unit-lg py-unit-md font-medium">09:00 AM</td>
+<td class="px-unit-lg py-unit-md text-on-surface-variant">10:00 AM</td>
+<td class="px-unit-lg py-unit-md text-center">150</td>
+<td class="px-unit-lg py-unit-md">
+<div class="flex flex-col items-center gap-1">
+<span class="text-body-sm font-bold">150/150</span>
+<div class="w-24 h-1.5 bg-surface-container-highest rounded-full overflow-hidden">
+<div class="h-full bg-secondary-container" style="width: 100%"></div>
+</div>
+</div>
+</td>
+<td class="px-unit-lg py-unit-md font-bold">$25.00</td>
+<td class="px-unit-lg py-unit-md">
+<span class="bg-surface-container-highest text-on-surface-variant px-3 py-1 rounded-full text-label-md font-bold uppercase">COMPLETED</span>
+</td>
+<td class="px-unit-lg py-unit-md text-right">
+<div class="flex justify-end gap-unit-sm opacity-0 group-hover:opacity-100 transition-opacity">
+<button class="p-2 hover:bg-primary/10 text-primary rounded-full"><span class="material-symbols-outlined" data-icon="visibility">visibility</span></button>
+</div>
+</td>
+</tr>
+</tbody>
+</table>
+<!-- Table Pagination -->
+<div class="p-unit-md border-t border-outline-variant/10 flex items-center justify-between">
+<span class="text-body-sm text-on-surface-variant">Showing 1-10 of 42 schedules</span>
+<div class="flex items-center gap-unit-xs">
+<button class="p-unit-sm rounded-md hover:bg-surface-container-high transition-colors"><span class="material-symbols-outlined" data-icon="chevron_left">chevron_left</span></button>
+<button class="w-8 h-8 rounded-md bg-primary text-on-primary font-bold">1</button>
+<button class="w-8 h-8 rounded-md hover:bg-surface-container-high">2</button>
+<button class="w-8 h-8 rounded-md hover:bg-surface-container-high">3</button>
+<button class="p-unit-sm rounded-md hover:bg-surface-container-high transition-colors"><span class="material-symbols-outlined" data-icon="chevron_right">chevron_right</span></button>
+</div>
+</div>
+</div>
+</div>
+</main>
+<!-- New Schedule Modal -->
+<div class="fixed inset-0 bg-on-background/40 backdrop-blur-sm z-[100] hidden items-center justify-center p-unit-lg" id="modalOverlay">
+<div class="glass-card w-full max-w-2xl rounded-lg shadow-2xl overflow-hidden flex flex-col animate-in fade-in zoom-in duration-300">
+<div class="p-unit-lg border-b border-outline-variant/20 flex justify-between items-center">
+<h2 class="font-headline-md text-headline-md font-bold text-primary">New Show Schedule</h2>
+<button class="p-unit-sm hover:bg-error/10 text-error rounded-full transition-colors" onclick="closeModal()">
+<span class="material-symbols-outlined" data-icon="close">close</span>
+</button>
+</div>
+<form class="p-unit-lg overflow-y-auto max-h-[716px] space-y-unit-lg" id="scheduleForm">
+<div class="grid grid-cols-2 gap-unit-lg">
+<div class="space-y-unit-xs">
+<label class="text-label-md font-bold text-on-surface-variant">Select Show</label>
+<select class="w-full bg-surface-container-low border-none rounded-md text-body-md focus:ring-2 focus:ring-primary py-unit-md px-unit-md">
+<option>Dolphin Symphony</option>
+<option>The Orca Tale</option>
+</select>
+</div>
+<div class="space-y-unit-xs">
+<label class="text-label-md font-bold text-on-surface-variant">Select Venue</label>
+<select class="w-full bg-surface-container-low border-none rounded-md text-body-md focus:ring-2 focus:ring-primary py-unit-md px-unit-md">
+<option>Main Lagoon</option>
+<option>Sunset Arena</option>
+</select>
+</div>
+</div>
+<div class="grid grid-cols-2 gap-unit-lg">
+<div class="space-y-unit-xs">
+<label class="text-label-md font-bold text-on-surface-variant">Start Time</label>
+<div class="relative">
+<input class="w-full bg-surface-container-low border-none rounded-md text-body-md focus:ring-2 focus:ring-primary py-unit-md px-unit-md" type="time"/>
+</div>
+</div>
+<div class="space-y-unit-xs">
+<label class="text-label-md font-bold text-on-surface-variant">End Time</label>
+<div class="relative">
+<input class="w-full bg-surface-container-low border-none rounded-md text-body-md focus:ring-2 focus:ring-primary py-unit-md px-unit-md" type="time"/>
+</div>
+</div>
+</div>
+<div class="grid grid-cols-3 gap-unit-lg">
+<div class="space-y-unit-xs">
+<label class="text-label-md font-bold text-on-surface-variant">Capacity</label>
+<input class="w-full bg-surface-container-low border-none rounded-md text-body-md focus:ring-2 focus:ring-primary py-unit-md px-unit-md" placeholder="500" type="number"/>
+<p class="text-[10px] text-tertiary font-medium">Max Venue Cap: 800</p>
+</div>
+<div class="space-y-unit-xs">
+<label class="text-label-md font-bold text-on-surface-variant">Ticket Price ($)</label>
+<input class="w-full bg-surface-container-low border-none rounded-md text-body-md focus:ring-2 focus:ring-primary py-unit-md px-unit-md" placeholder="45.00" step="0.01" type="number"/>
+</div>
+<div class="space-y-unit-xs">
+<label class="text-label-md font-bold text-on-surface-variant">Status</label>
+<select class="w-full bg-surface-container-low border-none rounded-md text-body-md focus:ring-2 focus:ring-primary py-unit-md px-unit-md">
+<option>ACTIVE</option>
+<option>INACTIVE</option>
+</select>
+</div>
+</div>
+<!-- Validation Hint Section -->
+<div class="bg-tertiary-container/10 border border-tertiary-container/30 p-unit-md rounded-md flex gap-unit-md">
+<span class="material-symbols-outlined text-tertiary-container" data-icon="warning">warning</span>
+<div class="space-y-1">
+<h4 class="text-label-md font-bold text-tertiary">Conflict Detection</h4>
+<p class="text-body-sm text-on-surface-variant">Selected time overlaps with "Lagoon Maintenance" (09:00 - 10:30). Please adjust start time.</p>
+</div>
+</div>
+</form>
+<div class="p-unit-lg bg-surface-container-low flex justify-end gap-unit-md">
+<button class="px-unit-xl py-unit-md text-on-surface-variant font-label-lg hover:bg-surface-container-high rounded-md transition-colors" onclick="closeModal()">Cancel</button>
+<button class="px-unit-xl py-unit-md bg-primary text-on-primary font-label-lg rounded-md hover:opacity-90 active:scale-95 transition-all">Create Schedule</button>
+</div>
+</div>
+</div>
+<script>
+        function openModal() {
+            const modal = document.getElementById('modalOverlay');
+            modal.classList.remove('hidden');
+            modal.classList.add('flex');
+            document.body.style.overflow = 'hidden';
+        }
+
+        function closeModal() {
+            const modal = document.getElementById('modalOverlay');
+            modal.classList.add('hidden');
+            modal.classList.remove('flex');
+            document.body.style.overflow = 'auto';
+        }
+
+        // Close on escape key
+        document.addEventListener('keydown', (e) => {
+            if (e.key === 'Escape') closeModal();
+        });
+
+        // Close on overlay click
+        document.getElementById('modalOverlay').addEventListener('click', (e) => {
+            if (e.target === document.getElementById('modalOverlay')) closeModal();
+        });
+    </script>
+</body></html>

@@ -1,3 +1,6 @@
+import { useEffect } from 'react';
+import { Link, useLocation } from 'react-router-dom';
+
 import MainLayout from '../../shared/layouts/MainLayout.jsx';
 
 const featuredShows = [
@@ -8,7 +11,7 @@ const featuredShows = [
       'https://lh3.googleusercontent.com/aida-public/AB6AXuDgtKbX141GIXV28czApt3tHguCUvPKSbRAnFdFAQzlJutKE1EC4vS7jnqAU4kbJta6FkkFLWOG1xo4RFS8AM1MXBGOQlPFZh-FlQEpmZlt5nYB6wUrwlpXP5TSpL1DI7WuOKTisPjwwu6BaEFAPWXD2NGxEfXQvUJmomtpfH0x7egW2U7kxW6h2RZFC6PIb1cpt9NbIPLdOpwlkZgjkBVzNlC3R9onv6_Esbk17K0of4PgvHxDHfAWZoVi41bvelTws71QLVrPMQ',
     badge: 'Popular',
     badgeClass: 'bg-[#ff6900] text-white',
-    price: 'from $29',
+    price: 'from 2.000 ₫',
   },
   {
     title: 'Deep Sea Mystery',
@@ -17,14 +20,14 @@ const featuredShows = [
       'https://lh3.googleusercontent.com/aida-public/AB6AXuCaDCEPuRXIz-tXX1TXYxFJLqc_NIsXu8w_yLI5ZUwrlr8wnEL8-kgSlFbHHypXmoS8BFV3Nt-uIqfoUBNP3vsNwRpxWltuGVcjFaEYr5i0Jxbq-UGbC8e5wY7oIaDMk2npEmreyGf9rBbp29WokyWvugQKmrBX2PoVJWFeSGUirssyqs6CAB1JREDZCBlv_mFFOq4aPXSDN7RXezaVkV4yhWwjPBXZkL6PwbhHkm0AYogBR_08bBqL0orR0zzGAHByqIypSnGUag',
     badge: 'New',
     badgeClass: 'bg-cyan-300 text-slate-950',
-    price: 'from $35',
+    price: 'from 2.000 ₫',
   },
   {
     title: 'Tropical Splash',
     description: 'A high-energy daytime parade with water cannons, music, and tropical rhythms.',
     image:
       'https://lh3.googleusercontent.com/aida-public/AB6AXuDOdYlgXL4Nwf4AWcGFjApQwu1wTev59cOd_-GZKhZAWO4Iz_zf7Tn8_yeXyi9P-cEDz6PldhiUpJ7j_1kqfhSt3YHIgmEJCtryWfqAghSSeXxzgAUM-pXEtaZhoz6g-0FlaiKz-SMUTjlXf7-QNguIhszVSRUHyFOy4zzsc6qh5RCz4gEwyyuSD5_OrUqMRuq-If6WwHs7nBE7Nwij3GBrdW3JEC77ydu5Az0EctrAsKLg-FkB0ZzurXJq_eCzA4NIrDfQsrmB1A',
-    price: 'from $25',
+    price: 'from 2.000 ₫',
   },
 ];
 
@@ -77,6 +80,20 @@ const benefits = [
 ];
 
 export default function HomePage() {
+  const location = useLocation();
+
+  useEffect(() => {
+    const sectionId = location.hash?.replace('#', '') || (location.pathname === '/shows' || location.pathname === '/public/shows' ? 'shows' : '');
+
+    if (!sectionId) {
+      return;
+    }
+
+    window.requestAnimationFrame(() => {
+      document.getElementById(sectionId)?.scrollIntoView({ behavior: 'smooth', block: 'start' });
+    });
+  }, [location.hash, location.pathname]);
+
   return (
     <MainLayout>
       <section className="relative flex min-h-[600px] items-center overflow-hidden lg:min-h-[720px]">
@@ -102,12 +119,12 @@ export default function HomePage() {
               Experience the harmony of light, water, and music.
             </p>
             <div className="mt-10 flex flex-wrap gap-4">
-              <button className="rounded-full bg-gradient-to-r from-cyan-500 to-teal-700 px-10 py-4 font-bold text-white shadow-2xl shadow-cyan-950/30 transition hover:-translate-y-0.5 hover:shadow-cyan-950/40 active:translate-y-0" type="button">
+              <Link className="rounded-full bg-gradient-to-r from-cyan-500 to-teal-700 px-10 py-4 font-bold text-white shadow-2xl shadow-cyan-950/30 transition hover:-translate-y-0.5 hover:shadow-cyan-950/40 active:translate-y-0" to="/bookings/create">
                 Book Tickets
-              </button>
-              <button className="rounded-full border-2 border-white/30 bg-white/10 px-10 py-4 font-bold text-white backdrop-blur-md transition hover:bg-white/20" type="button">
+              </Link>
+              <a className="rounded-full border-2 border-white/30 bg-white/10 px-10 py-4 font-bold text-white backdrop-blur-md transition hover:bg-white/20" href="#shows">
                 Explore Shows
-              </button>
+              </a>
             </div>
           </div>
         </div>
@@ -158,20 +175,20 @@ export default function HomePage() {
             </label>
           </div>
 
-          <button className="flex w-full items-center justify-center gap-2 whitespace-nowrap rounded-full bg-cyan-700 px-10 py-4 font-bold text-white shadow-lg shadow-cyan-900/20 transition hover:bg-cyan-800 md:w-auto" type="button">
+          <Link className="flex w-full items-center justify-center gap-2 whitespace-nowrap rounded-full bg-cyan-700 px-10 py-4 font-bold text-white shadow-lg shadow-cyan-900/20 transition hover:bg-cyan-800 md:w-auto" to="/bookings/create">
             <span className="material-symbols-outlined">search</span>
             Search Tickets
-          </button>
+          </Link>
         </div>
       </div>
 
-      <section className="mx-auto max-w-7xl px-4 py-20 sm:px-6 lg:px-8">
+      <section className="mx-auto max-w-7xl px-4 py-20 sm:px-6 lg:px-8" id="shows">
         <div className="mb-12 flex flex-col gap-4 sm:flex-row sm:items-end sm:justify-between">
           <div>
             <span className="mb-2 block text-sm font-bold uppercase tracking-[0.24em] text-cyan-700">Performances</span>
             <h2 className="text-3xl font-black tracking-tight text-slate-950 sm:text-4xl">Featured Water Shows</h2>
           </div>
-          <a className="group flex items-center gap-1 font-bold text-cyan-700 transition hover:text-cyan-900" href="#">
+          <a className="group flex items-center gap-1 font-bold text-cyan-700 transition hover:text-cyan-900" href="#shows">
             View All
             <span className="material-symbols-outlined transition group-hover:translate-x-1">arrow_forward</span>
           </a>
@@ -194,16 +211,16 @@ export default function HomePage() {
               <div className="p-8">
                 <h3 className="mb-3 text-2xl font-black text-slate-950">{show.title}</h3>
                 <p className="mb-8 line-clamp-2 text-slate-600">{show.description}</p>
-                <button className="w-full rounded-full border-2 border-cyan-700 py-3.5 font-bold text-cyan-700 transition hover:bg-cyan-700 hover:text-white" type="button">
+                <Link className="block w-full rounded-full border-2 border-cyan-700 py-3.5 text-center font-bold text-cyan-700 transition hover:bg-cyan-700 hover:text-white" to={`/shows/${encodeURIComponent(show.title.toLowerCase().replaceAll(' ', '-'))}`}>
                   View Details
-                </button>
+                </Link>
               </div>
             </article>
           ))}
         </div>
       </section>
 
-      <section className="bg-white/60 py-20">
+      <section className="bg-white/60 py-20" id="schedules">
         <div className="mx-auto max-w-7xl px-4 sm:px-6 lg:px-8">
           <div className="mb-16 text-center">
             <h2 className="mb-4 text-3xl font-black tracking-tight text-slate-950 sm:text-4xl">Upcoming Show Schedules</h2>
@@ -240,9 +257,9 @@ export default function HomePage() {
                     <span className={`h-2 w-2 rounded-full ${schedule.dotClass}`} />
                     {schedule.status}
                   </span>
-                  <button className="rounded-full bg-cyan-700 px-8 py-3.5 font-bold text-white shadow-md transition hover:bg-cyan-800" type="button">
+                  <Link className="rounded-full bg-cyan-700 px-8 py-3.5 font-bold text-white shadow-md transition hover:bg-cyan-800" to="/bookings/create">
                     Book Now
-                  </button>
+                  </Link>
                 </div>
               </article>
             ))}
@@ -268,9 +285,9 @@ export default function HomePage() {
                 Family Bundle
               </h3>
               <p className="max-w-sm text-lg text-white/80">Get 4 tickets for the price of 3 plus free snacks and drinks for the kids.</p>
-              <button className="mt-4 w-fit rounded-full bg-yellow-300 px-10 py-4 font-black text-slate-950 transition hover:shadow-xl active:scale-95" type="button">
+              <Link className="mt-4 block w-fit rounded-full bg-yellow-300 px-10 py-4 font-black text-slate-950 transition hover:shadow-xl active:scale-95" to="/bookings/create">
                 Grab Offer
-              </button>
+              </Link>
             </div>
             <div className="absolute -bottom-20 -right-20 h-80 w-80 rounded-full bg-white/10 blur-3xl" />
             <div className="absolute right-10 top-10 h-40 w-40 rounded-full border border-white/10 bg-white/5" />
@@ -288,9 +305,9 @@ export default function HomePage() {
                 Early Access
               </h3>
               <p className="max-w-sm text-lg text-white/80">Enjoy unlimited entries and priority seating for all premium shows this season.</p>
-              <button className="mt-4 w-fit rounded-full bg-white px-10 py-4 font-black text-cyan-800 transition hover:shadow-xl active:scale-95" type="button">
+              <Link className="mt-4 block w-fit rounded-full bg-white px-10 py-4 font-black text-cyan-800 transition hover:shadow-xl active:scale-95" to="/bookings/create">
                 Explore Perks
-              </button>
+              </Link>
             </div>
             <div className="absolute -left-10 -top-10 h-64 w-64 rounded-full bg-white/10 blur-2xl" />
             <span className="material-symbols-outlined absolute bottom-8 right-8 select-none text-[120px] leading-none opacity-10">stars</span>

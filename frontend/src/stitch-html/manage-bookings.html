@@ -1,0 +1,564 @@
+<!DOCTYPE html>
+
+<html class="light" lang="en"><head>
+<meta charset="utf-8"/>
+<meta content="width=device-width, initial-scale=1.0" name="viewport"/>
+<title>Manage Bookings - AquaShow MS</title>
+<script src="https://cdn.tailwindcss.com?plugins=forms,container-queries"></script>
+<link href="https://fonts.googleapis.com/css2?family=Plus+Jakarta+Sans:wght@400;600;700;800&amp;display=swap" rel="stylesheet"/>
+<link href="https://fonts.googleapis.com/css2?family=Material+Symbols+Outlined:wght,FILL@100..700,0..1&amp;display=swap" rel="stylesheet"/>
+<link href="https://fonts.googleapis.com/css2?family=Material+Symbols+Outlined:wght,FILL@100..700,0..1&amp;display=swap" rel="stylesheet"/>
+<style>
+        body {
+            font-family: 'Plus Jakarta Sans', sans-serif;
+            background-color: #f1fbfb;
+        }
+        .glass-panel {
+            background: rgba(255, 255, 255, 0.7);
+            backdrop-filter: blur(20px);
+            border: 1px solid rgba(255, 255, 255, 0.2);
+        }
+        .custom-scrollbar::-webkit-scrollbar {
+            width: 6px;
+        }
+        .custom-scrollbar::-webkit-scrollbar-track {
+            background: transparent;
+        }
+        .custom-scrollbar::-webkit-scrollbar-thumb {
+            background: #bac9c9;
+            border-radius: 10px;
+        }
+        .side-panel-transition {
+            transition: transform 0.4s cubic-bezier(0.4, 0, 0.2, 1);
+        }
+        .material-symbols-outlined {
+            font-variation-settings: 'FILL' 0, 'wght' 400, 'GRAD' 0, 'opsz' 24;
+        }
+    </style>
+<script id="tailwind-config">
+        tailwind.config = {
+            darkMode: "class",
+            theme: {
+                extend: {
+                    "colors": {
+                        "on-tertiary": "#ffffff",
+                        "on-tertiary-fixed": "#2f1500",
+                        "on-tertiary-container": "#723c00",
+                        "inverse-surface": "#293232",
+                        "inverse-on-surface": "#e9f3f3",
+                        "surface-container-highest": "#dae4e4",
+                        "error-container": "#ffdad6",
+                        "surface-dim": "#d2dcdc",
+                        "surface-container-high": "#e0eaea",
+                        "on-error-container": "#93000a",
+                        "outline-variant": "#bac9c9",
+                        "on-surface": "#141d1e",
+                        "on-primary-fixed": "#002020",
+                        "primary": "#00696b",
+                        "on-error": "#ffffff",
+                        "tertiary-fixed-dim": "#ffb77d",
+                        "primary-fixed": "#5af8fb",
+                        "on-surface-variant": "#3b4949",
+                        "primary-container": "#00ced1",
+                        "error": "#ba1a1a",
+                        "surface-tint": "#00696b",
+                        "secondary": "#356476",
+                        "on-primary": "#ffffff",
+                        "secondary-fixed": "#baeafe",
+                        "background": "#f1fbfb",
+                        "on-secondary": "#ffffff",
+                        "secondary-container": "#b7e7fb",
+                        "tertiary-fixed": "#ffdcc3",
+                        "tertiary": "#904d00",
+                        "surface-container-lowest": "#ffffff",
+                        "surface": "#f1fbfb",
+                        "on-secondary-fixed-variant": "#194d5d",
+                        "surface-container": "#e6f0f0",
+                        "surface-bright": "#f1fbfb",
+                        "primary-fixed-dim": "#2ddbde",
+                        "on-secondary-fixed": "#001f28",
+                        "on-background": "#141d1e",
+                        "surface-container-low": "#ecf6f6",
+                        "on-secondary-container": "#39697a",
+                        "on-primary-fixed-variant": "#004f51",
+                        "on-tertiary-fixed-variant": "#6e3900",
+                        "outline": "#6b7a7a",
+                        "tertiary-container": "#ffa557",
+                        "on-primary-container": "#005354",
+                        "inverse-primary": "#2ddbde",
+                        "secondary-fixed-dim": "#9ecee1",
+                        "surface-variant": "#dae4e4",
+                        "sidebar-width": "280px"
+                    },
+                    "borderRadius": {
+                        "DEFAULT": "1rem",
+                        "lg": "2rem",
+                        "xl": "3rem",
+                        "full": "9999px"
+                    },
+                    "spacing": {
+                        "unit-xs": "4px",
+                        "sidebar-collapsed": "80px",
+                        "unit-xl": "32px",
+                        "unit-sm": "8px",
+                        "unit-md": "16px",
+                        "margin-mobile": "16px",
+                        "gutter": "24px",
+                        "unit-lg": "24px",
+                        "sidebar-width": "280px",
+                        "margin-desktop": "40px"
+                    },
+                    "fontFamily": {
+                        "headline-md": ["Plus Jakarta Sans"],
+                        "label-lg": ["Plus Jakarta Sans"],
+                        "headline-2xl": ["Plus Jakarta Sans"],
+                        "body-lg": ["Plus Jakarta Sans"],
+                        "headline-lg": ["Plus Jakarta Sans"],
+                        "headline-xl": ["Plus Jakarta Sans"],
+                        "body-sm": ["Plus Jakarta Sans"],
+                        "label-md": ["Plus Jakarta Sans"],
+                        "body-md": ["Plus Jakarta Sans"]
+                    },
+                    "fontSize": {
+                        "headline-md": ["24px", {"lineHeight": "32px", "fontWeight": "600"}],
+                        "label-lg": ["14px", {"lineHeight": "20px", "letterSpacing": "0.05em", "fontWeight": "600"}],
+                        "headline-2xl": ["48px", {"lineHeight": "56px", "letterSpacing": "-0.02em", "fontWeight": "700"}],
+                        "body-lg": ["18px", {"lineHeight": "28px", "fontWeight": "400"}],
+                        "headline-lg": ["28px", {"lineHeight": "36px", "fontWeight": "600"}],
+                        "headline-xl": ["36px", {"lineHeight": "44px", "letterSpacing": "-0.02em", "fontWeight": "700"}],
+                        "body-sm": ["14px", {"lineHeight": "20px", "fontWeight": "400"}],
+                        "label-md": ["12px", {"lineHeight": "16px", "letterSpacing": "0.05em", "fontWeight": "600"}],
+                        "body-md": ["16px", {"lineHeight": "24px", "fontWeight": "400"}]
+                    }
+                }
+            }
+        }
+    </script>
+</head>
+<body class="bg-background text-on-surface overflow-hidden h-screen flex">
+<!-- Sidebar Navigation -->
+<aside class="fixed left-0 top-0 h-full w-sidebar-width bg-on-secondary-fixed shadow-lg flex flex-col py-unit-lg z-50">
+<div class="px-unit-lg mb-unit-xl">
+<h1 class="font-headline-md text-headline-md font-bold text-primary-fixed">AquaShow MS</h1>
+<p class="text-on-secondary-fixed-variant font-label-md">Management System</p>
+</div>
+<nav class="flex-1 space-y-unit-xs">
+<a class="flex items-center gap-unit-md text-on-secondary-fixed-variant px-unit-lg py-unit-md hover:text-primary-fixed hover:bg-on-secondary-fixed-variant/20 transition-all" href="#">
+<span class="material-symbols-outlined" data-icon="dashboard">dashboard</span>
+<span class="font-body-md">Dashboard</span>
+</a>
+<a class="flex items-center gap-unit-md text-on-secondary-fixed-variant px-unit-lg py-unit-md hover:text-primary-fixed hover:bg-on-secondary-fixed-variant/20 transition-all" href="#">
+<span class="material-symbols-outlined" data-icon="theater_comedy">theater_comedy</span>
+<span class="font-body-md">Shows</span>
+</a>
+<a class="flex items-center gap-unit-md text-on-secondary-fixed-variant px-unit-lg py-unit-md hover:text-primary-fixed hover:bg-on-secondary-fixed-variant/20 transition-all" href="#">
+<span class="material-symbols-outlined" data-icon="water_drop">water_drop</span>
+<span class="font-body-md">Venues</span>
+</a>
+<a class="flex items-center gap-unit-md text-on-secondary-fixed-variant px-unit-lg py-unit-md hover:text-primary-fixed hover:bg-on-secondary-fixed-variant/20 transition-all" href="#">
+<span class="material-symbols-outlined" data-icon="calendar_month">calendar_month</span>
+<span class="font-body-md">Schedules</span>
+</a>
+<a class="flex items-center gap-unit-md text-primary-fixed border-l-4 border-primary-fixed bg-on-secondary-fixed-variant/30 px-unit-lg py-unit-md transition-all" href="#">
+<span class="material-symbols-outlined" data-icon="event_seat">event_seat</span>
+<span class="font-body-md">Bookings</span>
+</a>
+<a class="flex items-center gap-unit-md text-on-secondary-fixed-variant px-unit-lg py-unit-md hover:text-primary-fixed hover:bg-on-secondary-fixed-variant/20 transition-all" href="#">
+<span class="material-symbols-outlined" data-icon="analytics">analytics</span>
+<span class="font-body-md">Reports</span>
+</a>
+<a class="flex items-center gap-unit-md text-on-secondary-fixed-variant px-unit-lg py-unit-md hover:text-primary-fixed hover:bg-on-secondary-fixed-variant/20 transition-all" href="#">
+<span class="material-symbols-outlined" data-icon="group">group</span>
+<span class="font-body-md">Users</span>
+</a>
+</nav>
+<div class="mt-auto px-unit-lg">
+<button class="w-full bg-primary-fixed text-on-primary-fixed py-unit-md rounded-lg font-label-lg flex items-center justify-center gap-unit-sm hover:opacity-90 transition-all">
+<span class="material-symbols-outlined" data-icon="add">add</span>
+                Quick Schedule
+            </button>
+</div>
+</aside>
+<!-- Main Content Area -->
+<main class="ml-sidebar-width w-[calc(100%-theme(spacing.sidebar-width))] flex flex-col h-full relative">
+<!-- Top App Bar -->
+<header class="flex justify-between items-center px-unit-lg py-unit-sm w-full sticky top-0 z-40 bg-surface/70 backdrop-blur-md border-b border-outline-variant/20 shadow-sm">
+<div class="flex items-center gap-unit-lg">
+<h2 class="font-headline-md text-headline-md font-extrabold text-primary">Manage Bookings</h2>
+<div class="relative w-96">
+<span class="material-symbols-outlined absolute left-3 top-1/2 -translate-y-1/2 text-on-surface-variant text-body-md" data-icon="search">search</span>
+<input class="w-full bg-surface-container-low border-none rounded-full pl-10 pr-4 py-2 text-label-md focus:ring-2 focus:ring-primary/20" placeholder="Search booking ID or customer..." type="text"/>
+</div>
+</div>
+<div class="flex items-center gap-unit-md">
+<button class="p-unit-sm text-on-surface-variant hover:bg-surface-container-high/50 rounded-full transition-colors">
+<span class="material-symbols-outlined" data-icon="notifications">notifications</span>
+</button>
+<button class="p-unit-sm text-on-surface-variant hover:bg-surface-container-high/50 rounded-full transition-colors">
+<span class="material-symbols-outlined" data-icon="settings">settings</span>
+</button>
+<div class="h-10 w-10 rounded-full overflow-hidden border-2 border-primary/20 cursor-pointer">
+<img alt="Admin Profile" data-alt="A professional close-up portrait of a corporate manager in a modern office. The lighting is bright and clean with a cool aquatic blue tint, matching a high-end management dashboard aesthetic. The subject is smiling warmly, conveying confidence and hospitality, with a soft-focus background that includes glass partitions and lush green indoor plants." src="https://lh3.googleusercontent.com/aida-public/AB6AXuCPUCoTYKwKJ2yBm_yKnxhppj1EnonxQD4M4tQnRUlkFwhBggGoi99H1mIyOZJV4qJDWmQVseqZRkZqAQxx2vEN9MB81oKpH0qQELzP1xUmpMLkHfO2yKJQzm2uc2jeVh_9Wv0aHTynbwtjwA0jIeBmGbudXacXTmtH05dXH5MqCy_bg45dgM2u2JGrJEAweLfnm9cfycGzBUtmp9r7_imyIIzra-qpeERpY3i9EJDANhhCFuiGjxvk2FQ-TEf4yZ51lQnDo3dbIBH8"/>
+</div>
+</div>
+</header>
+<!-- Page Canvas -->
+<div class="flex-1 p-unit-lg overflow-y-auto custom-scrollbar space-y-unit-lg">
+<!-- Filter Bar Section -->
+<section class="glass-panel p-unit-md rounded-xl flex flex-wrap items-center gap-unit-md">
+<div class="flex flex-col gap-1 min-w-[200px]">
+<label class="text-label-md text-on-surface-variant px-1">Show</label>
+<select class="bg-surface-container-low border-none rounded-lg text-body-sm px-3 py-2.5 focus:ring-primary/20">
+<option>All Shows</option>
+<option>Dolphin Symphony</option>
+<option>Oceanic Wonders</option>
+<option>Mermaid Lagoon</option>
+</select>
+</div>
+<div class="flex flex-col gap-1 min-w-[150px]">
+<label class="text-label-md text-on-surface-variant px-1">Schedule</label>
+<select class="bg-surface-container-low border-none rounded-lg text-body-sm px-3 py-2.5 focus:ring-primary/20">
+<option>All Times</option>
+<option>Today (10:00 AM)</option>
+<option>Today (02:00 PM)</option>
+<option>Tomorrow (11:00 AM)</option>
+</select>
+</div>
+<div class="flex flex-col gap-1 min-w-[140px]">
+<label class="text-label-md text-on-surface-variant px-1">Status</label>
+<select class="bg-surface-container-low border-none rounded-lg text-body-sm px-3 py-2.5 focus:ring-primary/20">
+<option>All Statuses</option>
+<option>Confirmed</option>
+<option>Pending</option>
+<option>Cancelled</option>
+</select>
+</div>
+<div class="flex flex-col gap-1 min-w-[140px]">
+<label class="text-label-md text-on-surface-variant px-1">Payment</label>
+<select class="bg-surface-container-low border-none rounded-lg text-body-sm px-3 py-2.5 focus:ring-primary/20">
+<option>All Payments</option>
+<option>Paid</option>
+<option>Unpaid</option>
+<option>Refunded</option>
+</select>
+</div>
+<div class="ml-auto self-end flex gap-unit-sm">
+<button class="px-unit-lg py-2.5 bg-secondary-container text-on-secondary-container rounded-lg font-label-lg hover:opacity-90 transition-all flex items-center gap-2">
+<span class="material-symbols-outlined text-body-md" data-icon="filter_list">filter_list</span>
+                        Apply Filters
+                    </button>
+<button class="px-unit-lg py-2.5 bg-surface-container-high text-on-surface-variant rounded-lg font-label-lg hover:bg-surface-container-highest transition-all">
+                        Reset
+                    </button>
+</div>
+</section>
+<!-- Table Section -->
+<section class="bg-surface-container-lowest rounded-xl shadow-sm border border-outline-variant/10 overflow-hidden">
+<div class="overflow-x-auto">
+<table class="w-full text-left border-collapse">
+<thead>
+<tr class="bg-surface-container-low/50">
+<th class="px-unit-lg py-unit-md font-label-lg text-on-surface-variant uppercase tracking-wider">Booking ID</th>
+<th class="px-unit-lg py-unit-md font-label-lg text-on-surface-variant uppercase tracking-wider">Customer</th>
+<th class="px-unit-lg py-unit-md font-label-lg text-on-surface-variant uppercase tracking-wider">Show</th>
+<th class="px-unit-lg py-unit-md font-label-lg text-on-surface-variant uppercase tracking-wider">Schedule Time</th>
+<th class="px-unit-lg py-unit-md font-label-lg text-on-surface-variant uppercase tracking-wider">Qty</th>
+<th class="px-unit-lg py-unit-md font-label-lg text-on-surface-variant uppercase tracking-wider">Total</th>
+<th class="px-unit-lg py-unit-md font-label-lg text-on-surface-variant uppercase tracking-wider">Status</th>
+<th class="px-unit-lg py-unit-md font-label-lg text-on-surface-variant uppercase tracking-wider">Payment</th>
+<th class="px-unit-lg py-unit-md font-label-lg text-on-surface-variant uppercase tracking-wider">Actions</th>
+</tr>
+</thead>
+<tbody class="divide-y divide-outline-variant/20">
+<!-- Row 1 -->
+<tr class="hover:bg-primary/5 cursor-pointer transition-colors" onclick="openSidePanel('BK-8821', 'Elena Rodriguez', 'Dolphin Symphony', 'Oct 24, 2023 - 10:00 AM', 4, '$120.00', 'Confirmed', 'Paid', 'elena.r@example.com')">
+<td class="px-unit-lg py-unit-md font-label-md text-primary font-bold">#BK-8821</td>
+<td class="px-unit-lg py-unit-md">
+<div class="flex flex-col">
+<span class="font-body-md font-semibold text-on-surface">Elena Rodriguez</span>
+<span class="text-body-sm text-on-surface-variant">elena.r@example.com</span>
+</div>
+</td>
+<td class="px-unit-lg py-unit-md font-body-md">Dolphin Symphony</td>
+<td class="px-unit-lg py-unit-md font-body-sm text-on-surface-variant">Oct 24, 2023 10:00 AM</td>
+<td class="px-unit-lg py-unit-md font-body-md">4</td>
+<td class="px-unit-lg py-unit-md font-body-md font-semibold">$120.00</td>
+<td class="px-unit-lg py-unit-md">
+<span class="bg-primary-container/20 text-on-primary-container px-3 py-1 rounded-full text-label-md">Confirmed</span>
+</td>
+<td class="px-unit-lg py-unit-md">
+<span class="bg-primary/10 text-primary px-3 py-1 rounded-full text-label-md font-bold flex items-center gap-1">
+<span class="material-symbols-outlined text-[12px]" data-icon="check_circle" style="font-variation-settings: 'FILL' 1;">check_circle</span>
+                                        Paid
+                                    </span>
+</td>
+<td class="px-unit-lg py-unit-md">
+<button class="p-2 hover:bg-surface-container-high rounded-full transition-colors text-on-surface-variant">
+<span class="material-symbols-outlined" data-icon="more_vert">more_vert</span>
+</button>
+</td>
+</tr>
+<!-- Row 2 -->
+<tr class="hover:bg-primary/5 cursor-pointer transition-colors" onclick="openSidePanel('BK-8822', 'Marcus Chen', 'Oceanic Wonders', 'Oct 24, 2023 - 02:00 PM', 2, '$70.00', 'Pending', 'Unpaid', 'm.chen@example.com')">
+<td class="px-unit-lg py-unit-md font-label-md text-primary font-bold">#BK-8822</td>
+<td class="px-unit-lg py-unit-md">
+<div class="flex flex-col">
+<span class="font-body-md font-semibold text-on-surface">Marcus Chen</span>
+<span class="text-body-sm text-on-surface-variant">m.chen@example.com</span>
+</div>
+</td>
+<td class="px-unit-lg py-unit-md font-body-md">Oceanic Wonders</td>
+<td class="px-unit-lg py-unit-md font-body-sm text-on-surface-variant">Oct 24, 2023 02:00 PM</td>
+<td class="px-unit-lg py-unit-md font-body-md">2</td>
+<td class="px-unit-lg py-unit-md font-body-md font-semibold">$70.00</td>
+<td class="px-unit-lg py-unit-md">
+<span class="bg-tertiary-container/20 text-on-tertiary-container px-3 py-1 rounded-full text-label-md">Pending</span>
+</td>
+<td class="px-unit-lg py-unit-md">
+<span class="bg-surface-container-highest text-on-surface-variant px-3 py-1 rounded-full text-label-md">Unpaid</span>
+</td>
+<td class="px-unit-lg py-unit-md">
+<button class="p-2 hover:bg-surface-container-high rounded-full transition-colors text-on-surface-variant">
+<span class="material-symbols-outlined" data-icon="more_vert">more_vert</span>
+</button>
+</td>
+</tr>
+<!-- Row 3 -->
+<tr class="hover:bg-primary/5 cursor-pointer transition-colors" onclick="openSidePanel('BK-8823', 'Sarah Jenkins', 'Mermaid Lagoon', 'Oct 25, 2023 - 11:00 AM', 3, '$95.00', 'Confirmed', 'Paid', 'sarah.j@example.com')">
+<td class="px-unit-lg py-unit-md font-label-md text-primary font-bold">#BK-8823</td>
+<td class="px-unit-lg py-unit-md">
+<div class="flex flex-col">
+<span class="font-body-md font-semibold text-on-surface">Sarah Jenkins</span>
+<span class="text-body-sm text-on-surface-variant">sarah.j@example.com</span>
+</div>
+</td>
+<td class="px-unit-lg py-unit-md font-body-md">Mermaid Lagoon</td>
+<td class="px-unit-lg py-unit-md font-body-sm text-on-surface-variant">Oct 25, 2023 11:00 AM</td>
+<td class="px-unit-lg py-unit-md font-body-md">3</td>
+<td class="px-unit-lg py-unit-md font-body-md font-semibold">$95.00</td>
+<td class="px-unit-lg py-unit-md">
+<span class="bg-primary-container/20 text-on-primary-container px-3 py-1 rounded-full text-label-md">Confirmed</span>
+</td>
+<td class="px-unit-lg py-unit-md">
+<span class="bg-primary/10 text-primary px-3 py-1 rounded-full text-label-md font-bold flex items-center gap-1">
+<span class="material-symbols-outlined text-[12px]" data-icon="check_circle" style="font-variation-settings: 'FILL' 1;">check_circle</span>
+                                        Paid
+                                    </span>
+</td>
+<td class="px-unit-lg py-unit-md">
+<button class="p-2 hover:bg-surface-container-high rounded-full transition-colors text-on-surface-variant">
+<span class="material-symbols-outlined" data-icon="more_vert">more_vert</span>
+</button>
+</td>
+</tr>
+</tbody>
+</table>
+</div>
+<div class="px-unit-lg py-unit-md bg-surface-container-low/30 border-t border-outline-variant/10 flex items-center justify-between">
+<span class="text-body-sm text-on-surface-variant">Showing 1 to 10 of 248 bookings</span>
+<div class="flex gap-unit-xs">
+<button class="w-8 h-8 flex items-center justify-center rounded-lg border border-outline-variant hover:bg-surface-container-high transition-colors text-on-surface-variant">
+<span class="material-symbols-outlined text-body-md" data-icon="chevron_left">chevron_left</span>
+</button>
+<button class="w-8 h-8 flex items-center justify-center rounded-lg bg-primary text-on-primary font-label-md shadow-md">1</button>
+<button class="w-8 h-8 flex items-center justify-center rounded-lg border border-outline-variant hover:bg-surface-container-high transition-colors text-on-surface-variant font-label-md">2</button>
+<button class="w-8 h-8 flex items-center justify-center rounded-lg border border-outline-variant hover:bg-surface-container-high transition-colors text-on-surface-variant font-label-md">3</button>
+<button class="w-8 h-8 flex items-center justify-center rounded-lg border border-outline-variant hover:bg-surface-container-high transition-colors text-on-surface-variant">
+<span class="material-symbols-outlined text-body-md" data-icon="chevron_right">chevron_right</span>
+</button>
+</div>
+</div>
+</section>
+</div>
+<!-- Details Side Panel -->
+<div class="fixed right-0 top-0 h-full w-[450px] bg-surface-container-lowest shadow-2xl z-[60] transform translate-x-full side-panel-transition flex flex-col border-l border-outline-variant/20" id="side-panel">
+<header class="p-unit-lg border-b border-outline-variant/20 flex items-center justify-between">
+<div class="flex flex-col">
+<h3 class="font-headline-md text-headline-md text-primary" id="panel-booking-id">#BK-0000</h3>
+<span class="text-body-sm text-on-surface-variant">Detailed Booking View</span>
+</div>
+<button class="p-unit-sm hover:bg-surface-container-high rounded-full transition-colors" onclick="closeSidePanel()">
+<span class="material-symbols-outlined" data-icon="close">close</span>
+</button>
+</header>
+<div class="flex-1 overflow-y-auto custom-scrollbar p-unit-lg space-y-unit-xl">
+<!-- Status & Summary -->
+<div class="flex items-center justify-between p-unit-md bg-surface-container rounded-xl">
+<div class="flex flex-col gap-1">
+<span class="text-label-md text-on-surface-variant uppercase">Booking Status</span>
+<span class="bg-primary-container/30 text-on-primary-container px-3 py-1 rounded-full text-label-md font-bold w-fit text-center" id="panel-booking-status">Confirmed</span>
+</div>
+<div class="flex flex-col gap-1 text-right">
+<span class="text-label-md text-on-surface-variant uppercase">Payment</span>
+<span class="bg-primary/10 text-primary px-3 py-1 rounded-full text-label-md font-bold flex items-center gap-1 justify-end" id="panel-payment-status">
+<span class="material-symbols-outlined text-[14px]" data-icon="check_circle" style="font-variation-settings: 'FILL' 1;">check_circle</span>
+                            Paid
+                        </span>
+</div>
+</div>
+<!-- Customer Info -->
+<div class="space-y-unit-md">
+<div class="flex items-center gap-unit-sm">
+<span class="material-symbols-outlined text-primary" data-icon="person">person</span>
+<h4 class="font-label-lg text-on-surface uppercase">Customer Information</h4>
+</div>
+<div class="grid grid-cols-1 gap-unit-md p-unit-md border border-outline-variant/20 rounded-xl">
+<div class="flex justify-between">
+<span class="text-body-sm text-on-surface-variant">Full Name</span>
+<span class="font-body-md font-semibold" id="panel-customer-name">Elena Rodriguez</span>
+</div>
+<div class="flex justify-between">
+<span class="text-body-sm text-on-surface-variant">Email Address</span>
+<span class="font-body-md" id="panel-customer-email">elena.r@example.com</span>
+</div>
+<div class="flex justify-between">
+<span class="text-body-sm text-on-surface-variant">Phone Number</span>
+<span class="font-body-md">+1 (555) 902-3341</span>
+</div>
+</div>
+</div>
+<!-- Show Info -->
+<div class="space-y-unit-md">
+<div class="flex items-center gap-unit-sm">
+<span class="material-symbols-outlined text-primary" data-icon="theater_comedy">theater_comedy</span>
+<h4 class="font-label-lg text-on-surface uppercase">Show Details</h4>
+</div>
+<div class="p-unit-md border border-outline-variant/20 rounded-xl space-y-unit-sm">
+<div class="aspect-video w-full rounded-lg overflow-hidden mb-unit-sm">
+<img alt="Dolphin Show" data-alt="A cinematic, wide-angle shot of a grand aquatic stadium. Powerful turquoise dolphins leap gracefully from a crystalline pool, backlit by soft atmospheric sunlight filtering through the water. The surrounding architecture is modern glass and steel, with the branding and color scheme perfectly aligned with a luxury marine theme in shades of teal and ocean blue." src="https://lh3.googleusercontent.com/aida-public/AB6AXuCI37PKlcmE_VLM82w0HhigXhxLEo7JYUykpVDYPVnZnMWqppYh0JyT98-3c9wqZzL2rvWVwK1RQ1Zsok4uVKTz9ze6Om7UGd63n2EoKGUFT9PLZlUiSHpPn7SU4FvJ5ke78evMyVdCpVTi8O5kt7EKUdU37c5a6MAtNzowti3WKWeSWmsN1gVIsrbzxvItIwBZfj2ePXQBI0ykjnxDoLQ60iD5QOhophb6IVHURnkDmu1hClkTEjPloJedCqqqcRz5zzSeQllI0qLQ"/>
+</div>
+<div class="flex justify-between">
+<span class="text-body-sm text-on-surface-variant">Performance</span>
+<span class="font-body-md font-semibold" id="panel-show-name">Dolphin Symphony</span>
+</div>
+<div class="flex justify-between">
+<span class="text-body-sm text-on-surface-variant">Venue</span>
+<span class="font-body-md">Grand Blue Arena</span>
+</div>
+<div class="flex justify-between">
+<span class="text-body-sm text-on-surface-variant">Scheduled Time</span>
+<span class="font-body-md" id="panel-schedule-time">Oct 24, 2023 - 10:00 AM</span>
+</div>
+</div>
+</div>
+<!-- Ticket Summary -->
+<div class="space-y-unit-md">
+<div class="flex items-center gap-unit-sm">
+<span class="material-symbols-outlined text-primary" data-icon="receipt_long">receipt_long</span>
+<h4 class="font-label-lg text-on-surface uppercase">Ticket Summary</h4>
+</div>
+<div class="p-unit-md border border-outline-variant/20 rounded-xl space-y-unit-md">
+<div class="flex justify-between items-center pb-unit-sm border-b border-outline-variant/10">
+<div class="flex flex-col">
+<span class="font-body-md font-semibold">Standard Entry x <span id="panel-quantity">4</span></span>
+<span class="text-body-sm text-on-surface-variant">$30.00 each</span>
+</div>
+<span class="font-headline-md text-primary" id="panel-total-amount">$120.00</span>
+</div>
+<div class="flex justify-between text-body-sm">
+<span class="text-on-surface-variant">Service Fee (0%)</span>
+<span>$0.00</span>
+</div>
+<div class="flex justify-between text-body-lg font-bold">
+<span>Total</span>
+<span id="panel-total-final">$120.00</span>
+</div>
+</div>
+</div>
+<!-- Activity Log -->
+<div class="space-y-unit-md pb-unit-xl">
+<div class="flex items-center gap-unit-sm">
+<span class="material-symbols-outlined text-primary" data-icon="history">history</span>
+<h4 class="font-label-lg text-on-surface uppercase text-[12px]">Activity Timeline</h4>
+</div>
+<div class="relative pl-6 border-l-2 border-outline-variant/30 space-y-6 ml-2">
+<div class="relative">
+<span class="absolute -left-[31px] top-0 w-4 h-4 rounded-full bg-primary ring-4 ring-background"></span>
+<div class="flex flex-col">
+<span class="text-label-md font-bold">Booking Created</span>
+<span class="text-body-sm text-on-surface-variant">Oct 20, 2023 at 11:45 AM</span>
+</div>
+</div>
+<div class="relative">
+<span class="absolute -left-[31px] top-0 w-4 h-4 rounded-full bg-primary ring-4 ring-background"></span>
+<div class="flex flex-col">
+<span class="text-label-md font-bold">Payment Verified</span>
+<span class="text-body-sm text-on-surface-variant">Oct 20, 2023 at 11:47 AM</span>
+</div>
+</div>
+<div class="relative">
+<span class="absolute -left-[31px] top-0 w-4 h-4 rounded-full bg-outline-variant ring-4 ring-background"></span>
+<div class="flex flex-col opacity-60">
+<span class="text-label-md font-bold">Ticket Issued</span>
+<span class="text-body-sm text-on-surface-variant">Pending distribution</span>
+</div>
+</div>
+</div>
+</div>
+</div>
+<!-- Panel Actions -->
+<footer class="p-unit-lg border-t border-outline-variant/20 bg-surface-container-low/50 flex gap-unit-md">
+<button class="flex-1 bg-surface-container-high text-on-surface-variant py-unit-md rounded-lg font-label-lg flex items-center justify-center gap-2 hover:bg-surface-container-highest transition-all">
+<span class="material-symbols-outlined" data-icon="print">print</span>
+                    Print Ticket
+                </button>
+<button class="flex-1 bg-primary text-on-primary py-unit-md rounded-lg font-label-lg flex items-center justify-center gap-2 shadow-lg shadow-primary/20 hover:opacity-90 transition-all">
+<span class="material-symbols-outlined" data-icon="edit">edit</span>
+                    Modify Seat
+                </button>
+</footer>
+</div>
+<!-- Backdrop for side panel -->
+<div class="fixed inset-0 bg-on-surface/20 backdrop-blur-sm z-[55] hidden opacity-0 transition-opacity duration-300" id="panel-backdrop" onclick="closeSidePanel()"></div>
+</main>
+<script>
+        function openSidePanel(id, customer, show, time, qty, total, status, payment, email) {
+            const panel = document.getElementById('side-panel');
+            const backdrop = document.getElementById('panel-backdrop');
+            
+            // Fill details
+            document.getElementById('panel-booking-id').innerText = id;
+            document.getElementById('panel-customer-name').innerText = customer;
+            document.getElementById('panel-customer-email').innerText = email;
+            document.getElementById('panel-show-name').innerText = show;
+            document.getElementById('panel-schedule-time').innerText = time;
+            document.getElementById('panel-quantity').innerText = qty;
+            document.getElementById('panel-total-amount').innerText = total;
+            document.getElementById('panel-total-final').innerText = total;
+            
+            const statusBadge = document.getElementById('panel-booking-status');
+            statusBadge.innerText = status;
+            if (status === 'Pending') {
+                statusBadge.className = 'bg-tertiary-container/30 text-on-tertiary-container px-3 py-1 rounded-full text-label-md font-bold w-fit text-center';
+            } else {
+                statusBadge.className = 'bg-primary-container/30 text-on-primary-container px-3 py-1 rounded-full text-label-md font-bold w-fit text-center';
+            }
+
+            const paymentBadge = document.getElementById('panel-payment-status');
+            paymentBadge.innerHTML = `<span class="material-symbols-outlined text-[14px]" style="font-variation-settings: 'FILL' 1;">${payment === 'Paid' ? 'check_circle' : 'hourglass_empty'}</span> ${payment}`;
+            if (payment === 'Unpaid') {
+                paymentBadge.className = 'bg-surface-container-highest text-on-surface-variant px-3 py-1 rounded-full text-label-md font-bold flex items-center gap-1 justify-end';
+            } else {
+                paymentBadge.className = 'bg-primary/10 text-primary px-3 py-1 rounded-full text-label-md font-bold flex items-center gap-1 justify-end';
+            }
+
+            // Show panel
+            panel.classList.remove('translate-x-full');
+            backdrop.classList.remove('hidden');
+            setTimeout(() => {
+                backdrop.classList.add('opacity-100');
+            }, 10);
+        }
+
+        function closeSidePanel() {
+            const panel = document.getElementById('side-panel');
+            const backdrop = document.getElementById('panel-backdrop');
+            
+            panel.classList.add('translate-x-full');
+            backdrop.classList.remove('opacity-100');
+            setTimeout(() => {
+                backdrop.classList.add('hidden');
+            }, 300);
+        }
+    </script>
+</body></html>

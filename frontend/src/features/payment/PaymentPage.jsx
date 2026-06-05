@@ -1,150 +1,324 @@
 import { useEffect, useMemo, useState } from 'react';
-import { Link, useParams } from 'react-router-dom';
+import { Link, useLocation, useNavigate, useParams } from 'react-router-dom';
 
 import { getBookingDetail } from '../../services/bookingService.js';
 import { createPayment } from '../../services/paymentService.js';
 import MainLayout from '../../shared/layouts/MainLayout.jsx';
 
+const fallbackImageUrl =
+  'https://images.unsplash.com/photo-1507525428034-b723cf961d3e?auto=format&fit=crop&w=1400&q=80';
+
+const statusCopy = {
+  PROCESSING: {
+    label: 'Processing',
+    tone: 'border-cyan-200 bg-cyan-50 text-cyan-700',
+    title: 'Booking is still being processed',
+    message: 'AquaPulse is finalizing this booking before payment can start.',
+  },
+  PENDING_PAYMENT: {
+    label: 'Pending payment',
+    tone: 'border-yellow-200 bg-yellow-100 text-[#a43c12]',
+    title: 'Complete payment before the hold expires',
+    message: 'Your tickets are temporarily held while PayOS payment is pending.',
+  },
+  PAID: {
+    label: 'Paid',
+    tone: 'border-emerald-200 bg-emerald-100 text-emerald-700',
+    title: 'Payment completed',
+    message: 'The booking is paid. Tickets and email status are available on the payment result page.',
+  },
+  EXPIRED: {
+    label: 'Expired',
+    tone: 'border-slate-200 bg-slate-100 text-slate-600',
+    title: 'Booking hold expired',
+    message: 'This booking can no longer be paid. Please create a new booking.',
+  },
+  FAILED: {
+    label: 'Failed',
+    tone: 'border-red-200 bg-red-100 text-red-700',
+    title: 'Payment failed',
+    message: 'This booking could not be completed. Please create a new booking.',
+  },
+};
+
+function normalizeBooking(booking) {
+  if (!booking) {
+    return null;
+  }
+
+  return {
+    id: booking.id,
+    bookingCode: booking.bookingCode || booking.id,
+    showName: booking.showName || 'AquaPulse Show',
+    showDate: booking.showDate,
+    ticketType: booking.ticketType || 'Standard Entry',
+    quantity: booking.quantity ?? 0,
+    unitPrice: booking.unitPrice,
+    totalAmount: booking.totalAmount,
+    status: booking.status || 'PROCESSING',
+    createdAt: booking.createdAt,
+    expiresAt: booking.expiresAt,
+  };
+}
+
 function formatCurrency(amount) {
-  return new Intl.NumberFormat('vi-VN', { style: 'currency', currency: 'VND' }).format(Number(amount || 0));
+  return new Intl.NumberFormat('vi-VN', {
+    style: 'currency',
+    currency: 'VND',
+    maximumFractionDigits: 0,
+  }).format(Number(amount || 0));
+}
+
+function formatDate(value) {
+  if (!value) {
+    return 'Not available';
+  }
+
+  const date = new Date(value);
+  if (Number.isNaN(date.getTime())) {
+    return value;
+  }
+
+  return new Intl.DateTimeFormat('en-US', { dateStyle: 'medium' }).format(date);
 }
 
 function formatDateTime(value) {
-  return value ? new Intl.DateTimeFormat('en-US', { dateStyle: 'medium', timeStyle: 'short' }).format(new Date(value)) : 'Pending schedule';
+  if (!value) {
+    return 'Not available';
+  }
+
+  const date = new Date(value);
+  if (Number.isNaN(date.getTime())) {
+    return value;
+  }
+
+  return new Intl.DateTimeFormat('en-US', { dateStyle: 'medium', timeStyle: 'short' }).format(date);
 }
 
 function formatCountdown(seconds) {
+  if (seconds === null) {
+    return '--:--';
+  }
+
   const minutes = Math.floor(seconds / 60);
   const remaining = seconds % 60;
   return `${minutes.toString().padStart(2, '0')}:${remaining.toString().padStart(2, '0')}`;
 }
 
-function getInitialSeconds(expiredAt) {
-  if (!expiredAt) {
-    return 0;
+function getInitialSeconds(expiresAt) {
+  if (!expiresAt) {
+    return null;
   }
-  return Math.max(0, Math.floor((new Date(expiredAt).getTime() - Date.now()) / 1000));
+
+  const expiresAtTime = new Date(expiresAt).getTime();
+  if (Number.isNaN(expiresAtTime)) {
+    return null;
+  }
+
+  return Math.max(0, Math.floor((expiresAtTime - Date.now()) / 1000));
 }
 
-function ticketQrImageUrl(qrCode) {
-  return `https://api.qrserver.com/v1/create-qr-code/?size=180x180&data=${encodeURIComponent(qrCode)}`;
+function getLoadErrorMessage(error) {
+  const status = error?.response?.status;
+
+  if (status === 400) {
+    return 'This booking cannot be paid in its current state.';
+  }
+
+  if (status === 404) {
+    return 'This booking was not found or you do not have permission to view it.';
+  }
+
+  if (status === 503) {
+    return 'Payment service is temporarily unavailable. Please try again later.';
+  }
+
+  return error?.response?.data?.message || error?.message || 'Unable to load booking.';
 }
 
-function statusBadgeClass(status, isExpired) {
-  if (status === 'PAID') {
-    return 'bg-emerald-100 text-emerald-700';
+function getPaymentErrorMessage(error) {
+  const status = error?.response?.status;
+
+  if (status === 400) {
+    return error?.response?.data?.message || 'This booking is not eligible for payment.';
   }
-  if (isExpired || status === 'FAILED') {
-    return 'bg-red-100 text-red-700';
+
+  if (status === 404) {
+    return 'This booking was not found or it no longer belongs to your account.';
   }
-  return 'bg-yellow-100 text-[#a43c12]';
+
+  if (status === 503) {
+    return 'PayOS is not available right now. Please try again later.';
+  }
+
+  return error?.response?.data?.message || error?.message || 'Unable to start payment.';
+}
+
+function paymentQrImageUrl(paymentSession, amount) {
+  if (paymentSession?.qrCode) {
+    return `https://api.qrserver.com/v1/create-qr-code/?size=280x280&data=${encodeURIComponent(paymentSession.qrCode)}`;
+  }
+
+  if (paymentSession?.bankBin && paymentSession?.accountNumber) {
+    const qrAmount = Number(paymentSession.amount || amount || 0);
+    const description = paymentSession.description || paymentSession.payosOrderCode || '';
+    const accountName = paymentSession.accountName || 'ASMS';
+    return `https://img.vietqr.io/image/${paymentSession.bankBin}-${paymentSession.accountNumber}-compact2.png?amount=${qrAmount}&addInfo=${encodeURIComponent(description)}&accountName=${encodeURIComponent(accountName)}`;
+  }
+
+  return null;
+}
+
+function DetailTile({ icon, label, value }) {
+  return (
+    <div className="rounded-2xl bg-cyan-50 p-4">
+      <span className="material-symbols-outlined text-cyan-700" aria-hidden="true">
+        {icon}
+      </span>
+      <p className="mt-3 text-xs font-black uppercase tracking-[0.14em] text-slate-400">{label}</p>
+      <p className="mt-2 break-words font-black text-slate-900">{value || 'Not available'}</p>
+    </div>
+  );
+}
+
+function PaymentInfoRow({ label, value }) {
+  if (!value) {
+    return null;
+  }
+
+  return (
+    <div className="flex justify-between gap-3">
+      <span>{label}</span>
+      <span className="break-all text-right font-black text-slate-900">{value}</span>
+    </div>
+  );
 }
 
 export default function PaymentPage() {
   const { bookingId } = useParams();
+  const navigate = useNavigate();
+  const location = useLocation();
   const [booking, setBooking] = useState(null);
   const [paymentSession, setPaymentSession] = useState(null);
-  const [countdownSeconds, setCountdownSeconds] = useState(0);
+  const [countdownSeconds, setCountdownSeconds] = useState(null);
   const [loading, setLoading] = useState(true);
   const [submitting, setSubmitting] = useState(false);
   const [error, setError] = useState('');
 
+  async function refreshBooking({ showLoading = false } = {}) {
+    if (showLoading) {
+      setLoading(true);
+    }
+
+    try {
+      const detail = await getBookingDetail(bookingId);
+      const normalized = normalizeBooking(detail);
+      setBooking(normalized);
+      setCountdownSeconds(getInitialSeconds(normalized?.expiresAt));
+      setError('');
+      return normalized;
+    } catch (loadError) {
+      if (loadError?.response?.status === 401) {
+        navigate('/login', { replace: true, state: { from: location } });
+        return null;
+      }
+
+      setError(getLoadErrorMessage(loadError));
+      return null;
+    } finally {
+      if (showLoading) {
+        setLoading(false);
+      }
+    }
+  }
+
   useEffect(() => {
     let ignore = false;
 
-    async function loadBooking() {
-      try {
-        const detail = await getBookingDetail(bookingId);
-        if (!ignore) {
-          setBooking(detail);
-          setCountdownSeconds(getInitialSeconds(detail.expiresAt || detail.expiredAt));
-        }
-      } catch (loadError) {
-        if (!ignore) {
-          setError(loadError.response?.data?.message || loadError.message || 'Unable to load booking.');
-        }
-      } finally {
-        if (!ignore) {
-          setLoading(false);
-        }
+    async function load() {
+      setLoading(true);
+      const detail = await refreshBooking({ showLoading: false });
+      if (!ignore) {
+        setBooking(detail);
+        setLoading(false);
       }
     }
 
-    loadBooking();
+    load();
     return () => {
       ignore = true;
     };
-  }, [bookingId]);
+  }, [bookingId, location, navigate]);
 
   useEffect(() => {
-    if (countdownSeconds <= 0) {
+    if (countdownSeconds === null || countdownSeconds <= 0 || booking?.status !== 'PENDING_PAYMENT') {
       return undefined;
     }
+
     const timerId = window.setInterval(() => {
-      setCountdownSeconds((current) => Math.max(0, current - 1));
+      setCountdownSeconds((current) => (current === null ? null : Math.max(0, current - 1)));
     }, 1000);
+
     return () => window.clearInterval(timerId);
-  }, [countdownSeconds]);
+  }, [booking?.status, countdownSeconds]);
 
   useEffect(() => {
-    if (!paymentSession || booking?.status === 'PAID') {
+    if (!paymentSession || ['PAID', 'EXPIRED', 'FAILED'].includes(booking?.status)) {
       return undefined;
     }
 
-    let ignore = false;
     const intervalId = window.setInterval(async () => {
-      try {
-        const detail = await getBookingDetail(bookingId);
-        if (!ignore) {
-          setBooking(detail);
-          if (detail?.status === 'PAID') {
-            window.clearInterval(intervalId);
-          }
-        }
-      } catch {
-        // Keep the payment screen stable while PayOS callback is still being processed.
+      const latest = await refreshBooking();
+      if (['PAID', 'EXPIRED', 'FAILED'].includes(latest?.status)) {
+        window.clearInterval(intervalId);
       }
     }, 3000);
 
-    return () => {
-      ignore = true;
-      window.clearInterval(intervalId);
-    };
-  }, [bookingId, booking?.status, paymentSession]);
+    return () => window.clearInterval(intervalId);
+  }, [booking?.status, bookingId, paymentSession]);
 
-  const isExpired = booking?.status !== 'PAID' && (countdownSeconds === 0 || booking?.status === 'EXPIRED');
-  const canPay = booking?.status === 'PENDING_PAYMENT' && !isExpired;
-  const ticketItems = booking?.tickets?.items || [];
-  const backendPaymentStatus = booking?.payment?.status;
-  const displayPaymentStatus = backendPaymentStatus || paymentSession?.status || 'PENDING';
-  const isPaid = booking?.status === 'PAID' || backendPaymentStatus === 'SUCCESS';
+  const effectiveStatus = booking?.status === 'PENDING_PAYMENT' && countdownSeconds === 0 ? 'EXPIRED' : booking?.status;
+  const isPaid = effectiveStatus === 'PAID';
+  const isExpiredOrFailed = ['EXPIRED', 'FAILED'].includes(effectiveStatus);
+  const canPay = effectiveStatus === 'PENDING_PAYMENT';
+  const statusMeta = statusCopy[effectiveStatus] || statusCopy.PROCESSING;
+  const paymentStatus = paymentSession?.status || (isPaid ? 'SUCCESS' : effectiveStatus === 'FAILED' ? 'FAILED' : effectiveStatus === 'EXPIRED' ? 'EXPIRED' : 'PENDING');
+  const checkoutUrl = paymentSession?.checkoutUrl || paymentSession?.paymentUrl;
+  const qrUrl = paymentQrImageUrl(paymentSession, booking?.totalAmount);
 
   const paymentSteps = useMemo(
     () => [
-      { label: 'Booking held', icon: 'task_alt', active: true },
-      { label: 'PayOS checkout', icon: 'payments', active: canPay || isPaid },
-      { label: 'QR tickets', icon: 'qr_code_2', active: isPaid },
-      { label: 'Email sent', icon: 'outgoing_mail', active: booking?.emailNotification?.status === 'SENT' },
+      { label: 'Booking held', icon: 'task_alt', active: Boolean(booking), value: booking?.status || 'Loading' },
+      { label: 'PayOS checkout', icon: 'payments', active: Boolean(paymentSession) || isPaid, value: paymentStatus },
+      { label: 'Tickets', icon: 'qr_code_2', active: isPaid, value: isPaid ? 'Queued / ready' : 'After payment' },
+      { label: 'Email', icon: 'outgoing_mail', active: isPaid, value: isPaid ? 'Queued / sent' : 'After payment' },
     ],
-    [booking, canPay, isPaid],
+    [booking, isPaid, paymentSession, paymentStatus],
   );
 
   const handlePay = async () => {
     setSubmitting(true);
     setError('');
+
     try {
       const payment = await createPayment(bookingId);
       setPaymentSession(payment);
+
+      const nextCheckoutUrl = payment?.checkoutUrl || payment?.paymentUrl;
+      if (nextCheckoutUrl) {
+        window.open(nextCheckoutUrl, '_blank', 'noopener,noreferrer');
+      }
     } catch (payError) {
-      setError(payError.response?.data?.message || payError.message || 'Unable to start payment.');
+      if (payError?.response?.status === 401) {
+        navigate('/login', { replace: true, state: { from: location } });
+        return;
+      }
+
+      setError(getPaymentErrorMessage(payError));
     } finally {
       setSubmitting(false);
     }
   };
-
-  const qrImageUrl = paymentSession?.bankBin && paymentSession?.accountNumber
-    ? `https://img.vietqr.io/image/${paymentSession.bankBin}-${paymentSession.accountNumber}-compact2.png?amount=${Number(paymentSession.amount || booking?.totalAmount || 0)}&addInfo=${encodeURIComponent(paymentSession.description || paymentSession.payosOrderCode)}&accountName=${encodeURIComponent(paymentSession.accountName || 'ASMS')}`
-    : null;
 
   return (
     <MainLayout>
@@ -152,11 +326,16 @@ export default function PaymentPage() {
         <div className="mx-auto max-w-7xl">
           <div className="mb-8 flex flex-col justify-between gap-4 md:flex-row md:items-end">
             <div>
-              <p className="inline-flex rounded-full bg-cyan-100 px-4 py-1.5 text-xs font-black uppercase tracking-[0.2em] text-cyan-800">UC-10 Payment</p>
+              <p className="inline-flex rounded-full bg-cyan-100 px-4 py-1.5 text-xs font-black uppercase tracking-[0.2em] text-cyan-800">
+                UC-10 Payment
+              </p>
               <h1 className="mt-4 text-4xl font-black text-slate-950 md:text-5xl">Complete payment</h1>
               <p className="mt-3 max-w-2xl text-slate-600">PayOS checkout for your reserved AquaPulse booking.</p>
             </div>
-            <Link className="inline-flex items-center gap-2 rounded-full border border-cyan-200 bg-white px-5 py-3 text-sm font-bold text-cyan-700 hover:bg-cyan-50" to={`/bookings/${bookingId}`}>
+            <Link
+              className="inline-flex items-center gap-2 rounded-full border border-cyan-200 bg-white px-5 py-3 text-sm font-bold text-cyan-700 hover:bg-cyan-50"
+              to={`/bookings/${bookingId}`}
+            >
               <span className="material-symbols-outlined text-lg">receipt_long</span>
               Booking detail
             </Link>
@@ -167,95 +346,99 @@ export default function PaymentPage() {
               <div className="mx-auto mb-4 h-10 w-10 animate-spin rounded-full border-4 border-cyan-100 border-t-cyan-600" />
               <p className="font-bold text-slate-600">Loading booking...</p>
             </section>
+          ) : !booking && error ? (
+            <section className="rounded-[1.5rem] border border-red-100 bg-white p-10 text-center shadow-sm" role="alert">
+              <span className="material-symbols-outlined text-5xl text-red-500">error</span>
+              <h2 className="mt-4 text-3xl font-black text-slate-950">Booking unavailable</h2>
+              <p className="mx-auto mt-3 max-w-2xl text-sm font-semibold leading-6 text-slate-600">{error}</p>
+              <div className="mt-8 flex flex-col justify-center gap-3 sm:flex-row">
+                <Link className="rounded-full bg-cyan-700 px-6 py-3 font-bold text-white transition hover:bg-cyan-800" to="/bookings/my">
+                  My bookings
+                </Link>
+                <Link className="rounded-full border border-cyan-200 bg-white px-6 py-3 font-bold text-cyan-700 transition hover:bg-cyan-50" to="/">
+                  Back Home
+                </Link>
+              </div>
+            </section>
           ) : (
             <div className="grid grid-cols-1 gap-8 lg:grid-cols-12">
               <section className="space-y-6 lg:col-span-8">
                 {error ? (
-                  <div className="rounded-2xl border border-red-200 bg-red-50 px-5 py-4 text-sm font-semibold text-red-700">{error}</div>
+                  <div className="rounded-2xl border border-red-200 bg-red-50 px-5 py-4 text-sm font-semibold text-red-700" role="alert">
+                    {error}
+                  </div>
                 ) : null}
 
-                <article className="overflow-hidden rounded-[1.5rem] border border-cyan-100 bg-white shadow-[0_16px_40px_rgba(8,145,178,0.10)]">
-                  <div className="relative h-72 overflow-hidden">
-                    <img alt={booking?.show?.title || booking?.showName || 'AquaPulse show'} className="h-full w-full object-cover" src={booking?.show?.imageUrl || 'https://images.unsplash.com/photo-1507525428034-b723cf961d3e?auto=format&fit=crop&w=1400&q=80'} />
-                    <div className="absolute inset-0 bg-gradient-to-t from-cyan-950/80 via-cyan-950/20 to-transparent" />
-                    <div className="absolute bottom-6 left-6 right-6 text-white">
-                      <p className="text-sm font-black uppercase tracking-[0.2em] text-cyan-100">{booking?.schedule?.venueName || 'Main Plaza Pool'}</p>
-                      <h2 className="mt-2 text-3xl font-black">{booking?.show?.title || booking?.showName}</h2>
-                    </div>
-                  </div>
-                  <div className="grid grid-cols-1 gap-4 p-6 md:grid-cols-3">
-                    <div className="rounded-2xl bg-cyan-50 p-4">
-                      <p className="text-xs font-black uppercase tracking-[0.14em] text-slate-400">Schedule</p>
-                      <p className="mt-2 font-black text-slate-900">{formatDateTime(booking?.schedule?.startTime || booking?.showDate)}</p>
-                    </div>
-                    <div className="rounded-2xl bg-cyan-50 p-4">
-                      <p className="text-xs font-black uppercase tracking-[0.14em] text-slate-400">Tickets</p>
-                      <p className="mt-2 font-black text-slate-900">{booking?.totalQuantity || booking?.quantity} tickets</p>
-                    </div>
-                    <div className="rounded-2xl bg-cyan-50 p-4">
-                      <p className="text-xs font-black uppercase tracking-[0.14em] text-slate-400">Total</p>
-                      <p className="mt-2 text-2xl font-black text-cyan-700">{formatCurrency(booking?.totalAmount)}</p>
-                    </div>
-                  </div>
-                </article>
-
-                {ticketItems.length > 0 ? (
-                  <article className="rounded-[1.5rem] border border-cyan-100 bg-white p-6 shadow-sm">
-                    <div className="flex flex-col justify-between gap-3 sm:flex-row sm:items-end">
-                      <div>
-                        <p className="text-xs font-black uppercase tracking-[0.18em] text-emerald-700">Paid booking</p>
-                        <h3 className="mt-2 text-xl font-black text-slate-950">QR tickets are ready</h3>
-                      </div>
-                      <Link className="inline-flex items-center justify-center gap-2 rounded-full bg-cyan-700 px-5 py-3 text-sm font-black text-white hover:bg-cyan-800" to={`/payments/result?bookingId=${bookingId}&status=success`}>
-                        <span className="material-symbols-outlined">receipt_long</span>
-                        Payment result
-                      </Link>
-                    </div>
-                    <div className="mt-5 grid grid-cols-1 gap-4 sm:grid-cols-2">
-                      {ticketItems.map((ticket, index) => (
-                        <div className="rounded-2xl border border-cyan-100 bg-cyan-50/70 p-4" key={ticket.id || ticket.qrCode}>
-                          <img className="mx-auto h-40 w-40 rounded-xl border border-cyan-100 bg-white p-2" alt={`Ticket QR ${index + 1}`} src={ticketQrImageUrl(ticket.qrCode)} />
-                          <p className="mt-3 text-center text-sm font-black text-slate-900">Ticket #{index + 1}</p>
-                          <p className="mt-2 break-all rounded-xl bg-white p-3 text-xs font-semibold text-slate-500">{ticket.qrCode}</p>
+                {booking ? (
+                  <>
+                    <article className="overflow-hidden rounded-[1.5rem] border border-cyan-100 bg-white shadow-[0_16px_40px_rgba(8,145,178,0.10)]">
+                      <div className="relative h-72 overflow-hidden">
+                        <img alt={booking.showName} className="h-full w-full object-cover" src={fallbackImageUrl} />
+                        <div className="absolute inset-0 bg-gradient-to-t from-cyan-950/80 via-cyan-950/20 to-transparent" />
+                        <div className="absolute bottom-6 left-6 right-6 text-white">
+                          <p className="text-sm font-black uppercase tracking-[0.2em] text-cyan-100">Booking #{booking.bookingCode}</p>
+                          <h2 className="mt-2 text-3xl font-black">{booking.showName}</h2>
                         </div>
-                      ))}
-                    </div>
-                  </article>
-                ) : null}
-
-                <article className="rounded-[1.5rem] border border-cyan-100 bg-white p-6 shadow-sm">
-                  <h3 className="text-xl font-black text-slate-950">Payment flow</h3>
-                  <div className="mt-6 grid grid-cols-2 gap-4 md:grid-cols-4">
-                    {paymentSteps.map((step) => (
-                      <div className="rounded-2xl border border-cyan-100 bg-cyan-50/70 p-4" key={step.label}>
-                        <span className={`flex h-11 w-11 items-center justify-center rounded-full ${step.active ? 'bg-cyan-700 text-white' : 'bg-white text-slate-400'}`}>
-                          <span className="material-symbols-outlined">{step.icon}</span>
-                        </span>
-                        <p className="mt-3 text-sm font-black text-slate-800">{step.label}</p>
                       </div>
-                    ))}
-                  </div>
-                </article>
+                      <div className="grid grid-cols-1 gap-4 p-6 md:grid-cols-3">
+                        <DetailTile icon="event" label="Show date" value={formatDate(booking.showDate)} />
+                        <DetailTile icon="confirmation_number" label="Tickets" value={`${booking.quantity} ${booking.ticketType}`} />
+                        <DetailTile icon="payments" label="Total" value={formatCurrency(booking.totalAmount)} />
+                      </div>
+                    </article>
+
+                    <article className="rounded-[1.5rem] border border-cyan-100 bg-white p-6 shadow-sm">
+                      <div className="flex flex-col justify-between gap-4 sm:flex-row sm:items-start">
+                        <div>
+                          <span className={`inline-flex rounded-full border px-4 py-1.5 text-xs font-black uppercase tracking-[0.16em] ${statusMeta.tone}`}>
+                            {statusMeta.label}
+                          </span>
+                          <h3 className="mt-4 text-2xl font-black text-slate-950">{statusMeta.title}</h3>
+                          <p className="mt-2 max-w-2xl text-sm font-semibold leading-6 text-slate-600">{statusMeta.message}</p>
+                        </div>
+                        <div className={`text-right font-black ${isPaid ? 'text-emerald-700' : isExpiredOrFailed ? 'text-red-600' : 'text-cyan-700'}`}>
+                          <p className="text-xs uppercase tracking-[0.18em] text-slate-400">Hold timer</p>
+                          <p className={isPaid ? 'mt-2 text-4xl' : 'mt-2 text-5xl tracking-widest'}>
+                            {isPaid ? 'PAID' : formatCountdown(countdownSeconds)}
+                          </p>
+                        </div>
+                      </div>
+                    </article>
+
+                    <article className="rounded-[1.5rem] border border-cyan-100 bg-white p-6 shadow-sm">
+                      <h3 className="text-xl font-black text-slate-950">Payment flow</h3>
+                      <div className="mt-6 grid grid-cols-2 gap-4 md:grid-cols-4">
+                        {paymentSteps.map((step) => (
+                          <div className="rounded-2xl border border-cyan-100 bg-cyan-50/70 p-4" key={step.label}>
+                            <span className={`flex h-11 w-11 items-center justify-center rounded-full ${step.active ? 'bg-cyan-700 text-white' : 'bg-white text-slate-400'}`}>
+                              <span className="material-symbols-outlined">{step.icon}</span>
+                            </span>
+                            <p className="mt-3 text-sm font-black text-slate-800">{step.label}</p>
+                            <p className="mt-1 text-xs font-semibold text-slate-500">{step.value}</p>
+                          </div>
+                        ))}
+                      </div>
+                    </article>
+                  </>
+                ) : null}
               </section>
 
               <aside className="lg:sticky lg:top-28 lg:col-span-4">
                 <div className="rounded-[1.5rem] border border-cyan-100 bg-white p-6 shadow-[0_16px_40px_rgba(8,145,178,0.10)]">
-                  <div className="flex items-center justify-between">
-                    <p className="text-xs font-black uppercase tracking-[0.18em] text-slate-400">Hold timer</p>
-                    <span className={`rounded-full px-3 py-1 text-xs font-black ${statusBadgeClass(booking?.status, isExpired)}`}>
-                      {isExpired ? 'EXPIRED' : booking?.status}
-                    </span>
+                  <p className="text-xs font-black uppercase tracking-[0.18em] text-slate-400">Checkout</p>
+                  <div className="mt-5 space-y-3 text-sm font-semibold text-slate-600">
+                    <PaymentInfoRow label="Booking code" value={booking?.bookingCode} />
+                    <PaymentInfoRow label="Show date" value={formatDate(booking?.showDate)} />
+                    <PaymentInfoRow label="Quantity" value={booking ? String(booking.quantity) : ''} />
+                    <PaymentInfoRow label="Unit price" value={formatCurrency(booking?.unitPrice)} />
                   </div>
-                  <div className={`mt-5 text-center ${isPaid ? 'text-4xl' : 'text-6xl tracking-widest'} font-black ${isExpired ? 'text-red-600' : isPaid ? 'text-emerald-700' : 'text-cyan-700'}`}>
-                    {isPaid ? 'PAID' : formatCountdown(countdownSeconds)}
+                  <div className="mt-6 border-t-2 border-dashed border-cyan-100 pt-6">
+                    <div className="flex items-end justify-between gap-4">
+                      <span className="text-xs font-black uppercase tracking-[0.2em] text-slate-400">Total amount</span>
+                      <span className="text-3xl font-black text-cyan-700">{formatCurrency(booking?.totalAmount)}</span>
+                    </div>
                   </div>
-                  <p className="mt-4 rounded-2xl bg-cyan-50 p-4 text-sm font-semibold leading-6 text-slate-600">
-                    {isPaid
-                      ? 'Payment completed. QR tickets are ready below and have been sent to the customer email.'
-                      : isExpired
-                        ? 'This booking can no longer be paid. Create a new booking to reserve seats again.'
-                        : 'Complete PayOS checkout before the temporary hold expires.'}
-                  </p>
+
                   <button
                     className="mt-6 flex w-full items-center justify-center gap-2 rounded-full bg-cyan-700 px-6 py-4 font-black text-white shadow-lg shadow-cyan-700/20 transition hover:bg-cyan-800 disabled:cursor-not-allowed disabled:bg-slate-300 disabled:shadow-none"
                     disabled={!canPay || submitting}
@@ -265,56 +448,66 @@ export default function PaymentPage() {
                     <span className="material-symbols-outlined">payments</span>
                     {isPaid ? 'Payment completed' : submitting ? 'Opening PayOS...' : 'Pay with PayOS'}
                   </button>
-                  {paymentSession || booking?.payment ? (
+
+                  {!canPay ? (
+                    <p className="mt-3 rounded-2xl bg-slate-50 p-4 text-sm font-semibold leading-6 text-slate-500">
+                      {isPaid ? 'This booking is already paid.' : statusMeta.message}
+                    </p>
+                  ) : null}
+
+                  {paymentSession ? (
                     <div className="mt-6 rounded-2xl border border-cyan-100 bg-cyan-50 p-4">
                       <div className="flex items-center justify-between gap-3">
-                        <p className="text-xs font-black uppercase tracking-[0.16em] text-cyan-800">PayOS QR</p>
-                        <span className={`rounded-full px-3 py-1 text-xs font-black ${displayPaymentStatus === 'SUCCESS' ? 'bg-emerald-100 text-emerald-700' : 'bg-yellow-100 text-[#a43c12]'}`}>{displayPaymentStatus}</span>
+                        <p className="text-xs font-black uppercase tracking-[0.16em] text-cyan-800">PayOS session</p>
+                        <span className={`rounded-full px-3 py-1 text-xs font-black ${paymentStatus === 'SUCCESS' ? 'bg-emerald-100 text-emerald-700' : 'bg-yellow-100 text-[#a43c12]'}`}>
+                          {paymentStatus}
+                        </span>
                       </div>
-                      {qrImageUrl ? (
-                        <img className="mx-auto mt-4 w-full max-w-[260px] rounded-2xl border border-cyan-100 bg-white p-3" alt="PayOS VietQR" src={qrImageUrl} />
+
+                      {qrUrl ? (
+                        <img className="mx-auto mt-4 w-full max-w-[260px] rounded-2xl border border-cyan-100 bg-white p-3" alt="PayOS QR" src={qrUrl} />
                       ) : (
                         <div className="mt-4 rounded-2xl bg-white p-4 text-center text-sm font-semibold text-slate-500">
                           PayOS checkout link is ready.
                         </div>
                       )}
+
                       <div className="mt-4 space-y-2 text-sm font-semibold text-slate-600">
-                        <div className="flex justify-between gap-3">
-                          <span>Order</span>
-                          <span className="text-right font-black text-slate-900">{paymentSession?.payosOrderCode || booking?.payment?.payosOrderCode}</span>
-                        </div>
-                        <div className="flex justify-between gap-3">
-                          <span>Amount</span>
-                          <span className="font-black text-cyan-700">{formatCurrency(paymentSession?.amount || booking?.payment?.amount || booking?.totalAmount)}</span>
-                        </div>
-                        {paymentSession?.accountNumber ? (
-                          <div className="flex justify-between gap-3">
-                            <span>Account</span>
-                            <span className="text-right font-black text-slate-900">{paymentSession.accountNumber}</span>
-                          </div>
-                        ) : null}
-                        {paymentSession?.description ? (
-                          <div className="flex justify-between gap-3">
-                            <span>Content</span>
-                            <span className="text-right font-black text-slate-900">{paymentSession.description}</span>
-                          </div>
-                        ) : null}
+                        <PaymentInfoRow label="Order" value={paymentSession.payosOrderCode} />
+                        <PaymentInfoRow label="Payment link" value={paymentSession.paymentLinkId} />
+                        <PaymentInfoRow label="Amount" value={formatCurrency(paymentSession.amount || booking?.totalAmount)} />
+                        <PaymentInfoRow label="Bank BIN" value={paymentSession.bankBin} />
+                        <PaymentInfoRow label="Account" value={paymentSession.accountNumber} />
+                        <PaymentInfoRow label="Account name" value={paymentSession.accountName} />
+                        <PaymentInfoRow label="Content" value={paymentSession.description} />
                       </div>
-                      {paymentSession?.checkoutUrl || paymentSession?.paymentUrl ? (
+
+                      {checkoutUrl ? (
                         <a
-                        className="mt-5 flex w-full items-center justify-center gap-2 rounded-full bg-white px-5 py-3 font-black text-cyan-700 ring-1 ring-cyan-200 hover:bg-cyan-50"
-                        href={paymentSession.checkoutUrl || paymentSession.paymentUrl}
-                        rel="noreferrer"
-                        target="_blank"
+                          className="mt-5 flex w-full items-center justify-center gap-2 rounded-full bg-white px-5 py-3 font-black text-cyan-700 ring-1 ring-cyan-200 hover:bg-cyan-50"
+                          href={checkoutUrl}
+                          rel="noreferrer"
+                          target="_blank"
                         >
                           <span className="material-symbols-outlined">open_in_new</span>
                           Open PayOS checkout
                         </a>
                       ) : null}
+
                       <p className="mt-3 text-xs font-semibold leading-5 text-slate-500">
-                        Sau khi bạn thanh toán, PayOS webhook sẽ cập nhật booking. Trang này tự kiểm tra lại mỗi 3 giây và hiện QR ticket khi booking chuyển sang PAID.
+                        After payment, PayOS callback updates the backend. This page checks booking status every 3 seconds.
                       </p>
                     </div>
+                  ) : null}
+
+                  {isPaid ? (
+                    <Link
+                      className="mt-5 flex w-full items-center justify-center gap-2 rounded-full bg-emerald-600 px-5 py-3 font-black text-white hover:bg-emerald-700"
+                      to={`/payments/result?bookingId=${bookingId}&status=success`}
+                    >
+                      <span className="material-symbols-outlined">receipt_long</span>
+                      View payment result
+                    </Link>
                   ) : null}
                 </div>
               </aside>

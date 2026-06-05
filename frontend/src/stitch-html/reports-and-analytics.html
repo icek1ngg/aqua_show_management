@@ -1,0 +1,495 @@
+<!DOCTYPE html>
+
+<html class="light" lang="en"><head>
+<meta charset="utf-8"/>
+<meta content="width=device-width, initial-scale=1.0" name="viewport"/>
+<title>Reports &amp; Analytics | AquaShow MS</title>
+<script src="https://cdn.tailwindcss.com?plugins=forms,container-queries"></script>
+<link href="https://fonts.googleapis.com/css2?family=Plus+Jakarta+Sans:wght@400;600;700;800&amp;display=swap" rel="stylesheet"/>
+<link href="https://fonts.googleapis.com/css2?family=Material+Symbols+Outlined:wght,FILL@100..700,0..1&amp;display=swap" rel="stylesheet"/>
+<link href="https://fonts.googleapis.com/css2?family=Material+Symbols+Outlined:wght,FILL@100..700,0..1&amp;display=swap" rel="stylesheet"/>
+<style>
+        body {
+            font-family: 'Plus Jakarta Sans', sans-serif;
+            background-color: #f1fbfb;
+        }
+        .material-symbols-outlined {
+            font-variation-settings: 'FILL' 0, 'wght' 400, 'GRAD' 0, 'opsz' 24;
+        }
+        .glass-card {
+            background: rgba(255, 255, 255, 0.7);
+            backdrop-filter: blur(20px);
+            border: 1px solid rgba(255, 255, 255, 0.2);
+        }
+        .chart-gradient-teal {
+            background: linear-gradient(180deg, #00ced1 0%, #00696b 100%);
+        }
+        .sidebar-active-indicator {
+            box-shadow: 4px 0px 10px rgba(0, 105, 107, 0.2);
+        }
+    </style>
+<script id="tailwind-config">
+        tailwind.config = {
+            darkMode: "class",
+            theme: {
+                extend: {
+                    "colors": {
+                        "on-tertiary": "#ffffff",
+                        "on-tertiary-fixed": "#2f1500",
+                        "on-tertiary-container": "#723c00",
+                        "inverse-surface": "#293232",
+                        "inverse-on-surface": "#e9f3f3",
+                        "surface-container-highest": "#dae4e4",
+                        "error-container": "#ffdad6",
+                        "surface-dim": "#d2dcdc",
+                        "surface-container-high": "#e0eaea",
+                        "on-error-container": "#93000a",
+                        "outline-variant": "#bac9c9",
+                        "on-surface": "#141d1e",
+                        "on-primary-fixed": "#002020",
+                        "primary": "#00696b",
+                        "on-error": "#ffffff",
+                        "tertiary-fixed-dim": "#ffb77d",
+                        "primary-fixed": "#5af8fb",
+                        "on-surface-variant": "#3b4949",
+                        "primary-container": "#00ced1",
+                        "error": "#ba1a1a",
+                        "surface-tint": "#00696b",
+                        "secondary": "#356476",
+                        "on-primary": "#ffffff",
+                        "secondary-fixed": "#baeafe",
+                        "background": "#f1fbfb",
+                        "on-secondary": "#ffffff",
+                        "secondary-container": "#b7e7fb",
+                        "tertiary-fixed": "#ffdcc3",
+                        "tertiary": "#904d00",
+                        "surface-container-lowest": "#ffffff",
+                        "surface": "#f1fbfb",
+                        "on-secondary-fixed-variant": "#194d5d",
+                        "surface-container": "#e6f0f0",
+                        "surface-bright": "#f1fbfb",
+                        "primary-fixed-dim": "#2ddbde",
+                        "on-secondary-fixed": "#001f28",
+                        "on-background": "#141d1e",
+                        "surface-container-low": "#ecf6f6",
+                        "on-secondary-container": "#39697a",
+                        "on-primary-fixed-variant": "#004f51",
+                        "on-tertiary-fixed-variant": "#6e3900",
+                        "outline": "#6b7a7a",
+                        "tertiary-container": "#ffa557",
+                        "on-primary-container": "#005354",
+                        "inverse-primary": "#2ddbde",
+                        "secondary-fixed-dim": "#9ecee1",
+                        "surface-variant": "#dae4e4"
+                    },
+                    "borderRadius": {
+                        "DEFAULT": "1rem",
+                        "lg": "2rem",
+                        "xl": "3rem",
+                        "full": "9999px"
+                    },
+                    "spacing": {
+                        "unit-xs": "4px",
+                        "sidebar-collapsed": "80px",
+                        "unit-xl": "32px",
+                        "unit-sm": "8px",
+                        "unit-md": "16px",
+                        "margin-mobile": "16px",
+                        "gutter": "24px",
+                        "unit-lg": "24px",
+                        "sidebar-width": "280px",
+                        "margin-desktop": "40px"
+                    },
+                    "fontFamily": {
+                        "headline-md": ["Plus Jakarta Sans"],
+                        "label-lg": ["Plus Jakarta Sans"],
+                        "headline-2xl": ["Plus Jakarta Sans"],
+                        "body-lg": ["Plus Jakarta Sans"],
+                        "headline-lg": ["Plus Jakarta Sans"],
+                        "headline-xl": ["Plus Jakarta Sans"],
+                        "body-sm": ["Plus Jakarta Sans"],
+                        "label-md": ["Plus Jakarta Sans"],
+                        "body-md": ["Plus Jakarta Sans"]
+                    },
+                    "fontSize": {
+                        "headline-md": ["24px", {"lineHeight": "32px", "fontWeight": "600"}],
+                        "label-lg": ["14px", {"lineHeight": "20px", "letterSpacing": "0.05em", "fontWeight": "600"}],
+                        "headline-2xl": ["48px", {"lineHeight": "56px", "letterSpacing": "-0.02em", "fontWeight": "700"}],
+                        "body-lg": ["18px", {"lineHeight": "28px", "fontWeight": "400"}],
+                        "headline-lg": ["28px", {"lineHeight": "36px", "fontWeight": "600"}],
+                        "headline-xl": ["36px", {"lineHeight": "44px", "letterSpacing": "-0.02em", "fontWeight": "700"}],
+                        "body-sm": ["14px", {"lineHeight": "20px", "fontWeight": "400"}],
+                        "label-md": ["12px", {"lineHeight": "16px", "letterSpacing": "0.05em", "fontWeight": "600"}],
+                        "body-md": ["16px", {"lineHeight": "24px", "fontWeight": "400"}]
+                    }
+                }
+            }
+        }
+    </script>
+</head>
+<body class="bg-background text-on-background">
+<!-- SideNavBar -->
+<aside class="fixed left-0 top-0 h-full w-sidebar-width bg-on-secondary-fixed shadow-lg flex flex-col h-full py-unit-lg z-50">
+<div class="px-unit-lg mb-unit-xl">
+<h1 class="font-headline-md text-headline-md font-bold text-primary-fixed">AquaShow MS</h1>
+<p class="font-body-md text-body-sm text-on-secondary-fixed-variant opacity-70">Management System</p>
+</div>
+<nav class="flex-1 space-y-unit-xs">
+<!-- Navigation Items Mapping -->
+<a class="flex items-center gap-unit-md text-on-secondary-fixed-variant px-unit-lg py-unit-md hover:text-primary-fixed hover:bg-on-secondary-fixed-variant/20 transition-all" href="#">
+<span class="material-symbols-outlined">dashboard</span>
+<span class="font-body-md">Dashboard</span>
+</a>
+<a class="flex items-center gap-unit-md text-on-secondary-fixed-variant px-unit-lg py-unit-md hover:text-primary-fixed hover:bg-on-secondary-fixed-variant/20 transition-all" href="#">
+<span class="material-symbols-outlined">theater_comedy</span>
+<span class="font-body-md">Shows</span>
+</a>
+<a class="flex items-center gap-unit-md text-on-secondary-fixed-variant px-unit-lg py-unit-md hover:text-primary-fixed hover:bg-on-secondary-fixed-variant/20 transition-all" href="#">
+<span class="material-symbols-outlined">water_drop</span>
+<span class="font-body-md">Venues</span>
+</a>
+<a class="flex items-center gap-unit-md text-on-secondary-fixed-variant px-unit-lg py-unit-md hover:text-primary-fixed hover:bg-on-secondary-fixed-variant/20 transition-all" href="#">
+<span class="material-symbols-outlined">calendar_month</span>
+<span class="font-body-md">Schedules</span>
+</a>
+<a class="flex items-center gap-unit-md text-on-secondary-fixed-variant px-unit-lg py-unit-md hover:text-primary-fixed hover:bg-on-secondary-fixed-variant/20 transition-all" href="#">
+<span class="material-symbols-outlined">event_seat</span>
+<span class="font-body-md">Bookings</span>
+</a>
+<!-- Active State for Reports -->
+<a class="flex items-center gap-unit-md text-primary-fixed border-l-4 border-primary-fixed bg-on-secondary-fixed-variant/30 px-unit-lg py-unit-md" href="#">
+<span class="material-symbols-outlined">analytics</span>
+<span class="font-body-md font-bold">Reports</span>
+</a>
+<a class="flex items-center gap-unit-md text-on-secondary-fixed-variant px-unit-lg py-unit-md hover:text-primary-fixed hover:bg-on-secondary-fixed-variant/20 transition-all" href="#">
+<span class="material-symbols-outlined">group</span>
+<span class="font-body-md">Users</span>
+</a>
+<a class="flex items-center gap-unit-md text-on-secondary-fixed-variant px-unit-lg py-unit-md hover:text-primary-fixed hover:bg-on-secondary-fixed-variant/20 transition-all" href="#">
+<span class="material-symbols-outlined">admin_panel_settings</span>
+<span class="font-body-md">Roles</span>
+</a>
+</nav>
+<div class="px-unit-lg mt-auto">
+<button class="w-full py-unit-md bg-primary-container text-on-primary-container rounded-lg font-label-lg hover:brightness-110 transition-all">
+                Quick Schedule
+            </button>
+<div class="flex items-center gap-unit-md mt-unit-lg pt-unit-md border-t border-on-secondary-fixed-variant/20">
+<img alt="AquaShow Admin Profile" class="w-10 h-10 rounded-full object-cover" data-alt="A professional headshot of a marine park manager in a clean white uniform, smiling warmly against a soft-focus background of a sunlit tropical aquatic center. The lighting is bright and airy, matching a high-end corporate aesthetic with subtle blue and teal undertones. High-quality professional photography style." src="https://lh3.googleusercontent.com/aida-public/AB6AXuDCbYJkp0pNvXTXiIisy-nc67tIW4TicjBPRQe8wj9xkEan3uNeHKuI2ZOA40wlTSntzQ3VMWmvf8hXpSl3jDvPYePrt-X3YyP8Ng6TjIHWsPTbfgzE-RFx1imI38S57RBgESwLXUZDxthN5wQT-YqHr8kxlnlnuUwgxoorfbaYRySRoNPQf1HU2V64TKlDF-pnPC_cpRW7nzrtxm8qngYBL_CMDRqv0ynzJDduJFF4XspN66qjboaF9OoCxYdrpCPyOUBE-8M8uuEx"/>
+<div>
+<p class="font-label-lg text-primary-fixed">Alex Rivers</p>
+<p class="text-[10px] text-on-secondary-fixed-variant uppercase tracking-widest">Admin Manager</p>
+</div>
+</div>
+</div>
+</aside>
+<!-- Main Content Shell -->
+<main class="ml-sidebar-width flex flex-col min-h-screen">
+<!-- TopAppBar -->
+<header class="flex justify-between items-center px-unit-lg py-unit-sm sticky top-0 z-40 bg-surface/70 backdrop-blur-md border-b border-outline-variant/20 shadow-sm">
+<div class="flex items-center gap-unit-lg">
+<h2 class="font-headline-md text-headline-md font-extrabold text-primary">Reports &amp; Analytics</h2>
+<div class="relative hidden lg:block">
+<span class="material-symbols-outlined absolute left-3 top-1/2 -translate-y-1/2 text-on-surface-variant">search</span>
+<input class="pl-10 pr-4 py-2 bg-surface-container-low border-none rounded-full w-64 focus:ring-2 focus:ring-primary/20 text-body-sm" placeholder="Search reports..." type="text"/>
+</div>
+</div>
+<div class="flex items-center gap-unit-md">
+<button class="p-2 text-on-surface-variant hover:bg-surface-container-high/50 rounded-full transition-colors active:scale-95">
+<span class="material-symbols-outlined">notifications</span>
+</button>
+<button class="p-2 text-on-surface-variant hover:bg-surface-container-high/50 rounded-full transition-colors active:scale-95">
+<span class="material-symbols-outlined">help_outline</span>
+</button>
+<button class="p-2 text-on-surface-variant hover:bg-surface-container-high/50 rounded-full transition-colors active:scale-95">
+<span class="material-symbols-outlined">settings</span>
+</button>
+</div>
+</header>
+<!-- Content Canvas -->
+<section class="p-unit-lg space-y-unit-lg max-w-[1600px] mx-auto w-full">
+<!-- Filters & Actions -->
+<div class="flex flex-col md:flex-row justify-between items-start md:items-center gap-unit-md">
+<div class="flex flex-wrap gap-unit-sm">
+<select class="bg-surface-container-lowest border border-outline-variant rounded-lg px-unit-md py-unit-sm text-body-sm focus:border-primary focus:ring-primary">
+<option>Last 30 Days</option>
+<option>Last Quarter</option>
+<option>This Year</option>
+<option>Custom Range</option>
+</select>
+<select class="bg-surface-container-lowest border border-outline-variant rounded-lg px-unit-md py-unit-sm text-body-sm focus:border-primary focus:ring-primary">
+<option>All Shows</option>
+<option>Dolphin Symphony</option>
+<option>Orca Odyssey</option>
+<option>Tropical Reef Ballet</option>
+</select>
+</div>
+<button class="flex items-center gap-unit-sm px-unit-lg py-unit-sm bg-primary text-on-primary rounded-full font-label-lg shadow-lg hover:shadow-primary/20 transition-all active:scale-95">
+<span class="material-symbols-outlined text-[20px]">download</span>
+                    Export PDF
+                </button>
+</div>
+<!-- Summary Cards Bento Grid -->
+<div class="grid grid-cols-1 md:grid-cols-3 lg:grid-cols-6 gap-unit-md">
+<!-- Total Bookings -->
+<div class="glass-card p-unit-lg rounded-lg shadow-sm border-l-4 border-primary">
+<p class="text-on-surface-variant font-label-md uppercase tracking-wider mb-unit-sm">Total Bookings</p>
+<h3 class="font-headline-lg text-headline-lg text-primary">12,482</h3>
+<div class="flex items-center gap-1 mt-unit-xs text-green-600 font-label-md">
+<span class="material-symbols-outlined text-[16px]">trending_up</span>
+<span>+12%</span>
+</div>
+</div>
+<!-- Paid Bookings -->
+<div class="glass-card p-unit-lg rounded-lg shadow-sm border-l-4 border-secondary">
+<p class="text-on-surface-variant font-label-md uppercase tracking-wider mb-unit-sm">Paid Bookings</p>
+<h3 class="font-headline-lg text-headline-lg text-secondary">11,902</h3>
+<div class="flex items-center gap-1 mt-unit-xs text-green-600 font-label-md">
+<span class="material-symbols-outlined text-[16px]">trending_up</span>
+<span>+8%</span>
+</div>
+</div>
+<!-- Total Revenue -->
+<div class="glass-card p-unit-lg rounded-lg shadow-sm border-l-4 border-tertiary col-span-1 lg:col-span-2">
+<p class="text-on-surface-variant font-label-md uppercase tracking-wider mb-unit-sm">Total Revenue</p>
+<h3 class="font-headline-lg text-headline-lg text-tertiary">$482,910.00</h3>
+<div class="flex items-center gap-1 mt-unit-xs text-green-600 font-label-md">
+<span class="material-symbols-outlined text-[16px]">trending_up</span>
+<span>+$42k vs last month</span>
+</div>
+</div>
+<!-- Attendance Rate -->
+<div class="glass-card p-unit-lg rounded-lg shadow-sm border-l-4 border-primary-container">
+<p class="text-on-surface-variant font-label-md uppercase tracking-wider mb-unit-sm">Attendance</p>
+<h3 class="font-headline-lg text-headline-lg text-on-primary-container">94.2%</h3>
+<div class="flex items-center gap-1 mt-unit-xs text-secondary font-label-md">
+<span class="material-symbols-outlined text-[16px]">verified</span>
+<span>High Capacity</span>
+</div>
+</div>
+<!-- Check-ins -->
+<div class="glass-card p-unit-lg rounded-lg shadow-sm border-l-4 border-outline">
+<p class="text-on-surface-variant font-label-md uppercase tracking-wider mb-unit-sm">Check-ins</p>
+<h3 class="font-headline-lg text-headline-lg text-on-surface">10,841</h3>
+<div class="flex items-center gap-1 mt-unit-xs text-on-surface-variant font-label-md">
+<span class="material-symbols-outlined text-[16px]">group</span>
+<span>Today: 842</span>
+</div>
+</div>
+</div>
+<!-- Charts Section -->
+<div class="grid grid-cols-1 lg:grid-cols-12 gap-unit-lg">
+<!-- Attendance Trend (Line Chart) -->
+<div class="lg:col-span-8 glass-card p-unit-lg rounded-lg shadow-md">
+<div class="flex justify-between items-center mb-unit-lg">
+<h4 class="font-headline-md text-headline-md text-on-surface">Daily Attendance Trend</h4>
+<div class="flex gap-unit-md text-body-sm text-on-surface-variant">
+<span class="flex items-center gap-1"><i class="w-3 h-3 rounded-full bg-primary"></i> Show A</span>
+<span class="flex items-center gap-1"><i class="w-3 h-3 rounded-full bg-secondary"></i> Show B</span>
+</div>
+</div>
+<div class="h-64 w-full relative flex items-end justify-between px-4 pb-8">
+<!-- CSS Line Chart Mockup -->
+<div class="absolute inset-0 flex items-end opacity-10">
+<div class="w-full h-[1px] bg-outline mb-12"></div>
+<div class="w-full h-[1px] bg-outline mb-24"></div>
+<div class="w-full h-[1px] bg-outline mb-36"></div>
+</div>
+<svg class="absolute bottom-12 left-0 w-full h-40 overflow-visible" preserveaspectratio="none" viewbox="0 0 1000 100">
+<path class="text-primary" d="M0,80 Q100,20 200,50 T400,30 T600,70 T800,10 T1000,40" fill="none" stroke="currentColor" stroke-width="3"></path>
+<path class="text-secondary" d="M0,90 Q120,40 250,70 T450,50 T650,90 T850,30 T1000,60" fill="none" stroke="currentColor" stroke-width="3"></path>
+</svg>
+<div class="text-[10px] text-outline font-bold">MON</div>
+<div class="text-[10px] text-outline font-bold">TUE</div>
+<div class="text-[10px] text-outline font-bold">WED</div>
+<div class="text-[10px] text-outline font-bold">THU</div>
+<div class="text-[10px] text-outline font-bold">FRI</div>
+<div class="text-[10px] text-outline font-bold">SAT</div>
+<div class="text-[10px] text-outline font-bold">SUN</div>
+</div>
+</div>
+<!-- Booking Status (Pie Chart) -->
+<div class="lg:col-span-4 glass-card p-unit-lg rounded-lg shadow-md flex flex-col">
+<h4 class="font-headline-md text-headline-md text-on-surface mb-unit-lg">Booking Distribution</h4>
+<div class="flex-1 flex flex-col items-center justify-center">
+<div class="relative w-48 h-48 rounded-full border-[16px] border-primary-container" style="border-right-color: #ffdcc3; border-bottom-color: #baeafe;">
+<div class="absolute inset-0 flex flex-col items-center justify-center text-center">
+<span class="font-headline-md text-on-surface">12k</span>
+<span class="text-[10px] uppercase font-bold text-outline">Tickets</span>
+</div>
+</div>
+<div class="mt-unit-lg w-full space-y-2">
+<div class="flex justify-between items-center text-body-sm">
+<span class="flex items-center gap-2"><i class="w-3 h-3 rounded-full bg-primary-container"></i> Confirmed</span>
+<span class="font-bold">75%</span>
+</div>
+<div class="flex justify-between items-center text-body-sm">
+<span class="flex items-center gap-2"><i class="w-3 h-3 rounded-full bg-secondary-fixed"></i> Pending</span>
+<span class="font-bold">15%</span>
+</div>
+<div class="flex justify-between items-center text-body-sm">
+<span class="flex items-center gap-2"><i class="w-3 h-3 rounded-full bg-tertiary-fixed"></i> Cancelled</span>
+<span class="font-bold">10%</span>
+</div>
+</div>
+</div>
+</div>
+<!-- Sales by Show (Bar Chart) -->
+<div class="lg:col-span-12 glass-card p-unit-lg rounded-lg shadow-md">
+<div class="flex justify-between items-center mb-unit-lg">
+<h4 class="font-headline-md text-headline-md text-on-surface">Revenue by Show Performance</h4>
+<button class="text-primary font-label-lg hover:underline">View Detailed breakdown</button>
+</div>
+<div class="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-unit-xl">
+<!-- Bar Item -->
+<div class="space-y-unit-sm">
+<div class="flex justify-between items-end mb-1">
+<span class="text-body-sm font-bold">Dolphin Symphony</span>
+<span class="text-primary font-label-lg">$142k</span>
+</div>
+<div class="h-4 bg-surface-container rounded-full overflow-hidden">
+<div class="h-full bg-primary rounded-full transition-all duration-1000" style="width: 85%"></div>
+</div>
+<p class="text-[10px] text-on-surface-variant uppercase tracking-tighter">Capacity: 92%</p>
+</div>
+<!-- Bar Item -->
+<div class="space-y-unit-sm">
+<div class="flex justify-between items-end mb-1">
+<span class="text-body-sm font-bold">Orca Odyssey</span>
+<span class="text-primary font-label-lg">$185k</span>
+</div>
+<div class="h-4 bg-surface-container rounded-full overflow-hidden">
+<div class="h-full bg-primary rounded-full transition-all duration-1000" style="width: 95%"></div>
+</div>
+<p class="text-[10px] text-on-surface-variant uppercase tracking-tighter">Capacity: 98%</p>
+</div>
+<!-- Bar Item -->
+<div class="space-y-unit-sm">
+<div class="flex justify-between items-end mb-1">
+<span class="text-body-sm font-bold">Sea Lion Splash</span>
+<span class="text-primary font-label-lg">$84k</span>
+</div>
+<div class="h-4 bg-surface-container rounded-full overflow-hidden">
+<div class="h-full bg-primary rounded-full transition-all duration-1000" style="width: 60%"></div>
+</div>
+<p class="text-[10px] text-on-surface-variant uppercase tracking-tighter">Capacity: 74%</p>
+</div>
+<!-- Bar Item -->
+<div class="space-y-unit-sm">
+<div class="flex justify-between items-end mb-1">
+<span class="text-body-sm font-bold">Coral Reef Ballet</span>
+<span class="text-primary font-label-lg">$71k</span>
+</div>
+<div class="h-4 bg-surface-container rounded-full overflow-hidden">
+<div class="h-full bg-primary rounded-full transition-all duration-1000" style="width: 52%"></div>
+</div>
+<p class="text-[10px] text-on-surface-variant uppercase tracking-tighter">Capacity: 68%</p>
+</div>
+</div>
+</div>
+</div>
+<!-- Recent Transactions / Detailed List -->
+<div class="glass-card rounded-lg overflow-hidden shadow-md">
+<div class="px-unit-lg py-unit-md border-b border-outline-variant/20 flex justify-between items-center bg-surface-container-low/30">
+<h4 class="font-headline-md text-on-surface">Top Booking Sources</h4>
+<button class="text-on-surface-variant hover:text-primary transition-colors">
+<span class="material-symbols-outlined">more_vert</span>
+</button>
+</div>
+<div class="overflow-x-auto">
+<table class="w-full text-left border-collapse">
+<thead>
+<tr class="bg-surface-container-high/20 text-on-surface-variant font-label-lg uppercase text-[12px] tracking-widest">
+<th class="px-unit-lg py-unit-md">Source</th>
+<th class="px-unit-lg py-unit-md">Bookings</th>
+<th class="px-unit-lg py-unit-md">Conversion</th>
+<th class="px-unit-lg py-unit-md">Revenue</th>
+<th class="px-unit-lg py-unit-md text-right">Trend</th>
+</tr>
+</thead>
+<tbody class="divide-y divide-outline-variant/10 text-body-sm">
+<tr class="hover:bg-primary/5 transition-colors">
+<td class="px-unit-lg py-unit-md flex items-center gap-3">
+<div class="w-8 h-8 rounded bg-primary-container/20 flex items-center justify-center text-primary">
+<span class="material-symbols-outlined text-[18px]">language</span>
+</div>
+                                    Direct Website
+                                </td>
+<td class="px-unit-lg py-unit-md font-bold">5,201</td>
+<td class="px-unit-lg py-unit-md">12.4%</td>
+<td class="px-unit-lg py-unit-md">$210,040</td>
+<td class="px-unit-lg py-unit-md text-right text-green-600">
+<span class="material-symbols-outlined text-[16px] align-middle">north_east</span>
+</td>
+</tr>
+<tr class="hover:bg-primary/5 transition-colors">
+<td class="px-unit-lg py-unit-md flex items-center gap-3">
+<div class="w-8 h-8 rounded bg-secondary-container/20 flex items-center justify-center text-secondary">
+<span class="material-symbols-outlined text-[18px]">confirmation_number</span>
+</div>
+                                    TicketMaster
+                                </td>
+<td class="px-unit-lg py-unit-md font-bold">3,892</td>
+<td class="px-unit-lg py-unit-md">8.2%</td>
+<td class="px-unit-lg py-unit-md">$158,230</td>
+<td class="px-unit-lg py-unit-md text-right text-green-600">
+<span class="material-symbols-outlined text-[16px] align-middle">north_east</span>
+</td>
+</tr>
+<tr class="hover:bg-primary/5 transition-colors">
+<td class="px-unit-lg py-unit-md flex items-center gap-3">
+<div class="w-8 h-8 rounded bg-tertiary-container/20 flex items-center justify-center text-tertiary">
+<span class="material-symbols-outlined text-[18px]">hotel</span>
+</div>
+                                    Hotel Concierge
+                                    <span class="px-2 py-0.5 bg-orange-100 text-orange-800 text-[10px] rounded-full font-bold">PARTNER</span>
+</td>
+<td class="px-unit-lg py-unit-md font-bold">1,405</td>
+<td class="px-unit-lg py-unit-md">18.1%</td>
+<td class="px-unit-lg py-unit-md">$62,400</td>
+<td class="px-unit-lg py-unit-md text-right text-red-600">
+<span class="material-symbols-outlined text-[16px] align-middle">south_east</span>
+</td>
+</tr>
+</tbody>
+</table>
+</div>
+</div>
+</section>
+<!-- Footer / Signature -->
+<footer class="mt-auto px-unit-lg py-unit-md border-t border-outline-variant/20 flex flex-col md:flex-row justify-between items-center text-on-surface-variant text-[12px]">
+<p>© 2024 AquaShow Management System. Precision in every splash.</p>
+<div class="flex gap-unit-lg mt-unit-sm md:mt-0">
+<a class="hover:text-primary transition-colors" href="#">Privacy Policy</a>
+<a class="hover:text-primary transition-colors" href="#">Audit Logs</a>
+<a class="hover:text-primary transition-colors" href="#">Support</a>
+</div>
+</footer>
+</main>
+<!-- Floating Action Button for Analytics Context -->
+<div class="fixed bottom-unit-lg right-unit-lg flex flex-col gap-unit-sm items-end group">
+<div class="hidden group-hover:flex flex-col gap-unit-sm items-end animate-in fade-in slide-in-from-bottom-4 duration-300">
+<button class="bg-white text-primary px-4 py-2 rounded-full shadow-lg border border-primary/20 font-label-lg flex items-center gap-2">
+<span class="material-symbols-outlined text-sm">mail</span> Email Report
+            </button>
+<button class="bg-white text-primary px-4 py-2 rounded-full shadow-lg border border-primary/20 font-label-lg flex items-center gap-2">
+<span class="material-symbols-outlined text-sm">schedule_send</span> Schedule Automated
+            </button>
+</div>
+<button class="w-14 h-14 bg-primary text-on-primary rounded-full shadow-2xl flex items-center justify-center hover:scale-110 active:scale-95 transition-all">
+<span class="material-symbols-outlined text-2xl">insights</span>
+</button>
+</div>
+<script>
+        // Micro-interactions for charts and UI
+        document.querySelectorAll('.glass-card').forEach(card => {
+            card.addEventListener('mouseenter', () => {
+                card.style.transform = 'translateY(-4px)';
+                card.style.transition = 'all 0.3s cubic-bezier(0.34, 1.56, 0.64, 1)';
+            });
+            card.addEventListener('mouseleave', () => {
+                card.style.transform = 'translateY(0px)';
+            });
+        });
+    </script>
+</body></html>

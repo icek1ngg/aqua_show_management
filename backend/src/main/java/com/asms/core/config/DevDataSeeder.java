@@ -3,6 +3,12 @@ package com.asms.core.config;
 import com.asms.booking.entity.Booking;
 import com.asms.booking.enums.BookingStatus;
 import com.asms.booking.repository.BookingRepository;
+import com.asms.catalog.entity.Show;
+import com.asms.catalog.entity.ShowSchedule;
+import com.asms.catalog.entity.Venue;
+import com.asms.catalog.repository.ShowRepository;
+import com.asms.catalog.repository.ShowScheduleRepository;
+import com.asms.catalog.repository.VenueRepository;
 import com.asms.identity.entity.User;
 import com.asms.identity.enums.UserRole;
 import com.asms.identity.repository.UserRepository;
@@ -21,6 +27,7 @@ import org.springframework.transaction.annotation.Transactional;
 import java.math.BigDecimal;
 import java.time.Instant;
 import java.time.LocalDate;
+import java.time.LocalDateTime;
 import java.time.temporal.ChronoUnit;
 import java.util.List;
 
@@ -29,6 +36,8 @@ public class DevDataSeeder {
 
     private static final String USER_EMAIL = "visitor@asms.test";
     private static final String STAFF_EMAIL = "staff@asms.test";
+    private static final String MANAGER_EMAIL = "manager@asms.test";
+    private static final String ADMIN_EMAIL = "admin@asms.test";
     private static final String PASSWORD = "Password123";
 
     @Bean
@@ -43,6 +52,9 @@ public class DevDataSeeder {
         private final BookingRepository bookingRepository;
         private final PaymentRepository paymentRepository;
         private final TicketRepository ticketRepository;
+        private final ShowRepository showRepository;
+        private final VenueRepository venueRepository;
+        private final ShowScheduleRepository scheduleRepository;
         private final PasswordEncoder passwordEncoder;
 
         DevSeedService(
@@ -50,12 +62,18 @@ public class DevDataSeeder {
                 BookingRepository bookingRepository,
                 PaymentRepository paymentRepository,
                 TicketRepository ticketRepository,
+                ShowRepository showRepository,
+                VenueRepository venueRepository,
+                ShowScheduleRepository scheduleRepository,
                 PasswordEncoder passwordEncoder
         ) {
             this.userRepository = userRepository;
             this.bookingRepository = bookingRepository;
             this.paymentRepository = paymentRepository;
             this.ticketRepository = ticketRepository;
+            this.showRepository = showRepository;
+            this.venueRepository = venueRepository;
+            this.scheduleRepository = scheduleRepository;
             this.passwordEncoder = passwordEncoder;
         }
 
@@ -71,8 +89,45 @@ public class DevDataSeeder {
                         return userRepository.save(staff);
                     });
 
+            userRepository.findByEmailIgnoreCase(MANAGER_EMAIL)
+                    .orElseGet(() -> {
+                        User manager = new User("Demo", "Manager", MANAGER_EMAIL, "0900000003", passwordEncoder.encode(PASSWORD));
+                        manager.setRole(UserRole.MANAGER);
+                        return userRepository.save(manager);
+                    });
+
+            userRepository.findByEmailIgnoreCase(ADMIN_EMAIL)
+                    .orElseGet(() -> {
+                        User admin = new User("Demo", "Admin", ADMIN_EMAIL, "0900000004", passwordEncoder.encode(PASSWORD));
+                        admin.setRole(UserRole.ADMIN);
+                        return userRepository.save(admin);
+                    });
+
+            seedCatalog();
             seedPendingBooking(visitor);
             seedPaidBookingWithTickets(visitor);
+        }
+
+        private void seedCatalog() {
+            if (showRepository.existsByTitleIgnoreCase("Midnight Aqua Symphony")) {
+                return;
+            }
+
+            Show show = showRepository.save(new Show(
+                    "Midnight Aqua Symphony",
+                    "A luminous water, light, and music performance designed for families and evening visitors.",
+                    "https://images.unsplash.com/photo-1507525428034-b723cf961d3e",
+                    45
+            ));
+            Venue venue = venueRepository.save(new Venue("Main Plaza Pool", "Central lagoon", 500));
+            scheduleRepository.save(new ShowSchedule(
+                    show,
+                    venue,
+                    LocalDateTime.now().plusDays(7).withHour(19).withMinute(30).withSecond(0).withNano(0),
+                    LocalDateTime.now().plusDays(7).withHour(20).withMinute(15).withSecond(0).withNano(0),
+                    300,
+                    new BigDecimal("45.00")
+            ));
         }
 
         private void seedPendingBooking(User visitor) {
@@ -84,7 +139,7 @@ public class DevDataSeeder {
                 return;
             }
 
-            Booking booking = baseBooking(visitor, "ASMS-DEMO-HOLD-PENDING", 2, "STANDARD", new BigDecimal("45.00"));
+            Booking booking = baseBooking(visitor, "ASMS-DEMO-HOLD-PENDING", 2, "STANDARD", new BigDecimal("2000"));
             booking.setStatus(BookingStatus.PENDING_PAYMENT);
             booking.setExpiresAt(Instant.now().plus(30, ChronoUnit.MINUTES));
             bookingRepository.save(booking);
@@ -95,7 +150,7 @@ public class DevDataSeeder {
                 return;
             }
 
-            Booking paidBooking = baseBooking(visitor, "ASMS-DEMO-HOLD-PAID", 4, "STANDARD", new BigDecimal("45.00"));
+            Booking paidBooking = baseBooking(visitor, "ASMS-DEMO-HOLD-PAID", 4, "STANDARD", new BigDecimal("2000"));
             paidBooking.setStatus(BookingStatus.PAID);
             paidBooking.setExpiresAt(Instant.now().plus(30, ChronoUnit.MINUTES));
             Booking savedBooking = bookingRepository.save(paidBooking);

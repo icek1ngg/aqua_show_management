@@ -1,5 +1,5 @@
 import { useEffect, useMemo, useState } from 'react';
-import { Link, useSearchParams } from 'react-router-dom';
+import { Link, useLocation, useNavigate, useSearchParams } from 'react-router-dom';
 
 import { getBookingDetail } from '../../services/bookingService.js';
 import MainLayout from '../../shared/layouts/MainLayout.jsx';
@@ -38,13 +38,49 @@ function inferResult(searchStatus, booking, isMock) {
       return 'failed';
     }
   }
-  if (booking?.payment?.status === 'SUCCESS' || booking?.status === 'PAID') {
+  if (booking?.status === 'PAID') {
     return 'success';
   }
-  if (['FAILED', 'EXPIRED'].includes(booking?.payment?.status) || ['FAILED', 'EXPIRED'].includes(booking?.status)) {
+  if (['FAILED', 'EXPIRED'].includes(booking?.status)) {
     return 'failed';
   }
   return 'pending';
+}
+
+function getPaymentStatus(booking, resultKey) {
+  if (booking?.payment?.status) {
+    return booking.payment.status;
+  }
+
+  if (resultKey === 'success') {
+    return 'SUCCESS';
+  }
+
+  if (booking?.status === 'FAILED') {
+    return 'FAILED';
+  }
+
+  if (booking?.status === 'EXPIRED') {
+    return 'EXPIRED';
+  }
+
+  return 'PENDING';
+}
+
+function getTicketStatus(booking, resultKey) {
+  if (booking?.tickets && Number.isFinite(booking.tickets.total)) {
+    return `${booking.tickets.valid}/${booking.tickets.total} valid`;
+  }
+
+  return resultKey === 'success' ? 'Queued' : 'Pending';
+}
+
+function getEmailStatus(booking, resultKey) {
+  if (booking?.emailNotification?.status) {
+    return booking.emailNotification.status;
+  }
+
+  return resultKey === 'success' ? 'Queued' : 'Pending';
 }
 
 function StatusCard({ icon, label, value, tone = 'text-cyan-700' }) {
@@ -65,6 +101,8 @@ function qrImageUrl(qrCode) {
 
 export default function PaymentResultPage() {
   const [searchParams] = useSearchParams();
+  const navigate = useNavigate();
+  const location = useLocation();
   const bookingId = searchParams.get('bookingId');
   const searchStatus = searchParams.get('status');
   const [booking, setBooking] = useState(null);
@@ -83,7 +121,7 @@ export default function PaymentResultPage() {
         return;
       }
       try {
-        const detail = await getBookingDetail(bookingId, { status: searchStatus });
+        const detail = await getBookingDetail(bookingId);
         if (!ignore) {
           setBooking(detail);
           setLastUpdatedAt(new Date());
@@ -94,6 +132,11 @@ export default function PaymentResultPage() {
         }
       } catch (loadError) {
         if (!ignore) {
+          if (loadError?.response?.status === 401) {
+            navigate('/login', { replace: true, state: { from: location } });
+            return;
+          }
+
           setError(loadError.response?.data?.message || loadError.message || 'Unable to load payment result.');
         }
       } finally {
@@ -109,16 +152,16 @@ export default function PaymentResultPage() {
       ignore = true;
       window.clearInterval(intervalId);
     };
-  }, [bookingId, searchStatus]);
+  }, [bookingId, location, navigate]);
 
   const resultKey = inferResult(searchStatus, booking, isMock);
   const meta = resultMeta[resultKey];
   const processingItems = useMemo(
     () => [
-      { icon: 'payments', label: 'Payment', value: booking?.payment?.status || (resultKey === 'success' ? 'SUCCESS' : 'PENDING'), tone: meta.tone },
+      { icon: 'payments', label: 'Payment', value: getPaymentStatus(booking, resultKey), tone: meta.tone },
       { icon: 'event_available', label: 'Booking', value: booking?.status || 'PENDING_PAYMENT', tone: meta.tone },
-      { icon: 'qr_code_2', label: 'Tickets', value: booking?.tickets ? `${booking.tickets.valid}/${booking.tickets.total} valid` : 'Pending', tone: 'text-cyan-700' },
-      { icon: 'outgoing_mail', label: 'Email', value: booking?.emailNotification?.status || 'Pending', tone: 'text-cyan-700' },
+      { icon: 'qr_code_2', label: 'Tickets', value: getTicketStatus(booking, resultKey), tone: 'text-cyan-700' },
+      { icon: 'outgoing_mail', label: 'Email', value: getEmailStatus(booking, resultKey), tone: 'text-cyan-700' },
     ],
     [booking, meta.tone, resultKey],
   );
@@ -165,7 +208,7 @@ export default function PaymentResultPage() {
                   <p className="text-xs font-black uppercase tracking-[0.18em] text-cyan-700">UC-13 QR tickets</p>
                   <h2 className="mt-2 text-2xl font-black text-slate-950">Scan these tickets at the gate</h2>
                 </div>
-                <Link className="inline-flex items-center justify-center gap-2 rounded-full border border-cyan-200 bg-cyan-50 px-5 py-3 text-sm font-black text-cyan-700 hover:bg-cyan-100" to="/staff/tickets/validate">
+                <Link className="inline-flex items-center justify-center gap-2 rounded-full border border-cyan-200 bg-cyan-50 px-5 py-3 text-sm font-black text-cyan-700 hover:bg-cyan-100" to="/staff/check-in">
                   <span className="material-symbols-outlined">qr_code_scanner</span>
                   Staff validation
                 </Link>

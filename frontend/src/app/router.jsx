@@ -9,7 +9,6 @@ import RegisterPage from '../features/auth/RegisterPage.jsx';
 import ResetPasswordPage from '../features/auth/ResetPasswordPage.jsx';
 import BookingDetailPage from '../features/booking/BookingDetailPage.jsx';
 import BookingHistoryPage from '../features/booking/BookingHistoryPage.jsx';
-import BookingPendingPage from '../features/booking/BookingPendingPage.jsx';
 import CreateBookingPage from '../features/booking/CreateBookingPage.jsx';
 import MockPayosCheckoutPage from '../features/payment/MockPayosCheckoutPage.jsx';
 import PaymentPage from '../features/payment/PaymentPage.jsx';
@@ -18,6 +17,14 @@ import HomePage from '../features/home/HomePage.jsx';
 import EditProfilePage from '../features/profile/EditProfilePage.jsx';
 import ProfilePage from '../features/profile/ProfilePage.jsx';
 import StaffTicketValidationPage from '../features/staff/StaffTicketValidationPage.jsx';
+import ManageBookingsPage from '../stitch-react/ManageBookingsPage.jsx';
+import ManageRolesPage from '../stitch-react/ManageRolesPage.jsx';
+import ManageSchedulesPage from '../stitch-react/ManageSchedulesPage.jsx';
+import ManageShowsPage from '../stitch-react/ManageShowsPage.jsx';
+import ManageUsersPage from '../stitch-react/ManageUsersPage.jsx';
+import ManageVenuesPage from '../stitch-react/ManageVenuesPage.jsx';
+import ReportsAndAnalyticsPage from '../stitch-react/ReportsAndAnalyticsPage.jsx';
+import ShowDetailPage from '../stitch-react/ShowDetailPage.jsx';
 
 export const router = createBrowserRouter([
   {
@@ -49,6 +56,22 @@ export const router = createBrowserRouter([
         element: <OAuthSuccessPage />,
       },
       {
+        path: 'public/shows',
+        element: <HomePage />,
+      },
+      {
+        path: 'shows',
+        element: <HomePage />,
+      },
+      {
+        path: 'shows/:showId',
+        element: <ShowDetailPage />,
+      },
+      {
+        path: 'public/shows/:showId',
+        element: <ShowDetailPage />,
+      },
+      {
         path: 'profile',
         element: (
           <ProtectedRoute>
@@ -73,14 +96,6 @@ export const router = createBrowserRouter([
         ),
       },
       {
-        path: 'bookings/:id/pending',
-        element: (
-          <ProtectedRoute>
-            <BookingPendingPage />
-          </ProtectedRoute>
-        ),
-      },
-      {
         path: 'bookings/:bookingId/payment',
         element: (
           <ProtectedRoute>
@@ -97,6 +112,22 @@ export const router = createBrowserRouter([
         element: (
           <ProtectedRoute>
             <PaymentResultPage />
+          </ProtectedRoute>
+        ),
+      },
+      {
+        path: 'staff/check-in',
+        element: (
+          <ProtectedRoute allowedRoles={['STAFF']}>
+            <StaffTicketValidationPage />
+          </ProtectedRoute>
+        ),
+      },
+      {
+        path: 'staff/validate-ticket',
+        element: (
+          <ProtectedRoute allowedRoles={['STAFF']}>
+            <StaffTicketValidationPage />
           </ProtectedRoute>
         ),
       },
@@ -121,6 +152,78 @@ export const router = createBrowserRouter([
         element: (
           <ProtectedRoute>
             <BookingDetailPage />
+          </ProtectedRoute>
+        ),
+      },
+      {
+        path: 'manager/dashboard',
+        element: (
+          <ProtectedRoute allowedRoles={['ADMIN', 'MANAGER']}>
+            <ReportsAndAnalyticsPage />
+          </ProtectedRoute>
+        ),
+      },
+      {
+        path: 'manager/shows',
+        element: (
+          <ProtectedRoute allowedRoles={['ADMIN', 'MANAGER']}>
+            <ManageShowsPage />
+          </ProtectedRoute>
+        ),
+      },
+      {
+        path: 'manager/venues',
+        element: (
+          <ProtectedRoute allowedRoles={['ADMIN', 'MANAGER']}>
+            <ManageVenuesPage />
+          </ProtectedRoute>
+        ),
+      },
+      {
+        path: 'manager/schedules',
+        element: (
+          <ProtectedRoute allowedRoles={['ADMIN', 'MANAGER']}>
+            <ManageSchedulesPage />
+          </ProtectedRoute>
+        ),
+      },
+      {
+        path: 'manager/bookings',
+        element: (
+          <ProtectedRoute allowedRoles={['ADMIN', 'MANAGER']}>
+            <ManageBookingsPage />
+          </ProtectedRoute>
+        ),
+      },
+      {
+        path: 'manager/reports',
+        element: (
+          <ProtectedRoute allowedRoles={['ADMIN', 'MANAGER']}>
+            <ReportsAndAnalyticsPage />
+          </ProtectedRoute>
+        ),
+      },
+      {
+        path: 'admin/dashboard',
+        element: (
+          <ProtectedRoute allowedRoles={['ADMIN']}>
+            <ManageUsersPage />
+          </ProtectedRoute>
+        ),
+      },
+      {
+        path: 'admin/users',
+        element: (
+          <ProtectedRoute allowedRoles={['ADMIN']}>
+            <ManageUsersPage />
+          </ProtectedRoute>
+        ),
+      },
+      {
+        path: 'admin/roles',
+        element: (
+          <ProtectedRoute allowedRoles={['ADMIN']}>
+            <ManageRolesPage />
           </ProtectedRoute>
         ),
       },

@@ -4,10 +4,8 @@ import Logo from './Logo.jsx';
 
 const quickLinks = [
   { label: 'Home', to: '/' },
-  // TODO: Replace with /shows when the Shows page exists.
-  { label: 'Shows', href: '#' },
-  // TODO: Replace with /schedules when the Schedules page exists.
-  { label: 'Schedules', href: '#' },
+  { label: 'Shows', to: '/shows' },
+  { label: 'Schedules', to: '/#schedules' },
   { label: 'My Bookings', to: '/bookings/my' },
   { label: 'Book Tickets', to: '/bookings/create' },
 ];
@@ -15,10 +13,10 @@ const supportLinks = [
   { label: 'Login', to: '/login' },
   { label: 'Register', to: '/register' },
   { label: 'Profile', to: '/profile' },
-  { label: 'Support Center', href: '#' },
-  { label: 'Contact Us', href: '#' },
-  { label: 'FAQs', href: '#' },
-  { label: 'Terms & Conditions', href: '#' },
+  { label: 'Support Center', href: 'mailto:support@aquashow.local' },
+  { label: 'Contact Us', href: 'mailto:support@aquashow.local' },
+  { label: 'FAQs', to: '/#shows' },
+  { label: 'Terms & Conditions', to: '/' },
 ];
 const socialIcons = ['public', 'photo_camera', 'play_circle'];
 
@@ -64,7 +62,7 @@ export default function Footer({ compact = false }) {
               {socialIcons.map((icon) => (
                 <a
                   className="flex h-10 w-10 items-center justify-center rounded-full border border-white/10 bg-white/5 text-cyan-100 transition hover:border-cyan-300/60 hover:bg-cyan-400/20 hover:text-white"
-                  href="#"
+                  href="/"
                   key={icon}
                   aria-label={`${icon} social link`}
                 >
@@ -118,10 +116,10 @@ export default function Footer({ compact = false }) {
         <div className="mt-12 flex flex-col gap-4 border-t border-white/10 pt-6 text-xs text-cyan-100/60 md:flex-row md:items-center md:justify-between">
           <p>&copy; 2026 AquaPulse. Making every splash count.</p>
           <div className="flex gap-6">
-            <a className="transition hover:text-white" href="#">
+            <a className="transition hover:text-white" href="/">
               Privacy Policy
             </a>
-            <a className="transition hover:text-white" href="#">
+            <a className="transition hover:text-white" href="/">
               Cookie Settings
             </a>
           </div>

@@ -2,7 +2,7 @@ export const mockBookingDetail = {
   id: '00000000-0000-4000-8000-000000088219',
   status: 'PENDING_PAYMENT',
   totalQuantity: 4,
-  totalAmount: 156,
+  totalAmount: 8000,
   createdAt: '2026-05-31T10:30:00Z',
   expiredAt: new Date(Date.now() + 13 * 60 * 1000).toISOString(),
   show: {
@@ -13,7 +13,7 @@ export const mockBookingDetail = {
     imageUrl:
       'https://lh3.googleusercontent.com/aida-public/AB6AXuBQJ-Fo4HDO72JbLax0CiFqctWCGXvU4YEfKNT6BKoii53LhvXYm3tK9deyNpu3SQhQuDwXH4brHWFob4XTMXC0igb1FTIelijgurjSK40wqc_V-h4hB2iXApJSw4tuIL9RRKwcdhGhhcgV9V5pOtwPQGvlVc5CRVwmmWl5xWGLSkDEXdqrpRF327LZc7RzHHIIOK5u5seDmxx49urrFLxksqEEDJ5_xPJn8EULd2-53B3FmPiCpcXrt3oMMoWR8T3lZdXTQe3xXQ',
     durationMinutes: 45,
-    basePrice: 39,
+    basePrice: 2000,
   },
   schedule: {
     id: 'schedule-midnight-aqua',
@@ -26,7 +26,7 @@ export const mockBookingDetail = {
     id: 'payment-mock',
     payosOrderCode: 'ASMSMOCK88219',
     transactionId: null,
-    amount: 156,
+    amount: 8000,
     paymentLink: null,
     status: 'PENDING',
     paidAt: null,
