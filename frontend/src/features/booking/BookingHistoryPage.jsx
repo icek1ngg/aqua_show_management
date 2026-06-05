@@ -48,12 +48,13 @@ const pageSize = 5;
 function formatCurrency(value) {
   const amount = Number(value);
   if (Number.isNaN(amount)) {
-    return '$0.00';
+    return '0 ₫';
   }
 
-  return new Intl.NumberFormat('en-US', {
+  return new Intl.NumberFormat('vi-VN', {
     style: 'currency',
-    currency: 'USD',
+    currency: 'VND',
+    maximumFractionDigits: 0,
   }).format(amount);
 }
 
@@ -143,8 +144,8 @@ function BookingStatus({ status, expiresAt }) {
 }
 
 function BookingAction({ booking }) {
-  const target = booking.status === 'PENDING_PAYMENT' ? `/bookings/${booking.id}/pending` : `/bookings/${booking.id}`;
-  const label = booking.status === 'PENDING_PAYMENT' ? 'View Pending' : 'View Details';
+  const target = booking.status === 'PENDING_PAYMENT' ? `/bookings/${booking.id}/payment` : `/bookings/${booking.id}`;
+  const label = booking.status === 'PENDING_PAYMENT' ? 'Continue Payment' : 'View Details';
 
   return (
     <Link

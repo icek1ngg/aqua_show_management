@@ -14,6 +14,7 @@ import javax.crypto.Mac;
 import javax.crypto.spec.SecretKeySpec;
 import java.nio.charset.StandardCharsets;
 import java.security.MessageDigest;
+import java.math.BigDecimal;
 import java.math.RoundingMode;
 import java.util.LinkedHashMap;
 import java.util.Map;
@@ -26,6 +27,7 @@ public class PayOsClient {
 
     private static final String HMAC_SHA256 = "HmacSHA256";
     private static final String PAYOS_BASE_URL = "https://api-merchant.payos.vn";
+    private static final BigDecimal MINIMUM_VND_AMOUNT = new BigDecimal("2000");
 
     private final String clientId;
     private final String apiKey;
@@ -54,7 +56,8 @@ public class PayOsClient {
         }
 
         long orderCode = Long.parseLong(payosOrderCode);
-        long amount = booking.getTotalAmount().setScale(0, RoundingMode.HALF_UP).longValue();
+        long amount = toPayOsVndAmount(booking.getTotalAmount());
+        long itemPrice = toPayOsVndAmount(booking.getUnitPrice());
         String returnUrl = createLocalPaymentLink(booking, payosOrderCode, "pending");
         String cancelUrl = createLocalPaymentLink(booking, payosOrderCode, "failed");
         String description = buildDescription(payosOrderCode);
@@ -74,7 +77,7 @@ public class PayOsClient {
         request.put("items", java.util.List.of(Map.of(
                 "name", booking.getShowName(),
                 "quantity", booking.getQuantity(),
-                "price", amount
+                "price", itemPrice
         )));
         request.put("cancelUrl", cancelUrl);
         request.put("returnUrl", returnUrl);
@@ -116,6 +119,18 @@ public class PayOsClient {
     private String buildDescription(String payosOrderCode) {
         String description = "ASMS" + payosOrderCode;
         return description.substring(0, Math.min(25, description.length()));
+    }
+
+    private long toPayOsVndAmount(BigDecimal amount) {
+        if (amount == null || amount.compareTo(MINIMUM_VND_AMOUNT) < 0) {
+            throw new BadRequestException("PayOS amount must be at least 2000 VND");
+        }
+
+        try {
+            return amount.setScale(0, RoundingMode.UNNECESSARY).longValueExact();
+        } catch (ArithmeticException exception) {
+            throw new BadRequestException("PayOS amount must be a whole VND amount");
+        }
     }
 
     private String createLocalPaymentLink(Booking booking, String payosOrderCode, String status) {

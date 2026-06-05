@@ -58,12 +58,13 @@ const statusMeta = {
 function formatCurrency(value) {
   const amount = Number(value);
   if (Number.isNaN(amount)) {
-    return '$0.00';
+    return '0 ₫';
   }
 
-  return new Intl.NumberFormat('en-US', {
+  return new Intl.NumberFormat('vi-VN', {
     style: 'currency',
-    currency: 'USD',
+    currency: 'VND',
+    maximumFractionDigits: 0,
   }).format(amount);
 }
 
@@ -111,8 +112,6 @@ function normalizeBooking(booking) {
   return {
     id: booking.id,
     bookingCode: booking.bookingCode || booking.id,
-    showId: booking.showId,
-    scheduleId: booking.scheduleId,
     showName: booking.showName || 'AquaPulse Show',
     showDate: booking.showDate,
     ticketType: booking.ticketType || 'Standard Entry',
@@ -154,14 +153,13 @@ function ActionPanel({ booking }) {
       <>
         <Link
           className="flex w-full items-center justify-center gap-2 rounded-full bg-cyan-700 px-6 py-4 font-bold text-white shadow-lg shadow-cyan-700/20 transition hover:bg-cyan-800 active:scale-[0.98]"
-          to={`/bookings/${booking.id}/pending`}
+          to={`/bookings/${booking.id}/payment`}
         >
           <span className="material-symbols-outlined text-xl" aria-hidden="true">
             payments
           </span>
           Continue Payment
         </Link>
-        <p className="text-center text-xs font-semibold text-slate-400">Payment coming soon. This link opens the pending payment view.</p>
       </>
     );
   }
@@ -173,7 +171,7 @@ function StatusMessage({ booking, meta }) {
   if (booking.status === 'PAID') {
     return (
       <p className="mt-3 text-sm font-semibold leading-7 text-slate-600">
-        Ticket will be available after QR flow is implemented.
+        Ticket QR and email status are available on the payment result page.
       </p>
     );
   }
@@ -302,7 +300,7 @@ function BookingJourney({ booking }) {
     <article className="rounded-[2rem] border border-cyan-100 bg-white p-6 shadow-[0_16px_40px_rgba(8,145,178,0.10)] md:p-8">
       <h4 className="text-2xl font-black text-slate-950">Booking Journey</h4>
       <p className="mt-2 text-sm font-semibold text-slate-500">
-        Track the booking lifecycle. Payment and ticket timestamps will appear when those flows are implemented.
+        Track the booking lifecycle from booking hold to payment and ticket delivery.
       </p>
 
       <div className="relative mt-10 flex flex-col gap-8 md:flex-row md:items-start md:justify-between md:gap-4">

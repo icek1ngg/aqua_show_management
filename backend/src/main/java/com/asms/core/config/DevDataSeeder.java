@@ -139,7 +139,7 @@ public class DevDataSeeder {
                 return;
             }
 
-            Booking booking = baseBooking(visitor, "ASMS-DEMO-HOLD-PENDING", 2, "STANDARD", new BigDecimal("45.00"));
+            Booking booking = baseBooking(visitor, "ASMS-DEMO-HOLD-PENDING", 2, "STANDARD", new BigDecimal("2000"));
             booking.setStatus(BookingStatus.PENDING_PAYMENT);
             booking.setExpiresAt(Instant.now().plus(30, ChronoUnit.MINUTES));
             bookingRepository.save(booking);
@@ -150,7 +150,7 @@ public class DevDataSeeder {
                 return;
             }
 
-            Booking paidBooking = baseBooking(visitor, "ASMS-DEMO-HOLD-PAID", 4, "STANDARD", new BigDecimal("45.00"));
+            Booking paidBooking = baseBooking(visitor, "ASMS-DEMO-HOLD-PAID", 4, "STANDARD", new BigDecimal("2000"));
             paidBooking.setStatus(BookingStatus.PAID);
             paidBooking.setExpiresAt(Instant.now().plus(30, ChronoUnit.MINUTES));
             Booking savedBooking = bookingRepository.save(paidBooking);

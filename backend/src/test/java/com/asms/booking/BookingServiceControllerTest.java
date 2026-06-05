@@ -43,6 +43,7 @@ import static org.mockito.ArgumentMatchers.eq;
 import static org.mockito.Mockito.doThrow;
 import static org.mockito.Mockito.mock;
 import static org.mockito.Mockito.never;
+import static org.mockito.Mockito.times;
 import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
 
@@ -66,9 +67,9 @@ class BookingServiceControllerTest {
         paymentRepository = mock(PaymentRepository.class);
         ticketRepository = mock(TicketRepository.class);
         emailNotificationRepository = mock(EmailNotificationRepository.class);
-        when(paymentRepository.findByBooking_Id(any())).thenReturn(Optional.empty());
-        when(ticketRepository.findByBooking_Id(any())).thenReturn(List.of());
-        when(emailNotificationRepository.findTopByBooking_IdOrderByCreatedAtDesc(any())).thenReturn(Optional.empty());
+        when(paymentRepository.findByBooking_Id(any(UUID.class))).thenReturn(Optional.empty());
+        when(ticketRepository.findByBooking_Id(any(UUID.class))).thenReturn(List.of());
+        when(emailNotificationRepository.findTopByBooking_IdOrderByCreatedAtDesc(any(UUID.class))).thenReturn(Optional.empty());
         bookingService = new com.asms.booking.service.impl.BookingServiceImpl(
                 bookingRepository,
                 userRepository,
@@ -95,9 +96,31 @@ class BookingServiceControllerTest {
         assertThat(response.message()).isEqualTo("Booking request is being processed.");
         org.mockito.ArgumentCaptor<BookingMessage> messageCaptor = org.mockito.ArgumentCaptor.forClass(BookingMessage.class);
         verify(bookingPublisher).publishCreateBooking(messageCaptor.capture());
-        assertThat(messageCaptor.getValue().unitPrice()).isEqualByComparingTo("45.00");
-        assertThat(messageCaptor.getValue().totalAmount()).isEqualByComparingTo("90.00");
+        assertThat(messageCaptor.getValue().unitPrice()).isEqualByComparingTo("2000");
+        assertThat(messageCaptor.getValue().totalAmount()).isEqualByComparingTo("4000");
         verify(bookingRepository, never()).save(any());
+    }
+
+    @Test
+    void createBookingUsesVndPricesAtLeastTwoThousandForSupportedTicketTypes() {
+        User user = user("user@example.com");
+        when(userRepository.findByEmailIgnoreCase("user@example.com")).thenReturn(Optional.of(user));
+        when(redisTicketHoldService.holdTickets(eq("schedule-1"), any(), any(Integer.class), eq(user.getId())))
+                .thenReturn(new HoldResult(true, "hold-123", "held", Instant.parse("2026-05-31T15:15:00Z")));
+
+        bookingService.createBooking(validRequest("STANDARD", 2), "user@example.com");
+        bookingService.createBooking(validRequest("VIP", 2), "user@example.com");
+        bookingService.createBooking(validRequest("FAMILY", 2), "user@example.com");
+
+        ArgumentCaptor<BookingMessage> messageCaptor = ArgumentCaptor.forClass(BookingMessage.class);
+        verify(bookingPublisher, times(3)).publishCreateBooking(messageCaptor.capture());
+
+        assertThat(messageCaptor.getAllValues())
+                .extracting(BookingMessage::unitPrice)
+                .allSatisfy((unitPrice) -> assertThat(unitPrice).isGreaterThanOrEqualTo(new BigDecimal("2000")));
+        assertThat(messageCaptor.getAllValues())
+                .extracting((message) -> message.totalAmount())
+                .containsExactly(new BigDecimal("4000"), new BigDecimal("10000"), new BigDecimal("6000"));
     }
 
     @Test
@@ -261,8 +284,8 @@ class BookingServiceControllerTest {
         assertThat(response.showDate()).isEqualTo(booking.getShowDate());
         assertThat(response.ticketType()).isEqualTo("STANDARD");
         assertThat(response.quantity()).isEqualTo(2);
-        assertThat(response.unitPrice()).isEqualByComparingTo("45.00");
-        assertThat(response.totalAmount()).isEqualByComparingTo("90.00");
+        assertThat(response.unitPrice()).isEqualByComparingTo("2000");
+        assertThat(response.totalAmount()).isEqualByComparingTo("4000");
         assertThat(response.status()).isEqualTo(BookingStatus.PENDING_PAYMENT);
         assertThat(response.expiresAt()).isEqualTo(booking.getExpiresAt());
     }
@@ -384,8 +407,8 @@ class BookingServiceControllerTest {
         booking.setShowDate(LocalDate.now().plusDays(1));
         booking.setTicketType("STANDARD");
         booking.setQuantity(2);
-        booking.setUnitPrice(new BigDecimal("45.00"));
-        booking.setTotalAmount(new BigDecimal("90.00"));
+        booking.setUnitPrice(new BigDecimal("2000"));
+        booking.setTotalAmount(new BigDecimal("4000"));
         booking.setStatus(BookingStatus.PENDING_PAYMENT);
         booking.setExpiresAt(Instant.now().plusSeconds(900));
         setId(booking, UUID.randomUUID());
