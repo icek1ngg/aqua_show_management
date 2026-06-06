@@ -5,6 +5,7 @@ import AuthLayout from '../../shared/layouts/AuthLayout.jsx';
 import Logo from '../../shared/components/navigation/Logo.jsx';
 import { validateEmail, validateRequired } from '../../shared/utils/validation.js';
 import { useAuth } from './AuthContext.jsx';
+import { getRedirectPathAfterLogin } from './authRedirect.js';
 import * as authService from '../../services/authService.js';
 
 const loginBubbles = [
@@ -255,10 +256,11 @@ export default function LoginPage() {
     setIsSubmitting(true);
 
     try {
-      await login(credentials, rememberMe);
-      const redirectTarget = location.state?.from
+      const result = await login(credentials, rememberMe);
+      const returnUrl = location.state?.from
         ? `${location.state.from.pathname}${location.state.from.search || ''}`
-        : '/';
+        : '';
+      const redirectTarget = getRedirectPathAfterLogin(result.user, returnUrl);
       navigate(redirectTarget, { replace: true });
     } catch (error) {
       setErrorMessage(error.message);

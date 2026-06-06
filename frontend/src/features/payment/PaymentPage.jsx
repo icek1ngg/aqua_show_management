@@ -324,6 +324,11 @@ export default function PaymentPage() {
     try {
       const payment = await createPayment(bookingId);
       setPaymentSession(payment);
+
+      const nextCheckoutUrl = payment?.checkoutUrl || payment?.paymentUrl;
+      if (nextCheckoutUrl) {
+        window.open(nextCheckoutUrl, '_blank', 'noopener,noreferrer');
+      }
     } catch (payError) {
       if (payError?.response?.status === 401) {
         navigate('/login', { replace: true, state: { from: location } });

@@ -1,0 +1,477 @@
+<!DOCTYPE html>
+
+<html class="light" lang="en"><head>
+<meta charset="utf-8"/>
+<meta content="width=device-width, initial-scale=1.0" name="viewport"/>
+<title>AquaShow MS - Manage Roles</title>
+<script src="https://cdn.tailwindcss.com?plugins=forms,container-queries"></script>
+<link href="https://fonts.googleapis.com/css2?family=Plus+Jakarta+Sans:wght@400;600;700;800&amp;display=swap" rel="stylesheet"/>
+<link href="https://fonts.googleapis.com/css2?family=Material+Symbols+Outlined:wght,FILL@100..700,0..1&amp;display=swap" rel="stylesheet"/>
+<link href="https://fonts.googleapis.com/css2?family=Material+Symbols+Outlined:wght,FILL@100..700,0..1&amp;display=swap" rel="stylesheet"/>
+<style>
+        body {
+            font-family: 'Plus Jakarta Sans', sans-serif;
+            background-color: #f1fbfb;
+        }
+        .glass-card {
+            background: rgba(255, 255, 255, 0.7);
+            backdrop-filter: blur(20px);
+            border: 1px solid rgba(255, 255, 255, 0.2);
+            box-shadow: 0 8px 32px 0 rgba(0, 31, 40, 0.05);
+        }
+        .material-symbols-outlined {
+            font-variation-settings: 'FILL' 0, 'wght' 400, 'GRAD' 0, 'opsz' 24;
+        }
+    </style>
+<script id="tailwind-config">
+        tailwind.config = {
+            darkMode: "class",
+            theme: {
+                extend: {
+                    "colors": {
+                        "on-tertiary": "#ffffff",
+                        "on-tertiary-fixed": "#2f1500",
+                        "on-tertiary-container": "#723c00",
+                        "inverse-surface": "#293232",
+                        "inverse-on-surface": "#e9f3f3",
+                        "surface-container-highest": "#dae4e4",
+                        "error-container": "#ffdad6",
+                        "surface-dim": "#d2dcdc",
+                        "surface-container-high": "#e0eaea",
+                        "on-error-container": "#93000a",
+                        "outline-variant": "#bac9c9",
+                        "on-surface": "#141d1e",
+                        "on-primary-fixed": "#002020",
+                        "primary": "#00696b",
+                        "on-error": "#ffffff",
+                        "tertiary-fixed-dim": "#ffb77d",
+                        "primary-fixed": "#5af8fb",
+                        "on-surface-variant": "#3b4949",
+                        "primary-container": "#00ced1",
+                        "error": "#ba1a1a",
+                        "surface-tint": "#00696b",
+                        "secondary": "#356476",
+                        "on-primary": "#ffffff",
+                        "secondary-fixed": "#baeafe",
+                        "background": "#f1fbfb",
+                        "on-secondary": "#ffffff",
+                        "secondary-container": "#b7e7fb",
+                        "tertiary-fixed": "#ffdcc3",
+                        "tertiary": "#904d00",
+                        "surface-container-lowest": "#ffffff",
+                        "surface": "#f1fbfb",
+                        "on-secondary-fixed-variant": "#194d5d",
+                        "surface-container": "#e6f0f0",
+                        "surface-bright": "#f1fbfb",
+                        "primary-fixed-dim": "#2ddbde",
+                        "on-secondary-fixed": "#001f28",
+                        "on-background": "#141d1e",
+                        "surface-container-low": "#ecf6f6",
+                        "on-secondary-container": "#39697a",
+                        "on-primary-fixed-variant": "#004f51",
+                        "on-tertiary-fixed-variant": "#6e3900",
+                        "outline": "#6b7a7a",
+                        "tertiary-container": "#ffa557",
+                        "on-primary-container": "#005354",
+                        "inverse-primary": "#2ddbde",
+                        "secondary-fixed-dim": "#9ecee1",
+                        "surface-variant": "#dae4e4"
+                    },
+                    "borderRadius": {
+                        "DEFAULT": "1rem",
+                        "lg": "2rem",
+                        "xl": "3rem",
+                        "full": "9999px"
+                    },
+                    "spacing": {
+                        "unit-xs": "4px",
+                        "sidebar-collapsed": "80px",
+                        "unit-xl": "32px",
+                        "unit-sm": "8px",
+                        "unit-md": "16px",
+                        "margin-mobile": "16px",
+                        "gutter": "24px",
+                        "unit-lg": "24px",
+                        "sidebar-width": "280px",
+                        "margin-desktop": "40px"
+                    },
+                    "fontFamily": {
+                        "headline-md": ["Plus Jakarta Sans"],
+                        "label-lg": ["Plus Jakarta Sans"],
+                        "headline-2xl": ["Plus Jakarta Sans"],
+                        "body-lg": ["Plus Jakarta Sans"],
+                        "headline-lg": ["Plus Jakarta Sans"],
+                        "headline-xl": ["Plus Jakarta Sans"],
+                        "body-sm": ["Plus Jakarta Sans"],
+                        "label-md": ["Plus Jakarta Sans"],
+                        "body-md": ["Plus Jakarta Sans"]
+                    },
+                    "fontSize": {
+                        "headline-md": ["24px", {"lineHeight": "32px", "fontWeight": "600"}],
+                        "label-lg": ["14px", {"lineHeight": "20px", "letterSpacing": "0.05em", "fontWeight": "600"}],
+                        "headline-2xl": ["48px", {"lineHeight": "56px", "letterSpacing": "-0.02em", "fontWeight": "700"}],
+                        "body-lg": ["18px", {"lineHeight": "28px", "fontWeight": "400"}],
+                        "headline-lg": ["28px", {"lineHeight": "36px", "fontWeight": "600"}],
+                        "headline-xl": ["36px", {"lineHeight": "44px", "letterSpacing": "-0.02em", "fontWeight": "700"}],
+                        "body-sm": ["14px", {"lineHeight": "20px", "fontWeight": "400"}],
+                        "label-md": ["12px", {"lineHeight": "16px", "letterSpacing": "0.05em", "fontWeight": "600"}],
+                        "body-md": ["16px", {"lineHeight": "24px", "fontWeight": "400"}]
+                    }
+                },
+            },
+        }
+    </script>
+</head>
+<body class="bg-background overflow-x-hidden">
+<!-- SideNavBar Shell -->
+<aside class="fixed left-0 top-0 h-full w-sidebar-width bg-on-secondary-fixed shadow-lg flex flex-col py-unit-lg z-50">
+<div class="px-unit-lg mb-unit-xl">
+<h1 class="font-headline-md text-headline-md font-bold text-primary-fixed">AquaShow MS</h1>
+<p class="font-body-md text-body-md text-primary-fixed/70">Management System</p>
+</div>
+<nav class="flex-1 space-y-unit-xs">
+<!-- Navigation Items Mapping -->
+<a class="flex items-center gap-unit-md text-on-secondary-fixed-variant px-unit-lg py-unit-md hover:text-primary-fixed hover:bg-on-secondary-fixed-variant/20 transition-all" href="#">
+<span class="material-symbols-outlined">dashboard</span>
+<span class="font-body-md">Dashboard</span>
+</a>
+<a class="flex items-center gap-unit-md text-on-secondary-fixed-variant px-unit-lg py-unit-md hover:text-primary-fixed hover:bg-on-secondary-fixed-variant/20 transition-all" href="#">
+<span class="material-symbols-outlined">theater_comedy</span>
+<span class="font-body-md">Shows</span>
+</a>
+<a class="flex items-center gap-unit-md text-on-secondary-fixed-variant px-unit-lg py-unit-md hover:text-primary-fixed hover:bg-on-secondary-fixed-variant/20 transition-all" href="#">
+<span class="material-symbols-outlined">water_drop</span>
+<span class="font-body-md">Venues</span>
+</a>
+<a class="flex items-center gap-unit-md text-on-secondary-fixed-variant px-unit-lg py-unit-md hover:text-primary-fixed hover:bg-on-secondary-fixed-variant/20 transition-all" href="#">
+<span class="material-symbols-outlined">calendar_month</span>
+<span class="font-body-md">Schedules</span>
+</a>
+<a class="flex items-center gap-unit-md text-on-secondary-fixed-variant px-unit-lg py-unit-md hover:text-primary-fixed hover:bg-on-secondary-fixed-variant/20 transition-all" href="#">
+<span class="material-symbols-outlined">event_seat</span>
+<span class="font-body-md">Bookings</span>
+</a>
+<a class="flex items-center gap-unit-md text-on-secondary-fixed-variant px-unit-lg py-unit-md hover:text-primary-fixed hover:bg-on-secondary-fixed-variant/20 transition-all" href="#">
+<span class="material-symbols-outlined">analytics</span>
+<span class="font-body-md">Reports</span>
+</a>
+<a class="flex items-center gap-unit-md text-on-secondary-fixed-variant px-unit-lg py-unit-md hover:text-primary-fixed hover:bg-on-secondary-fixed-variant/20 transition-all" href="#">
+<span class="material-symbols-outlined">group</span>
+<span class="font-body-md">Users</span>
+</a>
+<!-- Active Role Management -->
+<a class="flex items-center gap-unit-md text-primary-fixed border-l-4 border-primary-fixed bg-on-secondary-fixed-variant/30 px-unit-lg py-unit-md transition-all" href="#">
+<span class="material-symbols-outlined">admin_panel_settings</span>
+<span class="font-body-md">Roles</span>
+</a>
+</nav>
+<div class="px-unit-lg mt-auto">
+<button class="w-full bg-primary-fixed text-on-primary-fixed py-unit-md rounded-lg font-label-lg transition-transform active:scale-[0.98]">
+                Quick Schedule
+            </button>
+</div>
+</aside>
+<!-- Main Content Canvas -->
+<main class="ml-sidebar-width min-h-screen">
+<!-- TopAppBar Shell -->
+<header class="flex justify-between items-center px-unit-lg py-unit-sm sticky top-0 z-40 bg-surface/70 backdrop-blur-md border-b border-outline-variant/20 shadow-sm">
+<div class="flex items-center gap-unit-lg flex-1">
+<h2 class="font-headline-md text-headline-md font-extrabold text-primary">Manage Roles</h2>
+<div class="relative w-full max-w-md">
+<span class="material-symbols-outlined absolute left-unit-md top-1/2 -translate-y-1/2 text-on-surface-variant">search</span>
+<input class="w-full pl-unit-xl pr-unit-md py-2 bg-surface-container border-none rounded-full text-body-sm focus:ring-2 focus:ring-primary" placeholder="Search permissions or users..." type="text"/>
+</div>
+</div>
+<div class="flex items-center gap-unit-md">
+<button class="p-unit-sm hover:bg-surface-container-high/50 rounded-full transition-colors active:scale-95 duration-150">
+<span class="material-symbols-outlined text-on-surface-variant">notifications</span>
+</button>
+<button class="p-unit-sm hover:bg-surface-container-high/50 rounded-full transition-colors active:scale-95 duration-150">
+<span class="material-symbols-outlined text-on-surface-variant">help_outline</span>
+</button>
+<button class="p-unit-sm hover:bg-surface-container-high/50 rounded-full transition-colors active:scale-95 duration-150">
+<span class="material-symbols-outlined text-on-surface-variant">settings</span>
+</button>
+<div class="w-10 h-10 rounded-full overflow-hidden border-2 border-primary-container">
+<img alt="AquaShow Admin Profile" data-alt="A professional headshot of a marine park manager in a corporate setting. The subject is a middle-aged man with a friendly expression, wearing a navy blue blazer and a light blue shirt. The background is a softly blurred office with subtle aquatic-themed decor and cool, bright lighting consistent with a premium management environment." src="https://lh3.googleusercontent.com/aida-public/AB6AXuAP3bOaXpZivr8g8MgpaVOV3OtOWV4JFY_ObcuoFZ0Q_SaOTuOrlxvLI-HYsGiO3ajFdZNIQlxiF8LY1jLGM8a4uAJerw97bTU08xEV9OsaBOX2PY9bWwYKEwG9zxhR3aWZCQGLhUYNw6lW9ggJlSQ1dss4H4Bt5jKkpBjC2BKBxYbC-nIDxqBfjE1uiXoEQx8hcAkLF0yhmCf2T_NBSsAHZSXb2q1M2AEZtcQvNg4XWEADsvO5gYKTxomN3Nfas8aU11EDRRV6ogDc"/>
+</div>
+</div>
+</header>
+<div class="p-unit-lg space-y-unit-lg">
+<!-- Warning Banner -->
+<div class="flex items-center gap-unit-md p-unit-md bg-error-container/20 border border-error/20 rounded-lg text-on-error-container">
+<span class="material-symbols-outlined text-error">warning</span>
+<p class="font-label-lg">Warning note: Role changes affect access permissions immediately for all connected users.</p>
+</div>
+<!-- Role Summary Grid -->
+<section class="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-4 gap-unit-lg">
+<!-- USER CARD -->
+<div class="glass-card p-unit-lg rounded-lg flex flex-col gap-unit-md border-t-4 border-primary">
+<div class="flex justify-between items-start">
+<div class="p-unit-sm bg-primary/10 rounded-lg">
+<span class="material-symbols-outlined text-primary">person</span>
+</div>
+<span class="px-unit-sm py-unit-xs bg-surface-container rounded-full text-label-md text-on-surface-variant">42 Active</span>
+</div>
+<div>
+<h3 class="font-headline-md text-primary">USER</h3>
+<p class="font-body-sm text-on-surface-variant mt-unit-xs">Default customer access level.</p>
+</div>
+<ul class="space-y-unit-sm">
+<li class="flex items-center gap-unit-sm text-body-sm text-on-surface">
+<span class="material-symbols-outlined text-[18px] text-primary" data-weight="fill">check_circle</span> View Shows
+                        </li>
+<li class="flex items-center gap-unit-sm text-body-sm text-on-surface">
+<span class="material-symbols-outlined text-[18px] text-primary" data-weight="fill">check_circle</span> Book Tickets
+                        </li>
+</ul>
+</div>
+<!-- STAFF CARD -->
+<div class="glass-card p-unit-lg rounded-lg flex flex-col gap-unit-md border-t-4 border-secondary">
+<div class="flex justify-between items-start">
+<div class="p-unit-sm bg-secondary/10 rounded-lg">
+<span class="material-symbols-outlined text-secondary">badge</span>
+</div>
+<span class="px-unit-sm py-unit-xs bg-surface-container rounded-full text-label-md text-on-surface-variant">12 Active</span>
+</div>
+<div>
+<h3 class="font-headline-md text-secondary">STAFF</h3>
+<p class="font-body-sm text-on-surface-variant mt-unit-xs">Operational personnel access.</p>
+</div>
+<ul class="space-y-unit-sm">
+<li class="flex items-center gap-unit-sm text-body-sm text-on-surface">
+<span class="material-symbols-outlined text-[18px] text-secondary" data-weight="fill">check_circle</span> Check-in Guest
+                        </li>
+<li class="flex items-center gap-unit-sm text-body-sm text-on-surface">
+<span class="material-symbols-outlined text-[18px] text-secondary" data-weight="fill">check_circle</span> View Schedule
+                        </li>
+</ul>
+</div>
+<!-- MANAGER CARD -->
+<div class="glass-card p-unit-lg rounded-lg flex flex-col gap-unit-md border-t-4 border-primary-container">
+<div class="flex justify-between items-start">
+<div class="p-unit-sm bg-primary-container/10 rounded-lg">
+<span class="material-symbols-outlined text-on-primary-container">supervisor_account</span>
+</div>
+<span class="px-unit-sm py-unit-xs bg-surface-container rounded-full text-label-md text-on-surface-variant">4 Active</span>
+</div>
+<div>
+<h3 class="font-headline-md text-on-primary-container">MANAGER</h3>
+<p class="font-body-sm text-on-surface-variant mt-unit-xs">Departmental authority level.</p>
+</div>
+<ul class="space-y-unit-sm">
+<li class="flex items-center gap-unit-sm text-body-sm text-on-surface">
+<span class="material-symbols-outlined text-[18px] text-primary-container" data-weight="fill">check_circle</span> Edit Schedules
+                        </li>
+<li class="flex items-center gap-unit-sm text-body-sm text-on-surface">
+<span class="material-symbols-outlined text-[18px] text-primary-container" data-weight="fill">check_circle</span> View Reports
+                        </li>
+</ul>
+</div>
+<!-- ADMIN CARD -->
+<div class="glass-card p-unit-lg rounded-lg flex flex-col gap-unit-md border-t-4 border-on-secondary-fixed">
+<div class="flex justify-between items-start">
+<div class="p-unit-sm bg-on-secondary-fixed/10 rounded-lg">
+<span class="material-symbols-outlined text-on-secondary-fixed">shield_person</span>
+</div>
+<span class="px-unit-sm py-unit-xs bg-surface-container rounded-full text-label-md text-on-surface-variant">2 Active</span>
+</div>
+<div>
+<h3 class="font-headline-md text-on-secondary-fixed">ADMIN</h3>
+<p class="font-body-sm text-on-surface-variant mt-unit-xs">Full system configuration.</p>
+</div>
+<ul class="space-y-unit-sm">
+<li class="flex items-center gap-unit-sm text-body-sm text-on-surface">
+<span class="material-symbols-outlined text-[18px] text-on-secondary-fixed" data-weight="fill">check_circle</span> Manage Roles
+                        </li>
+<li class="flex items-center gap-unit-sm text-body-sm text-on-surface">
+<span class="material-symbols-outlined text-[18px] text-on-secondary-fixed" data-weight="fill">check_circle</span> System Logs
+                        </li>
+</ul>
+</div>
+</section>
+<!-- User Assignment Table -->
+<section class="glass-card rounded-lg overflow-hidden">
+<div class="p-unit-lg border-b border-outline-variant/20 flex flex-col md:flex-row md:items-center justify-between gap-unit-md">
+<div>
+<h4 class="font-headline-md text-on-surface">User Role Assignment</h4>
+<p class="font-body-sm text-on-surface-variant">Modify individual user permissions by assigning a primary role.</p>
+</div>
+<button class="bg-primary text-white px-unit-lg py-unit-md rounded-full font-label-lg flex items-center gap-unit-sm hover:opacity-90 transition-all shadow-md" onclick="toggleModal(true)">
+<span class="material-symbols-outlined">add</span>
+                        Assign Role
+                    </button>
+</div>
+<div class="overflow-x-auto">
+<table class="w-full text-left border-collapse">
+<thead class="bg-surface-container-low">
+<tr>
+<th class="px-unit-lg py-unit-md font-label-lg text-on-surface-variant">User</th>
+<th class="px-unit-lg py-unit-md font-label-lg text-on-surface-variant">Email Address</th>
+<th class="px-unit-lg py-unit-md font-label-lg text-on-surface-variant">Current Role</th>
+<th class="px-unit-lg py-unit-md font-label-lg text-on-surface-variant">Last Active</th>
+<th class="px-unit-lg py-unit-md font-label-lg text-on-surface-variant text-right">Actions</th>
+</tr>
+</thead>
+<tbody class="divide-y divide-outline-variant/10">
+<!-- User Row 1 -->
+<tr class="hover:bg-surface-container-lowest/50 transition-colors">
+<td class="px-unit-lg py-unit-md">
+<div class="flex items-center gap-unit-md">
+<img class="w-10 h-10 rounded-full" data-alt="A portrait of a young male aquarium trainer in a professional teal polo shirt with a name badge. He is smiling warmly in a bright, sun-drenched aquatic facility with blue water tanks in the distant background. High-key lighting, sharp focus, professional management software aesthetic." src="https://lh3.googleusercontent.com/aida-public/AB6AXuC_LcUUGhWnyVuGqrYH_C6k-1huclO7XuLxGhxndgUl0pFHDehIJ_vm8zFgMgjqhGrhMog8EfhP5n-wu3UBy8YjcZcU4hk5ZcGEhfMgjyg9VAwsd4t66nZKDzq2xT5V8dPrTUwj9bJOqE9pfJ20rzQLfYowaRMpSvq6bbq287G_3PlPnv_UbXkBcuI58hpZhp50uCXWTqi7Q2LN98rwvqrg5LPlcH3VWL71ph8Ma39be0Bh3nfuoVruAoo0HKWU3pwySIxS0AlCO-68"/>
+<div>
+<p class="font-body-md font-bold text-on-surface">Marcus Chen</p>
+<p class="font-body-sm text-on-surface-variant">Emp ID: AQ-772</p>
+</div>
+</div>
+</td>
+<td class="px-unit-lg py-unit-md font-body-sm text-on-surface-variant">m.chen@aquashow.com</td>
+<td class="px-unit-lg py-unit-md">
+<span class="px-unit-sm py-1 bg-secondary/10 text-secondary text-label-md rounded-full">STAFF</span>
+</td>
+<td class="px-unit-lg py-unit-md font-body-sm text-on-surface-variant">2 mins ago</td>
+<td class="px-unit-lg py-unit-md text-right">
+<button class="text-primary hover:bg-primary/5 p-unit-sm rounded-full transition-colors">
+<span class="material-symbols-outlined">edit_square</span>
+</button>
+</td>
+</tr>
+<!-- User Row 2 -->
+<tr class="hover:bg-surface-container-lowest/50 transition-colors">
+<td class="px-unit-lg py-unit-md">
+<div class="flex items-center gap-unit-md">
+<img class="w-10 h-10 rounded-full" data-alt="A portrait of a female operations manager at a marine park. She is wearing a professional white blouse and a lanyard. The lighting is soft and professional, set against a modern office background with subtle blue glass accents. Premium, clean, and efficient management aesthetic." src="https://lh3.googleusercontent.com/aida-public/AB6AXuA2AqhEdcBoItrk9mXYvcnR6ENdBXyVnxlVXPeniQPeHCQFlpaBbkX_ZAevV4_iBKn6yiPF2fZP3uO8NyqbG3B2RYcEX-OAs7ItC4vYy52wYlVDIyOKKaTErdNnYDFBbmUXzExQJHR7w1sRW4zeMhkd4NH-TIH3apLfTxLvp5_E0Y1gYM-l476AVWyF9j-iO22eNEbz_n9zUgcPA-odfQRqC8NPxKfXGccmbjY04VuAxTxl74bwvG4gSO3kj8KNplt-mObc4jhvEhXr"/>
+<div>
+<p class="font-body-md font-bold text-on-surface">Sarah Jennings</p>
+<p class="font-body-sm text-on-surface-variant">Emp ID: AQ-401</p>
+</div>
+</div>
+</td>
+<td class="px-unit-lg py-unit-md font-body-sm text-on-surface-variant">s.jennings@aquashow.com</td>
+<td class="px-unit-lg py-unit-md">
+<span class="px-unit-sm py-1 bg-primary-container/20 text-on-primary-container text-label-md rounded-full">MANAGER</span>
+</td>
+<td class="px-unit-lg py-unit-md font-body-sm text-on-surface-variant">1 hour ago</td>
+<td class="px-unit-lg py-unit-md text-right">
+<button class="text-primary hover:bg-primary/5 p-unit-sm rounded-full transition-colors">
+<span class="material-symbols-outlined">edit_square</span>
+</button>
+</td>
+</tr>
+<!-- User Row 3 -->
+<tr class="hover:bg-surface-container-lowest/50 transition-colors">
+<td class="px-unit-lg py-unit-md">
+<div class="flex items-center gap-unit-md">
+<img class="w-10 h-10 rounded-full" data-alt="A portrait of a male IT administrator for a large corporation. He is wearing a dark navy sweater and glasses, looking confident and skilled. The background is a clean, modern data center with blue LED indicators softly blurred. Tech-focused and secure management system style." src="https://lh3.googleusercontent.com/aida-public/AB6AXuAXpKC-wibyROsdWtiNJwtGpWf1i-SoypvefC9ZKbChQyFUjNzrXWj61Tny-iqUOmJhyvCj1GlJw9CEIEozW5krwkQEp88F5ZBJPsjdUIvl3jdSBhn8gcSttIZZuXXRKm9MZv5qKPkU_WR9V3NPIT7bK8FBKMMkr76bw7hN7_m9A4cbeeflPSNTH3Y_pnAZaXd0YkyIQNV-oL4e4Wvtu7R--Ns3_mOYb25_Iul-VF_8how9bEeDW9cbpmXI5ssig5AGkVyzFkCvRp4x"/>
+<div>
+<p class="font-body-md font-bold text-on-surface">David Vance</p>
+<p class="font-body-sm text-on-surface-variant">Emp ID: AQ-102</p>
+</div>
+</div>
+</td>
+<td class="px-unit-lg py-unit-md font-body-sm text-on-surface-variant">d.vance@aquashow.com</td>
+<td class="px-unit-lg py-unit-md">
+<span class="px-unit-sm py-1 bg-on-secondary-fixed/10 text-on-secondary-fixed text-label-md rounded-full">ADMIN</span>
+</td>
+<td class="px-unit-lg py-unit-md font-body-sm text-on-surface-variant">Online Now</td>
+<td class="px-unit-lg py-unit-md text-right">
+<button class="text-primary hover:bg-primary/5 p-unit-sm rounded-full transition-colors">
+<span class="material-symbols-outlined">edit_square</span>
+</button>
+</td>
+</tr>
+</tbody>
+</table>
+</div>
+<div class="p-unit-lg bg-surface-container-low flex justify-between items-center">
+<p class="text-body-sm text-on-surface-variant">Showing 3 of 60 users</p>
+<div class="flex gap-unit-sm">
+<button class="p-unit-sm hover:bg-surface rounded-full transition-colors"><span class="material-symbols-outlined">chevron_left</span></button>
+<button class="p-unit-sm bg-primary text-white w-8 h-8 rounded-full flex items-center justify-center text-label-md">1</button>
+<button class="p-unit-sm hover:bg-surface rounded-full transition-colors text-label-md">2</button>
+<button class="p-unit-sm hover:bg-surface rounded-full transition-colors"><span class="material-symbols-outlined">chevron_right</span></button>
+</div>
+</div>
+</section>
+</div>
+</main>
+<!-- Assign Role Confirmation Modal -->
+<div class="fixed inset-0 z-[100] hidden" id="role-modal">
+<div class="absolute inset-0 bg-on-secondary-fixed/40 backdrop-blur-sm" onclick="toggleModal(false)"></div>
+<div class="absolute top-1/2 left-1/2 -translate-x-1/2 -translate-y-1/2 w-full max-w-md p-unit-lg">
+<div class="bg-surface rounded-lg shadow-xl overflow-hidden animate-in fade-in zoom-in duration-300">
+<div class="p-unit-lg border-b border-outline-variant/20 flex justify-between items-center">
+<h5 class="font-headline-md text-on-surface">Assign New Role</h5>
+<button class="text-on-surface-variant hover:text-on-surface" onclick="toggleModal(false)"><span class="material-symbols-outlined">close</span></button>
+</div>
+<div class="p-unit-lg space-y-unit-md">
+<div class="space-y-unit-xs">
+<label class="font-label-lg text-on-surface-variant">Select User</label>
+<div class="relative">
+<select class="w-full bg-surface-container border-outline-variant/20 rounded-lg py-unit-md pl-unit-md pr-unit-xl appearance-none focus:ring-primary focus:border-primary">
+<option>Select a user...</option>
+<option>Alice Thompson (AQ-882)</option>
+<option>Robert Miller (AQ-912)</option>
+<option>Elena Rodriguez (AQ-115)</option>
+</select>
+<span class="material-symbols-outlined absolute right-unit-md top-1/2 -translate-y-1/2 pointer-events-none">expand_more</span>
+</div>
+</div>
+<div class="space-y-unit-xs">
+<label class="font-label-lg text-on-surface-variant">Select Target Role</label>
+<div class="grid grid-cols-2 gap-unit-sm">
+<button class="border-2 border-primary bg-primary/5 p-unit-md rounded-lg text-left transition-all">
+<p class="font-label-lg text-primary">STAFF</p>
+<p class="text-[10px] text-on-surface-variant">Operational Access</p>
+</button>
+<button class="border-2 border-outline-variant/20 p-unit-md rounded-lg text-left hover:border-primary/40 transition-all">
+<p class="font-label-lg text-on-surface">MANAGER</p>
+<p class="text-[10px] text-on-surface-variant">Team Authority</p>
+</button>
+</div>
+</div>
+<div class="p-unit-md bg-tertiary-container/10 rounded-lg flex gap-unit-sm">
+<span class="material-symbols-outlined text-tertiary text-[20px]">info</span>
+<p class="text-body-sm text-on-tertiary-container">Confirming this action will grant immediate access to sensitive operations.</p>
+</div>
+</div>
+<div class="p-unit-lg bg-surface-container-low flex gap-unit-md">
+<button class="flex-1 py-unit-md rounded-full font-label-lg border border-outline hover:bg-surface transition-all" onclick="toggleModal(false)">Cancel</button>
+<button class="flex-1 py-unit-md rounded-full font-label-lg bg-primary text-white hover:opacity-90 shadow-md transition-all" onclick="confirmAssignment()">Confirm Role</button>
+</div>
+</div>
+</div>
+</div>
+<!-- Micro-interactions Script -->
+<script>
+        function toggleModal(show) {
+            const modal = document.getElementById('role-modal');
+            if (show) {
+                modal.classList.remove('hidden');
+            } else {
+                modal.classList.add('hidden');
+            }
+        }
+
+        function confirmAssignment() {
+            // Animation for visual feedback
+            const btn = event.currentTarget;
+            btn.innerHTML = '<span class="material-symbols-outlined animate-spin">sync</span> Updating...';
+            
+            setTimeout(() => {
+                toggleModal(false);
+                btn.innerHTML = 'Confirm Role';
+                // Trigger a notification simulation could go here
+            }, 1000);
+        }
+
+        // Search highlight micro-interaction
+        const searchInput = document.querySelector('input[type="text"]');
+        searchInput.addEventListener('focus', () => {
+            searchInput.parentElement.classList.add('ring-2', 'ring-primary/20');
+        });
+        searchInput.addEventListener('blur', () => {
+            searchInput.parentElement.classList.remove('ring-2', 'ring-primary/20');
+        });
+    </script>
+</body></html>
