@@ -32,6 +32,8 @@ const resultStyles = {
   },
 };
 
+const duplicateScanCooldownMs = 2500;
+
 function formatDateTime(value) {
   return value ? new Intl.DateTimeFormat('en-US', { dateStyle: 'medium', timeStyle: 'short' }).format(new Date(value)) : 'Unavailable';
 }
@@ -60,6 +62,77 @@ function scanWithCanvas(video, canvas) {
   });
 
   return code?.data || '';
+}
+
+function normalizeQrPayload(rawPayload) {
+  const trimmed = String(rawPayload || '').trim();
+  if (!trimmed) {
+    return { value: '', error: 'QR code is required.' };
+  }
+
+  if (trimmed.startsWith('{') || trimmed.startsWith('[')) {
+    try {
+      const parsed = JSON.parse(trimmed);
+      const candidate = parsed?.qrCode || parsed?.ticketCode || parsed?.code || parsed?.payload || parsed?.data;
+      if (typeof candidate === 'string' && candidate.trim()) {
+        return { value: candidate.trim(), error: '' };
+      }
+      return { value: '', error: 'QR JSON does not contain a ticket code.' };
+    } catch {
+      return { value: '', error: 'QR JSON is malformed. Paste the ticket code manually.' };
+    }
+  }
+
+  return { value: trimmed, error: '' };
+}
+
+function playTone(frequency, durationMs) {
+  const AudioContext = window.AudioContext || window.webkitAudioContext;
+  if (!AudioContext) {
+    return;
+  }
+
+  try {
+    const audioContext = new AudioContext();
+    const oscillator = audioContext.createOscillator();
+    const gain = audioContext.createGain();
+    oscillator.frequency.value = frequency;
+    oscillator.type = 'sine';
+    gain.gain.value = 0.08;
+    oscillator.connect(gain);
+    gain.connect(audioContext.destination);
+    oscillator.start();
+    window.setTimeout(() => {
+      oscillator.stop();
+      audioContext.close();
+    }, durationMs);
+  } catch {
+    // Some browsers block audio feedback until a user gesture unlocks audio.
+  }
+}
+
+function runValidationFeedback(resultCode) {
+  const isSuccess = resultCode === 'SUCCESS';
+  if (navigator.vibrate) {
+    navigator.vibrate(isSuccess ? 80 : [80, 40, 80]);
+  }
+  playTone(isSuccess ? 880 : 220, isSuccess ? 120 : 180);
+}
+
+function getScannerStatus({ loading, result, cameraActive }) {
+  if (loading) {
+    return 'Validating ticket...';
+  }
+  if (result?.result === 'SUCCESS') {
+    return 'Ticket valid - Allow entry';
+  }
+  if (result?.result === 'ALREADY_USED') {
+    return 'Ticket already used';
+  }
+  if (result) {
+    return 'Ticket invalid - Deny entry';
+  }
+  return cameraActive ? 'Scanning...' : 'Camera stopped';
 }
 
 function ResultPanel({ result }) {
@@ -131,7 +204,7 @@ export default function StaffTicketValidationPage() {
   const [cameraError, setCameraError] = useState('');
   const [scannedPayload, setScannedPayload] = useState('');
   
-  const [autoCapture, setAutoCapture] = useState(true);
+  const [pauseAfterScan, setPauseAfterScan] = useState(false);
   const [capturedImage, setCapturedImage] = useState(null);
   const [flashActive, setFlashActive] = useState(false);
 
@@ -141,6 +214,18 @@ export default function StaffTicketValidationPage() {
   const detectorRef = useRef(null);
   const scanTimerRef = useRef(null);
   const validatingRef = useRef(false);
+  const lastAutoScanRef = useRef({ payload: '', scannedAt: 0 });
+  const pauseAfterScanRef = useRef(pauseAfterScan);
+  const capturedImageRef = useRef(capturedImage);
+  const scannerStatus = getScannerStatus({ loading, result, cameraActive });
+
+  useEffect(() => {
+    pauseAfterScanRef.current = pauseAfterScan;
+  }, [pauseAfterScan]);
+
+  useEffect(() => {
+    capturedImageRef.current = capturedImage;
+  }, [capturedImage]);
 
   const stopCamera = () => {
     if (scanTimerRef.current) {
@@ -160,28 +245,34 @@ export default function StaffTicketValidationPage() {
     setCameraActive(false);
     setCapturedImage(null);
     setFlashActive(false);
+    lastAutoScanRef.current = { payload: '', scannedAt: 0 };
   };
 
   useEffect(() => () => stopCamera(), []);
 
   const resumeScanning = () => {
     setCapturedImage(null);
+    setCameraError('');
     validatingRef.current = false;
   };
 
   const applyValidation = async (payload, capturedImg = null) => {
-    const trimmedQr = payload.trim();
-    if (!trimmedQr) {
-      setError('QR code is required.');
+    const parsedQr = normalizeQrPayload(payload);
+    if (parsedQr.error) {
+      setError(parsedQr.error);
+      setCameraError(parsedQr.error);
+      validatingRef.current = false;
       return;
     }
 
+    const trimmedQr = parsedQr.value;
     validatingRef.current = true;
     setLoading(true);
     setError('');
+    setCameraError('');
     setScannedPayload(trimmedQr);
     
-    if (capturedImg) {
+    if (capturedImg && pauseAfterScanRef.current) {
       setCapturedImage(capturedImg);
     } else if (!cameraActive) {
       setCapturedImage(null);
@@ -193,14 +284,16 @@ export default function StaffTicketValidationPage() {
       setResult(validationWithImage);
       setHistory((current) => [validationWithImage, ...current].slice(0, 8));
       setQrCode('');
+      runValidationFeedback(validation.result);
     } catch (validationError) {
       setError(validationError.response?.data?.message || validationError.message || 'Unable to validate QR.');
+      runValidationFeedback('ERROR');
     } finally {
       setLoading(false);
-      if (!autoCapture || !capturedImg) {
+      if (!pauseAfterScanRef.current || !capturedImg) {
         window.setTimeout(() => {
           validatingRef.current = false;
-        }, 1200);
+        }, 300);
       }
     }
   };
@@ -241,7 +334,7 @@ export default function StaffTicketValidationPage() {
 
       setCameraActive(true);
       scanTimerRef.current = window.setInterval(async () => {
-        if (!videoRef.current || validatingRef.current || loading || (autoCapture && capturedImage)) {
+        if (!videoRef.current || validatingRef.current || (pauseAfterScanRef.current && capturedImageRef.current)) {
           return;
         }
 
@@ -255,8 +348,23 @@ export default function StaffTicketValidationPage() {
             : scanWithCanvas(videoRef.current, canvasRef.current);
 
           if (rawValue) {
+            const normalizedRawValue = rawValue.trim();
+            const now = Date.now();
+            if (
+              normalizedRawValue === lastAutoScanRef.current.payload
+              && now - lastAutoScanRef.current.scannedAt < duplicateScanCooldownMs
+            ) {
+              setCameraError('This QR was just scanned. Move to the next ticket or wait a moment to rescan.');
+              return;
+            }
+
+            lastAutoScanRef.current = {
+              payload: normalizedRawValue,
+              scannedAt: now,
+            };
+
             let capturedDataUrl = null;
-            if (autoCapture && videoRef.current && canvasRef.current) {
+            if (videoRef.current && canvasRef.current) {
               const canvas = canvasRef.current;
               const video = videoRef.current;
               canvas.width = video.videoWidth;
@@ -265,17 +373,19 @@ export default function StaffTicketValidationPage() {
               if (context) {
                 context.drawImage(video, 0, 0, canvas.width, canvas.height);
                 capturedDataUrl = canvas.toDataURL('image/jpeg', 0.85);
-                setCapturedImage(capturedDataUrl);
+                if (pauseAfterScanRef.current) {
+                  setCapturedImage(capturedDataUrl);
+                }
                 setFlashActive(true);
                 setTimeout(() => setFlashActive(false), 250);
               }
             }
-            await applyValidation(rawValue, capturedDataUrl);
+            await applyValidation(normalizedRawValue, capturedDataUrl);
           }
         } catch (scanError) {
           setCameraError(scanError.message || 'Unable to scan QR from camera.');
         }
-      }, 700);
+      }, 350);
     } catch (cameraStartError) {
       setCameraError(cameraStartError.message || 'Camera permission was denied.');
       stopCamera();
@@ -299,17 +409,18 @@ export default function StaffTicketValidationPage() {
                   <div>
                     <p className="text-xs font-black uppercase tracking-[0.18em] text-cyan-700">Camera scanner</p>
                     <h2 className="mt-1 text-xl font-black text-slate-950">Scan ticket QR</h2>
+                    <p className="mt-2 inline-flex rounded-full bg-slate-100 px-3 py-1 text-xs font-black text-slate-700">{scannerStatus}</p>
                     
                     <div className="mt-3 flex items-center">
                       <label className="relative inline-flex items-center cursor-pointer select-none">
                         <input
                           type="checkbox"
-                          checked={autoCapture}
-                          onChange={(e) => setAutoCapture(e.target.checked)}
+                          checked={pauseAfterScan}
+                          onChange={(e) => setPauseAfterScan(e.target.checked)}
                           className="sr-only peer"
                         />
                         <div className="w-9 h-5 bg-slate-200 peer-focus:outline-none rounded-full peer peer-checked:after:translate-x-full rtl:peer-checked:after:-translate-x-full peer-checked:after:border-white after:content-[''] after:absolute after:top-[2px] after:start-[2px] after:bg-white after:border-slate-300 after:border after:rounded-full after:h-4 after:w-4 after:transition-all peer-checked:bg-cyan-700"></div>
-                        <span className="ms-2.5 text-xs font-bold text-slate-600">Chế độ chụp & Khóa hình khi rõ</span>
+                        <span className="ms-2.5 text-xs font-bold text-slate-600">Pause after scan</span>
                       </label>
                     </div>
                   </div>
@@ -346,7 +457,7 @@ export default function StaffTicketValidationPage() {
                         <img src={capturedImage} className="w-full h-full object-cover" alt="Captured Frame" />
                         <div className="absolute top-2 left-2 rounded-full bg-cyan-700 px-3 py-1 text-[10px] font-black tracking-wider uppercase flex items-center gap-1.5 shadow">
                           <span className="h-1.5 w-1.5 rounded-full bg-emerald-400 animate-ping" />
-                          Hình ảnh đã bắt (Captured)
+                          Captured frame
                         </div>
                       </div>
                       
@@ -356,7 +467,7 @@ export default function StaffTicketValidationPage() {
                         className="mt-6 inline-flex items-center gap-2 rounded-full bg-cyan-500 px-6 py-3 font-black text-white hover:bg-cyan-600 transition shadow-[0_4px_20px_rgba(6,182,212,0.4)]"
                       >
                         <span className="material-symbols-outlined">restart_alt</span>
-                        Tiếp tục quét (Scan Next)
+                        Scan next
                       </button>
                     </div>
                   )}
@@ -370,8 +481,8 @@ export default function StaffTicketValidationPage() {
                   <div className="pointer-events-none absolute inset-0 flex items-center justify-center">
                     <div className="h-56 w-56 rounded-[1.5rem] border-4 border-cyan-300/90 shadow-[0_0_0_999px_rgba(2,6,23,0.28)]" />
                   </div>
-                  {loading ? (
-                    <div className="absolute inset-x-0 bottom-0 bg-cyan-700/95 px-5 py-3 text-center text-sm font-black text-white z-20">Validating scanned QR...</div>
+                  {cameraActive ? (
+                    <div className="absolute inset-x-0 bottom-0 z-20 bg-cyan-700/95 px-5 py-3 text-center text-sm font-black text-white">{scannerStatus}</div>
                   ) : null}
                 </div>
                 {scannedPayload ? (

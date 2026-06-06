@@ -3,6 +3,7 @@ import { Link, useLocation, useNavigate, useSearchParams } from 'react-router-do
 
 import { getBookingDetail } from '../../services/bookingService.js';
 import MainLayout from '../../shared/layouts/MainLayout.jsx';
+import { isTerminalBookingStatus, normalizeBookingPaymentStatus } from '../../shared/utils/paymentStatus.js';
 
 const resultMeta = {
   success: {
@@ -30,6 +31,7 @@ const resultMeta = {
 
 function inferResult(searchStatus, booking, isMock) {
   const raw = searchStatus?.toLowerCase();
+  const statusState = normalizeBookingPaymentStatus(booking, booking?.payment);
   if (isMock || !booking) {
     if (raw === 'success' || raw === 'paid') {
       return 'success';
@@ -38,33 +40,31 @@ function inferResult(searchStatus, booking, isMock) {
       return 'failed';
     }
   }
-  if (booking?.status === 'PAID') {
+  if (statusState.status === 'PAID') {
     return 'success';
   }
-  if (['FAILED', 'EXPIRED'].includes(booking?.status)) {
+  if (['FAILED', 'EXPIRED'].includes(statusState.status)) {
     return 'failed';
   }
   return 'pending';
 }
 
 function getPaymentStatus(booking, resultKey) {
-  if (booking?.payment?.status) {
-    return booking.payment.status;
-  }
+  const statusState = normalizeBookingPaymentStatus(booking, booking?.payment);
 
-  if (resultKey === 'success') {
+  if (statusState.status === 'PAID' || resultKey === 'success') {
     return 'SUCCESS';
   }
 
-  if (booking?.status === 'FAILED') {
+  if (statusState.status === 'FAILED') {
     return 'FAILED';
   }
 
-  if (booking?.status === 'EXPIRED') {
+  if (statusState.status === 'EXPIRED') {
     return 'EXPIRED';
   }
 
-  return 'PENDING';
+  return statusState.paymentStatus || 'PENDING';
 }
 
 function getTicketStatus(booking, resultKey) {
@@ -126,7 +126,8 @@ export default function PaymentResultPage() {
           setBooking(detail);
           setLastUpdatedAt(new Date());
           setError('');
-          if (['PAID', 'FAILED', 'EXPIRED'].includes(detail?.status)) {
+          const statusState = normalizeBookingPaymentStatus(detail, detail?.payment);
+          if (isTerminalBookingStatus(statusState.status)) {
             window.clearInterval(intervalId);
           }
         }
@@ -155,15 +156,16 @@ export default function PaymentResultPage() {
   }, [bookingId, location, navigate]);
 
   const resultKey = inferResult(searchStatus, booking, isMock);
+  const normalizedStatus = normalizeBookingPaymentStatus(booking, booking?.payment);
   const meta = resultMeta[resultKey];
   const processingItems = useMemo(
     () => [
       { icon: 'payments', label: 'Payment', value: getPaymentStatus(booking, resultKey), tone: meta.tone },
-      { icon: 'event_available', label: 'Booking', value: booking?.status || 'PENDING_PAYMENT', tone: meta.tone },
+      { icon: 'event_available', label: 'Booking', value: normalizedStatus.status || 'PENDING_PAYMENT', tone: meta.tone },
       { icon: 'qr_code_2', label: 'Tickets', value: getTicketStatus(booking, resultKey), tone: 'text-cyan-700' },
       { icon: 'outgoing_mail', label: 'Email', value: getEmailStatus(booking, resultKey), tone: 'text-cyan-700' },
     ],
-    [booking, meta.tone, resultKey],
+    [booking, meta.tone, normalizedStatus.status, resultKey],
   );
   const ticketItems = booking?.tickets?.items || [];
 

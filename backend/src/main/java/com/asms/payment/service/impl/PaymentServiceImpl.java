@@ -3,6 +3,7 @@ package com.asms.payment.service.impl;
 import com.asms.booking.entity.Booking;
 import com.asms.booking.enums.BookingStatus;
 import com.asms.booking.repository.BookingRepository;
+import com.asms.booking.service.RedisTicketHoldService;
 import com.asms.core.exception.BadRequestException;
 import com.asms.core.exception.NotFoundException;
 import com.asms.identity.entity.User;
@@ -39,19 +40,22 @@ public class PaymentServiceImpl implements PaymentService {
     private final PayOsClient payOsClient;
     private final TicketGenerationService ticketGenerationService;
     private final PaymentCompletedPublisher paymentCompletedPublisher;
+    private final RedisTicketHoldService redisTicketHoldService;
 
     public PaymentServiceImpl(
             BookingRepository bookingRepository,
             PaymentRepository paymentRepository,
             PayOsClient payOsClient,
             TicketGenerationService ticketGenerationService,
-            PaymentCompletedPublisher paymentCompletedPublisher
+            PaymentCompletedPublisher paymentCompletedPublisher,
+            RedisTicketHoldService redisTicketHoldService
     ) {
         this.bookingRepository = bookingRepository;
         this.paymentRepository = paymentRepository;
         this.payOsClient = payOsClient;
         this.ticketGenerationService = ticketGenerationService;
         this.paymentCompletedPublisher = paymentCompletedPublisher;
+        this.redisTicketHoldService = redisTicketHoldService;
     }
 
     @Override
@@ -77,6 +81,8 @@ public class PaymentServiceImpl implements PaymentService {
         Payment payment = paymentRepository.findByBooking_Id(booking.getId())
                 .orElseGet(() -> createNewPendingPayment(booking));
 
+        payment = refreshPendingPaymentSessionIfMissing(payment);
+
         return toCreatePaymentResponse(payment);
     }
 
@@ -101,35 +107,59 @@ public class PaymentServiceImpl implements PaymentService {
         Booking booking = payment.getBooking();
         PaymentStatus incomingStatus = parseStatus(request.resolvedStatus());
 
-        if (payment.getStatus() == PaymentStatus.SUCCESS && incomingStatus == PaymentStatus.SUCCESS) {
-            int ticketCount = ticketGenerationService.generateTicketsIfMissing(booking).size();
-            return new PaymentCallbackResponse(booking.getId(), payment.getPayosOrderCode(), payment.getStatus(), booking.getStatus(), ticketCount);
+        if (incomingStatus == PaymentStatus.SUCCESS) {
+            boolean shouldPublishPaymentCompleted = payment.getStatus() != PaymentStatus.SUCCESS || booking.getStatus() != BookingStatus.PAID;
+            int generatedTickets = markPaymentSuccessful(payment, booking, request.resolvedTransactionId());
+            if (shouldPublishPaymentCompleted) {
+                publishPaymentCompletedAfterCommit(payment);
+            }
+            return new PaymentCallbackResponse(booking.getId(), payment.getPayosOrderCode(), payment.getStatus(), booking.getStatus(), generatedTickets);
         }
 
         payment.setTransactionId(request.resolvedTransactionId());
         payment.setStatus(incomingStatus);
 
-        int generatedTickets = 0;
-        if (incomingStatus == PaymentStatus.SUCCESS) {
-            payment.setPaidAt(Instant.now());
-            booking.setStatus(BookingStatus.PAID);
-            bookingRepository.save(booking);
-            paymentRepository.save(payment);
-
-            publishPaymentCompletedAfterCommit(payment);
-        } else if (incomingStatus == PaymentStatus.EXPIRED) {
+        if (incomingStatus == PaymentStatus.EXPIRED) {
             booking.setStatus(BookingStatus.EXPIRED);
+            releaseHoldIfPresent(booking);
             bookingRepository.save(booking);
             paymentRepository.save(payment);
         } else if (incomingStatus == PaymentStatus.FAILED) {
             booking.setStatus(BookingStatus.FAILED);
+            releaseHoldIfPresent(booking);
             bookingRepository.save(booking);
             paymentRepository.save(payment);
         } else {
             paymentRepository.save(payment);
         }
 
-        return new PaymentCallbackResponse(booking.getId(), payment.getPayosOrderCode(), payment.getStatus(), booking.getStatus(), generatedTickets);
+        return new PaymentCallbackResponse(booking.getId(), payment.getPayosOrderCode(), payment.getStatus(), booking.getStatus(), 0);
+    }
+
+    private int markPaymentSuccessful(Payment payment, Booking booking, String transactionId) {
+        payment.setTransactionId(transactionId);
+        payment.setStatus(PaymentStatus.SUCCESS);
+        if (payment.getPaidAt() == null) {
+            payment.setPaidAt(Instant.now());
+        }
+
+        if (booking.getStatus() != BookingStatus.PAID) {
+            booking.setStatus(BookingStatus.PAID);
+        }
+
+        bookingRepository.save(booking);
+        paymentRepository.save(payment);
+        releaseHoldIfPresent(booking);
+
+        return ticketGenerationService.generateTicketsIfMissing(booking).size();
+    }
+
+    private void releaseHoldIfPresent(Booking booking) {
+        String holdId = booking.getHoldId();
+        if (holdId == null || holdId.isBlank()) {
+            return;
+        }
+        redisTicketHoldService.releaseHold(holdId);
     }
 
     private void publishPaymentCompletedAfterCommit(Payment payment) {
@@ -157,13 +187,38 @@ public class PaymentServiceImpl implements PaymentService {
         String payosOrderCode = generateOrderCode(booking.getId());
         PayOsPaymentLink payOsPaymentLink = payOsClient.createPaymentLink(booking, payosOrderCode);
         Payment payment = new Payment(booking, payosOrderCode, booking.getTotalAmount(), payOsPaymentLink.checkoutUrl());
+        applyPayOsPaymentLink(payment, payOsPaymentLink);
+        return paymentRepository.save(payment);
+    }
+
+    private Payment refreshPendingPaymentSessionIfMissing(Payment payment) {
+        if (payment.getStatus() != PaymentStatus.PENDING || hasProviderPaymentSession(payment)) {
+            return payment;
+        }
+
+        PayOsPaymentLink payOsPaymentLink = payOsClient.createPaymentLink(payment.getBooking(), payment.getPayosOrderCode());
+        applyPayOsPaymentLink(payment, payOsPaymentLink);
+        return paymentRepository.save(payment);
+    }
+
+    private boolean hasProviderPaymentSession(Payment payment) {
+        return hasText(payment.getQrCode())
+                || hasText(payment.getPaymentLinkId())
+                || (hasText(payment.getBankBin()) && hasText(payment.getAccountNumber()));
+    }
+
+    private boolean hasText(String value) {
+        return value != null && !value.isBlank();
+    }
+
+    private void applyPayOsPaymentLink(Payment payment, PayOsPaymentLink payOsPaymentLink) {
+        payment.setPaymentLink(payOsPaymentLink.checkoutUrl());
         payment.setQrCode(payOsPaymentLink.qrCode());
         payment.setPaymentLinkId(payOsPaymentLink.paymentLinkId());
         payment.setBankBin(payOsPaymentLink.bin());
         payment.setAccountNumber(payOsPaymentLink.accountNumber());
         payment.setAccountName(payOsPaymentLink.accountName());
         payment.setPaymentDescription(payOsPaymentLink.description());
-        return paymentRepository.save(payment);
     }
 
     private String generateOrderCode(UUID bookingId) {

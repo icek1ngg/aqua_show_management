@@ -11,6 +11,10 @@ import com.asms.ticketing.enums.TicketStatus;
 import com.asms.ticketing.repository.CheckInLogRepository;
 import com.asms.ticketing.repository.TicketRepository;
 import com.asms.ticketing.service.TicketValidationService;
+import jakarta.persistence.EntityManager;
+import jakarta.persistence.PersistenceContext;
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
@@ -20,8 +24,13 @@ import java.util.Optional;
 @Service
 public class TicketValidationServiceImpl implements TicketValidationService {
 
+    private static final Logger log = LoggerFactory.getLogger(TicketValidationServiceImpl.class);
+
     private final TicketRepository ticketRepository;
     private final CheckInLogRepository checkInLogRepository;
+
+    @PersistenceContext
+    private EntityManager entityManager;
 
     public TicketValidationServiceImpl(TicketRepository ticketRepository, CheckInLogRepository checkInLogRepository) {
         this.ticketRepository = ticketRepository;
@@ -31,36 +40,64 @@ public class TicketValidationServiceImpl implements TicketValidationService {
     @Override
     @Transactional
     public ValidateQrResponse validateQr(ValidateQrRequest request, User staff) {
-        String qrCode = request.qrCode().trim();
-        Optional<Ticket> optionalTicket = ticketRepository.findByQrCode(qrCode);
+        long startedAt = System.nanoTime();
+        String outcome = "UNKNOWN";
 
-        if (optionalTicket.isEmpty()) {
-            CheckInLog log = checkInLogRepository.save(new CheckInLog(null, staff, CheckInResult.INVALID_QR, "Ticket QR code was not found"));
-            return new ValidateQrResponse("INVALID_QR", "Ticket QR code was not found", null, null, null, log.getCheckInTime(), log.getId());
+        try {
+            String qrCode = request == null || request.qrCode() == null ? "" : request.qrCode().trim();
+            if (qrCode.isBlank()) {
+                CheckInLog checkInLog = checkInLogRepository.save(new CheckInLog(null, staff, CheckInResult.INVALID_QR, "QR code is required"));
+                outcome = CheckInResult.INVALID_QR.name();
+                return new ValidateQrResponse("INVALID_QR", "QR code is required", null, null, null, checkInLog.getCheckInTime(), checkInLog.getId());
+            }
+
+            Optional<Ticket> optionalTicket = ticketRepository.findByQrCodeWithBooking(qrCode);
+
+            if (optionalTicket.isEmpty()) {
+                CheckInLog checkInLog = checkInLogRepository.save(new CheckInLog(null, staff, CheckInResult.INVALID_QR, "Ticket QR code was not found"));
+                outcome = CheckInResult.INVALID_QR.name();
+                return new ValidateQrResponse("INVALID_QR", "Ticket QR code was not found", null, null, null, checkInLog.getCheckInTime(), checkInLog.getId());
+            }
+
+            Ticket ticket = optionalTicket.get();
+
+            if (ticket.getBooking().getStatus() != BookingStatus.PAID) {
+                outcome = CheckInResult.BOOKING_NOT_PAID.name();
+                return failure(ticket, staff, CheckInResult.BOOKING_NOT_PAID, "Booking is not paid");
+            }
+
+            if (ticket.getStatus() == TicketStatus.USED) {
+                outcome = CheckInResult.ALREADY_USED.name();
+                return failure(ticket, staff, CheckInResult.ALREADY_USED, "Ticket has already been used");
+            }
+
+            Instant now = Instant.now();
+            if (ticket.getStatus() == TicketStatus.EXPIRED || ticket.getShowEndTime().isBefore(now)) {
+                ticket.setStatus(TicketStatus.EXPIRED);
+                ticketRepository.save(ticket);
+                outcome = CheckInResult.EXPIRED.name();
+                return failure(ticket, staff, CheckInResult.EXPIRED, "Ticket or show schedule has expired");
+            }
+
+            int updatedRows = ticketRepository.markUsedIfValid(ticket.getId(), TicketStatus.VALID, TicketStatus.USED, now);
+            if (updatedRows == 0) {
+                entityManager.refresh(ticket);
+                CheckInResult result = ticket.getStatus() == TicketStatus.EXPIRED ? CheckInResult.EXPIRED : CheckInResult.ALREADY_USED;
+                String message = result == CheckInResult.EXPIRED ? "Ticket or show schedule has expired" : "Ticket has already been used";
+                outcome = result.name();
+                return failure(ticket, staff, result, message);
+            }
+
+            ticket.setStatus(TicketStatus.USED);
+            ticket.setUsedAt(now);
+            CheckInLog checkInLog = checkInLogRepository.save(new CheckInLog(ticket, staff, CheckInResult.SUCCESS, null));
+
+            outcome = CheckInResult.SUCCESS.name();
+            return toResponse(ticket, checkInLog, "SUCCESS", "Ticket valid - Allow entry");
+        } finally {
+            long elapsedMs = (System.nanoTime() - startedAt) / 1_000_000;
+            log.info("Ticket QR validation outcome={} elapsedMs={}", outcome, elapsedMs);
         }
-
-        Ticket ticket = optionalTicket.get();
-
-        if (ticket.getBooking().getStatus() != BookingStatus.PAID) {
-            return failure(ticket, staff, CheckInResult.BOOKING_NOT_PAID, "Booking is not paid");
-        }
-
-        if (ticket.getStatus() == TicketStatus.USED) {
-            return failure(ticket, staff, CheckInResult.ALREADY_USED, "Ticket has already been used");
-        }
-
-        if (ticket.getStatus() == TicketStatus.EXPIRED || ticket.getShowEndTime().isBefore(Instant.now())) {
-            ticket.setStatus(TicketStatus.EXPIRED);
-            ticketRepository.save(ticket);
-            return failure(ticket, staff, CheckInResult.EXPIRED, "Ticket or show schedule has expired");
-        }
-
-        ticket.setStatus(TicketStatus.USED);
-        ticket.setUsedAt(Instant.now());
-        ticketRepository.save(ticket);
-        CheckInLog log = checkInLogRepository.save(new CheckInLog(ticket, staff, CheckInResult.SUCCESS, null));
-
-        return toResponse(ticket, log, "SUCCESS", "Ticket checked in successfully");
     }
 
     private ValidateQrResponse failure(Ticket ticket, User staff, CheckInResult result, String message) {

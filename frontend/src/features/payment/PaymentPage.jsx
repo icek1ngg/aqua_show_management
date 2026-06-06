@@ -4,6 +4,7 @@ import { Link, useLocation, useNavigate, useParams } from 'react-router-dom';
 import { getBookingDetail } from '../../services/bookingService.js';
 import { createPayment } from '../../services/paymentService.js';
 import MainLayout from '../../shared/layouts/MainLayout.jsx';
+import { isTerminalBookingStatus, normalizeBookingPaymentStatus } from '../../shared/utils/paymentStatus.js';
 
 const fallbackImageUrl =
   'https://images.unsplash.com/photo-1507525428034-b723cf961d3e?auto=format&fit=crop&w=1400&q=80';
@@ -58,6 +59,9 @@ function normalizeBooking(booking) {
     status: booking.status || 'PROCESSING',
     createdAt: booking.createdAt,
     expiresAt: booking.expiresAt,
+    payment: booking.payment || null,
+    tickets: booking.tickets || null,
+    emailNotification: booking.emailNotification || null,
   };
 }
 
@@ -251,7 +255,8 @@ export default function PaymentPage() {
   }, [bookingId, location, navigate]);
 
   useEffect(() => {
-    if (countdownSeconds === null || countdownSeconds <= 0 || booking?.status !== 'PENDING_PAYMENT') {
+    const statusState = normalizeBookingPaymentStatus(booking, booking?.payment);
+    if (countdownSeconds === null || countdownSeconds <= 0 || statusState.status !== 'PENDING_PAYMENT') {
       return undefined;
     }
 
@@ -260,35 +265,51 @@ export default function PaymentPage() {
     }, 1000);
 
     return () => window.clearInterval(timerId);
-  }, [booking?.status, countdownSeconds]);
+  }, [booking, countdownSeconds]);
 
   useEffect(() => {
-    if (!paymentSession || ['PAID', 'EXPIRED', 'FAILED'].includes(booking?.status)) {
+    const statusState = normalizeBookingPaymentStatus(booking, booking?.payment);
+    if (!paymentSession || isTerminalBookingStatus(statusState.status)) {
       return undefined;
     }
 
     const intervalId = window.setInterval(async () => {
       const latest = await refreshBooking();
-      if (['PAID', 'EXPIRED', 'FAILED'].includes(latest?.status)) {
+      const latestStatus = normalizeBookingPaymentStatus(latest, latest?.payment);
+      if (isTerminalBookingStatus(latestStatus.status)) {
         window.clearInterval(intervalId);
       }
     }, 3000);
 
     return () => window.clearInterval(intervalId);
-  }, [booking?.status, bookingId, paymentSession]);
+  }, [booking, bookingId, paymentSession]);
 
-  const effectiveStatus = booking?.status === 'PENDING_PAYMENT' && countdownSeconds === 0 ? 'EXPIRED' : booking?.status;
+  useEffect(() => {
+    const statusState = normalizeBookingPaymentStatus(booking, booking?.payment);
+    if (statusState.status !== 'PAID' || statusState.bookingStatus === 'PAID') {
+      return undefined;
+    }
+
+    const timeoutId = window.setTimeout(() => {
+      refreshBooking();
+    }, 1200);
+
+    return () => window.clearTimeout(timeoutId);
+  }, [booking]);
+
+  const normalizedStatus = normalizeBookingPaymentStatus(booking, booking?.payment);
+  const effectiveStatus = normalizedStatus.status === 'PENDING_PAYMENT' && countdownSeconds === 0 ? 'EXPIRED' : normalizedStatus.status;
   const isPaid = effectiveStatus === 'PAID';
   const isExpiredOrFailed = ['EXPIRED', 'FAILED'].includes(effectiveStatus);
   const canPay = effectiveStatus === 'PENDING_PAYMENT';
   const statusMeta = statusCopy[effectiveStatus] || statusCopy.PROCESSING;
-  const paymentStatus = paymentSession?.status || (isPaid ? 'SUCCESS' : effectiveStatus === 'FAILED' ? 'FAILED' : effectiveStatus === 'EXPIRED' ? 'EXPIRED' : 'PENDING');
+  const paymentStatus = isPaid ? 'SUCCESS' : normalizedStatus.paymentStatus || paymentSession?.status || (effectiveStatus === 'FAILED' ? 'FAILED' : effectiveStatus === 'EXPIRED' ? 'EXPIRED' : 'PENDING');
   const checkoutUrl = paymentSession?.checkoutUrl || paymentSession?.paymentUrl;
   const qrUrl = paymentQrImageUrl(paymentSession, booking?.totalAmount);
 
   const paymentSteps = useMemo(
     () => [
-      { label: 'Booking held', icon: 'task_alt', active: Boolean(booking), value: booking?.status || 'Loading' },
+      { label: 'Booking held', icon: 'task_alt', active: Boolean(booking), value: effectiveStatus || 'Loading' },
       { label: 'PayOS checkout', icon: 'payments', active: Boolean(paymentSession) || isPaid, value: paymentStatus },
       { label: 'Tickets', icon: 'qr_code_2', active: isPaid, value: isPaid ? 'Queued / ready' : 'After payment' },
       { label: 'Email', icon: 'outgoing_mail', active: isPaid, value: isPaid ? 'Queued / sent' : 'After payment' },
@@ -303,11 +324,6 @@ export default function PaymentPage() {
     try {
       const payment = await createPayment(bookingId);
       setPaymentSession(payment);
-
-      const nextCheckoutUrl = payment?.checkoutUrl || payment?.paymentUrl;
-      if (nextCheckoutUrl) {
-        window.open(nextCheckoutUrl, '_blank', 'noopener,noreferrer');
-      }
     } catch (payError) {
       if (payError?.response?.status === 401) {
         navigate('/login', { replace: true, state: { from: location } });
@@ -446,7 +462,7 @@ export default function PaymentPage() {
                     type="button"
                   >
                     <span className="material-symbols-outlined">payments</span>
-                    {isPaid ? 'Payment completed' : submitting ? 'Opening PayOS...' : 'Pay with PayOS'}
+                    {isPaid ? 'Payment completed' : submitting ? 'Creating QR...' : 'Show PayOS QR'}
                   </button>
 
                   {!canPay ? (
