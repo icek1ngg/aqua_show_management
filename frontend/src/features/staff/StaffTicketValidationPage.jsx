@@ -30,9 +30,35 @@ const resultStyles = {
     title: 'Booking not paid',
     className: 'border-red-200 bg-red-50 text-red-700',
   },
+  TICKET_NOT_FOUND: {
+    icon: 'search_off',
+    title: 'Ticket not found',
+    className: 'border-red-200 bg-red-50 text-red-700',
+  },
+  INVALID_STATUS: {
+    icon: 'block',
+    title: 'Invalid ticket status',
+    className: 'border-red-200 bg-red-50 text-red-700',
+  },
 };
 
-const duplicateScanCooldownMs = 2500;
+const scannerStates = Object.freeze({
+  IDLE: 'IDLE',
+  STARTING_CAMERA: 'STARTING_CAMERA',
+  SCANNING: 'SCANNING',
+  QR_DETECTED: 'QR_DETECTED',
+  VALIDATING: 'VALIDATING',
+  RESULT: 'RESULT',
+  COOLDOWN: 'COOLDOWN',
+  PAUSED: 'PAUSED',
+  ERROR: 'ERROR',
+});
+
+const scanIntervalMs = 180;
+const sameQrCooldownMs = 30000;
+const invalidQrCooldownMs = 5000;
+const resultDisplayMs = 1800;
+const resultCooldownMs = 200;
 
 function formatDateTime(value) {
   return value ? new Intl.DateTimeFormat('en-US', { dateStyle: 'medium', timeStyle: 'short' }).format(new Date(value)) : 'Unavailable';
@@ -119,26 +145,38 @@ function runValidationFeedback(resultCode) {
   playTone(isSuccess ? 880 : 220, isSuccess ? 120 : 180);
 }
 
-function getScannerStatus({ loading, result, cameraActive, cameraStarting, qrDetected }) {
-  if (cameraStarting) {
-    return 'Camera starting...';
+function runDetectionFeedback() {
+  if (navigator.vibrate) {
+    navigator.vibrate(35);
   }
-  if (loading) {
-    return 'Validating ticket...';
+  playTone(660, 70);
+}
+
+function getScannerStatus(scannerState, result) {
+  switch (scannerState) {
+    case scannerStates.STARTING_CAMERA:
+      return 'Camera starting...';
+    case scannerStates.SCANNING:
+      return 'Scanning...';
+    case scannerStates.QR_DETECTED:
+    case scannerStates.VALIDATING:
+      return 'QR detected. Validating...';
+    case scannerStates.RESULT:
+    case scannerStates.COOLDOWN:
+      if (result?.result === 'SUCCESS') {
+        return 'Ticket valid - Allow entry';
+      }
+      if (result?.result === 'ALREADY_USED') {
+        return 'Ticket already used';
+      }
+      return 'Invalid ticket - Deny entry';
+    case scannerStates.PAUSED:
+      return 'Paused - Scan next ticket when ready';
+    case scannerStates.ERROR:
+      return 'Scanner error';
+    default:
+      return 'Camera stopped';
   }
-  if (qrDetected) {
-    return 'QR detected';
-  }
-  if (result?.result === 'SUCCESS') {
-    return 'Ticket valid - Allow entry';
-  }
-  if (result?.result === 'ALREADY_USED') {
-    return 'Ticket already used';
-  }
-  if (result) {
-    return 'Ticket invalid - Deny entry';
-  }
-  return cameraActive ? 'Scanning...' : 'Camera stopped';
 }
 
 function waitForVideoReady(video) {
@@ -234,10 +272,9 @@ export default function StaffTicketValidationPage() {
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState('');
   const [cameraActive, setCameraActive] = useState(false);
-  const [cameraStarting, setCameraStarting] = useState(false);
   const [cameraError, setCameraError] = useState('');
   const [scannedPayload, setScannedPayload] = useState('');
-  const [qrDetected, setQrDetected] = useState(false);
+  const [scannerState, setScannerState] = useState(scannerStates.IDLE);
   const [debugInfo, setDebugInfo] = useState({
     permission: 'unknown',
     readyState: 0,
@@ -246,8 +283,8 @@ export default function StaffTicketValidationPage() {
     lastAttempt: '',
     lastRawValue: '',
     lastApiResult: '',
+    lastError: '',
   });
-  
   const [pauseAfterScan, setPauseAfterScan] = useState(false);
   const [capturedImage, setCapturedImage] = useState(null);
   const [flashActive, setFlashActive] = useState(false);
@@ -256,30 +293,57 @@ export default function StaffTicketValidationPage() {
   const canvasRef = useRef(null);
   const streamRef = useRef(null);
   const detectorRef = useRef(null);
-  const animationFrameRef = useRef(null);
+  const scheduledFrameRef = useRef(null);
   const scanLoopActiveRef = useRef(false);
-  const scanInProgressRef = useRef(false);
-  const validatingRef = useRef(false);
-  const lastAutoScanRef = useRef({ payload: '', scannedAt: 0 });
+  const isDetectingRef = useRef(false);
+  const isValidatingRef = useRef(false);
+  const scannerStateRef = useRef(scannerStates.IDLE);
+  const lastScanAttemptAtRef = useRef(0);
+  const lastDetectedQrRef = useRef('');
+  const lastDetectedAtRef = useRef(0);
+  const processedQrCacheRef = useRef(new Map());
   const pauseAfterScanRef = useRef(pauseAfterScan);
-  const capturedImageRef = useRef(capturedImage);
-  const scannerStatus = getScannerStatus({ loading, result, cameraActive, cameraStarting, qrDetected });
+  const resultTimerRef = useRef(null);
+  const cooldownTimerRef = useRef(null);
+  const scannerStatus = getScannerStatus(scannerState, result);
+  const cameraStarting = scannerState === scannerStates.STARTING_CAMERA;
 
   useEffect(() => {
     pauseAfterScanRef.current = pauseAfterScan;
   }, [pauseAfterScan]);
 
-  useEffect(() => {
-    capturedImageRef.current = capturedImage;
-  }, [capturedImage]);
+  const transitionScanner = (nextState) => {
+    scannerStateRef.current = nextState;
+    setScannerState(nextState);
+  };
+
+  const clearScannerTimers = () => {
+    window.clearTimeout(resultTimerRef.current);
+    window.clearTimeout(cooldownTimerRef.current);
+    resultTimerRef.current = null;
+    cooldownTimerRef.current = null;
+  };
+
+  const cancelScheduledFrame = () => {
+    const scheduled = scheduledFrameRef.current;
+    const video = videoRef.current;
+    if (!scheduled) {
+      return;
+    }
+    if (scheduled.type === 'video' && video?.cancelVideoFrameCallback) {
+      video.cancelVideoFrameCallback(scheduled.id);
+    } else {
+      window.cancelAnimationFrame(scheduled.id);
+    }
+    scheduledFrameRef.current = null;
+  };
 
   const stopCamera = () => {
     scanLoopActiveRef.current = false;
-    scanInProgressRef.current = false;
-    if (animationFrameRef.current) {
-      window.cancelAnimationFrame(animationFrameRef.current);
-      animationFrameRef.current = null;
-    }
+    isDetectingRef.current = false;
+    isValidatingRef.current = false;
+    clearScannerTimers();
+    cancelScheduledFrame();
 
     if (streamRef.current) {
       streamRef.current.getTracks().forEach((track) => track.stop());
@@ -291,80 +355,125 @@ export default function StaffTicketValidationPage() {
     }
 
     setCameraActive(false);
-    setCameraStarting(false);
-    setQrDetected(false);
     setCapturedImage(null);
     setFlashActive(false);
-    lastAutoScanRef.current = { payload: '', scannedAt: 0 };
+    lastScanAttemptAtRef.current = 0;
+    transitionScanner(scannerStates.IDLE);
   };
 
   useEffect(() => () => stopCamera(), []);
 
   const resumeScanning = () => {
+    clearScannerTimers();
     setCapturedImage(null);
     setCameraError('');
-    validatingRef.current = false;
+    isDetectingRef.current = false;
+    isValidatingRef.current = false;
+    transitionScanner(streamRef.current ? scannerStates.SCANNING : scannerStates.IDLE);
   };
 
-  const applyValidation = async (payload, capturedImg = null) => {
+  const scheduleAfterResult = () => {
+    transitionScanner(scannerStates.RESULT);
+    resultTimerRef.current = window.setTimeout(() => {
+      if (!scanLoopActiveRef.current) {
+        return;
+      }
+      if (pauseAfterScanRef.current) {
+        transitionScanner(scannerStates.PAUSED);
+        return;
+      }
+      transitionScanner(scannerStates.COOLDOWN);
+      cooldownTimerRef.current = window.setTimeout(() => {
+        if (scanLoopActiveRef.current) {
+          setCameraError('');
+          transitionScanner(scannerStates.SCANNING);
+        }
+      }, resultCooldownMs);
+    }, resultDisplayMs);
+  };
+
+  const rememberProcessedQr = (payload, resultCode) => {
+    const cooldownMs = ['SUCCESS', 'ALREADY_USED'].includes(resultCode) ? sameQrCooldownMs : invalidQrCooldownMs;
+    processedQrCacheRef.current.set(payload, Date.now() + cooldownMs);
+  };
+
+  const applyValidation = async (payload, capturedImg = null, source = 'manual') => {
+    if (isValidatingRef.current) {
+      return;
+    }
+
     const parsedQr = normalizeQrPayload(payload);
     if (parsedQr.error) {
       setError(parsedQr.error);
       setCameraError(parsedQr.error);
-      setDebugInfo((current) => ({ ...current, lastApiResult: parsedQr.error }));
-      validatingRef.current = false;
+      setDebugInfo((current) => ({ ...current, lastError: parsedQr.error }));
       return;
     }
 
-    const trimmedQr = parsedQr.value;
-    validatingRef.current = true;
+    const normalizedQr = parsedQr.value;
+    const cachedUntil = processedQrCacheRef.current.get(normalizedQr);
+    if (cachedUntil && cachedUntil > Date.now()) {
+      setCameraError('This QR was just scanned.');
+      setError('This QR was just scanned.');
+      return;
+    }
+    processedQrCacheRef.current.delete(normalizedQr);
+
+    isValidatingRef.current = true;
+    transitionScanner(scannerStates.VALIDATING);
     setLoading(true);
     setError('');
     setCameraError('');
-    setScannedPayload(trimmedQr);
-    setQrDetected(true);
-    
-    if (capturedImg && pauseAfterScanRef.current) {
+    setScannedPayload(normalizedQr);
+
+    if (capturedImg) {
       setCapturedImage(capturedImg);
-    } else if (!cameraActive) {
+    } else if (source === 'manual') {
       setCapturedImage(null);
     }
 
     try {
-      const validation = await validateQr(trimmedQr);
+      const validation = await validateQr(normalizedQr);
       const validationWithImage = { ...validation, capturedImage: capturedImg };
+      rememberProcessedQr(normalizedQr, validation.result);
       setResult(validationWithImage);
       setHistory((current) => [validationWithImage, ...current].slice(0, 8));
       setQrCode('');
       setDebugInfo((current) => ({ ...current, lastApiResult: validation.result }));
       runValidationFeedback(validation.result);
+      if (scanLoopActiveRef.current) {
+        scheduleAfterResult();
+      } else {
+        transitionScanner(scannerStates.RESULT);
+      }
     } catch (validationError) {
       const message = validationError.response?.data?.message || validationError.message || 'Unable to validate QR.';
+      rememberProcessedQr(normalizedQr, 'ERROR');
       setError(message);
-      setDebugInfo((current) => ({ ...current, lastApiResult: message }));
+      setCameraError(message);
+      setDebugInfo((current) => ({ ...current, lastError: message }));
       runValidationFeedback('ERROR');
+      transitionScanner(scannerStates.ERROR);
+      if (scanLoopActiveRef.current) {
+        resultTimerRef.current = window.setTimeout(() => transitionScanner(scannerStates.SCANNING), resultDisplayMs);
+      }
     } finally {
       setLoading(false);
-      setQrDetected(false);
-      if (!pauseAfterScanRef.current || !capturedImg) {
-        window.setTimeout(() => {
-          validatingRef.current = false;
-        }, 300);
-      }
+      isValidatingRef.current = false;
     }
   };
 
   const handleSubmit = async (event) => {
     event.preventDefault();
-    await applyValidation(qrCode);
+    await applyValidation(qrCode, null, 'manual');
   };
 
   const startCamera = async () => {
-    if (cameraStarting || cameraActive || scanLoopActiveRef.current) {
+    if (scanLoopActiveRef.current || streamRef.current || scannerStateRef.current === scannerStates.STARTING_CAMERA) {
       return;
     }
 
-    setCameraStarting(true);
+    transitionScanner(scannerStates.STARTING_CAMERA);
     setCameraError('');
     setError('');
     setCapturedImage(null);
@@ -415,28 +524,45 @@ export default function StaffTicketValidationPage() {
       }
 
       setCameraActive(true);
-      setCameraStarting(false);
       scanLoopActiveRef.current = true;
+      transitionScanner(scannerStates.SCANNING);
 
-      const scanFrame = async () => {
+      const scheduleNextFrame = (scanFrame) => {
         if (!scanLoopActiveRef.current) {
           return;
         }
         const video = videoRef.current;
+        if (video?.requestVideoFrameCallback) {
+          scheduledFrameRef.current = { type: 'video', id: video.requestVideoFrameCallback(scanFrame) };
+        } else {
+          scheduledFrameRef.current = { type: 'animation', id: window.requestAnimationFrame(scanFrame) };
+        }
+      };
+
+      const scanFrame = async () => {
+        scheduledFrameRef.current = null;
+        if (!scanLoopActiveRef.current) {
+          return;
+        }
+
+        const video = videoRef.current;
+        const now = Date.now();
         if (
           !video
-          || scanInProgressRef.current
-          || validatingRef.current
-          || (pauseAfterScanRef.current && capturedImageRef.current)
+          || scannerStateRef.current !== scannerStates.SCANNING
+          || isDetectingRef.current
+          || isValidatingRef.current
+          || now - lastScanAttemptAtRef.current < scanIntervalMs
           || video.readyState < HTMLMediaElement.HAVE_CURRENT_DATA
           || video.videoWidth === 0
           || video.videoHeight === 0
         ) {
-          animationFrameRef.current = window.requestAnimationFrame(scanFrame);
+          scheduleNextFrame(scanFrame);
           return;
         }
 
-        scanInProgressRef.current = true;
+        lastScanAttemptAtRef.current = now;
+        isDetectingRef.current = true;
         try {
           const attemptedAt = new Date();
           const rawValue = detectorRef.current
@@ -451,48 +577,64 @@ export default function StaffTicketValidationPage() {
           }));
 
           if (rawValue) {
-            const normalizedRawValue = rawValue.trim();
-            const now = Date.now();
-            if (
-              normalizedRawValue === lastAutoScanRef.current.payload
-              && now - lastAutoScanRef.current.scannedAt < duplicateScanCooldownMs
-            ) {
-              setCameraError('This QR was just scanned. Move to the next ticket or wait a moment to rescan.');
-            } else {
-              lastAutoScanRef.current = { payload: normalizedRawValue, scannedAt: now };
+            const parsedQr = normalizeQrPayload(rawValue);
+            const normalizedQr = parsedQr.value;
+            const detectedAt = Date.now();
+            const cachedUntil = normalizedQr ? processedQrCacheRef.current.get(normalizedQr) : 0;
+
+            if (cachedUntil && cachedUntil > detectedAt) {
+              if (normalizedQr !== lastDetectedQrRef.current || detectedAt - lastDetectedAtRef.current > resultDisplayMs) {
+                setCameraError('This QR was just scanned.');
+                lastDetectedQrRef.current = normalizedQr;
+                lastDetectedAtRef.current = detectedAt;
+              }
+            } else if (normalizedQr) {
+              processedQrCacheRef.current.delete(normalizedQr);
+              transitionScanner(scannerStates.QR_DETECTED);
+              lastDetectedQrRef.current = normalizedQr;
+              lastDetectedAtRef.current = detectedAt;
+              setScannedPayload(normalizedQr);
+              runDetectionFeedback();
+
               let capturedDataUrl = null;
-              const canvas = canvasRef.current;
-              if (canvas) {
-                canvas.width = video.videoWidth;
-                canvas.height = video.videoHeight;
-                const context = canvas.getContext('2d');
-                if (context) {
-                  context.drawImage(video, 0, 0, canvas.width, canvas.height);
-                  capturedDataUrl = canvas.toDataURL('image/jpeg', 0.85);
-                  if (pauseAfterScanRef.current) {
+              if (pauseAfterScanRef.current) {
+                const canvas = canvasRef.current;
+                if (canvas) {
+                  canvas.width = video.videoWidth;
+                  canvas.height = video.videoHeight;
+                  const context = canvas.getContext('2d');
+                  if (context) {
+                    context.drawImage(video, 0, 0, canvas.width, canvas.height);
+                    capturedDataUrl = canvas.toDataURL('image/jpeg', 0.85);
                     setCapturedImage(capturedDataUrl);
+                    setFlashActive(true);
+                    window.setTimeout(() => setFlashActive(false), 250);
                   }
-                  setFlashActive(true);
-                  window.setTimeout(() => setFlashActive(false), 250);
                 }
               }
-              await applyValidation(normalizedRawValue, capturedDataUrl);
+              await applyValidation(normalizedQr, capturedDataUrl, 'camera');
+            } else if (parsedQr.error) {
+              setCameraError(parsedQr.error);
+              setDebugInfo((current) => ({ ...current, lastError: parsedQr.error }));
             }
           }
         } catch (scanError) {
-          setCameraError(scanError.message || 'Unable to scan QR from camera.');
+          const message = scanError.message || 'Unable to scan QR from camera.';
+          setCameraError(message);
+          setDebugInfo((current) => ({ ...current, lastError: message }));
         } finally {
-          scanInProgressRef.current = false;
-          if (scanLoopActiveRef.current) {
-            animationFrameRef.current = window.requestAnimationFrame(scanFrame);
-          }
+          isDetectingRef.current = false;
+          scheduleNextFrame(scanFrame);
         }
       };
 
-      animationFrameRef.current = window.requestAnimationFrame(scanFrame);
+      scheduleNextFrame(scanFrame);
     } catch (cameraStartError) {
-      setCameraError(cameraStartError.message || 'Camera permission was denied.');
+      const message = cameraStartError.message || 'Camera permission was denied.';
       stopCamera();
+      setCameraError(message);
+      setDebugInfo((current) => ({ ...current, lastError: message }));
+      transitionScanner(scannerStates.ERROR);
     }
   };
 
@@ -597,10 +739,15 @@ export default function StaffTicketValidationPage() {
                 {cameraError ? <p className="border-t border-red-100 bg-red-50 px-5 py-3 text-sm font-semibold text-red-700">{cameraError}</p> : null}
                 {import.meta.env.DEV ? (
                   <div className="border-t border-slate-200 bg-slate-50 px-5 py-4 font-mono text-[11px] text-slate-600">
+                    <p>
+                      state={scannerState} locked={String(isDetectingRef.current || isValidatingRef.current)}
+                      {' '}coolingDown={String(scannerState === scannerStates.COOLDOWN || processedQrCacheRef.current.size > 0)}
+                    </p>
                     <p>permission={debugInfo.permission} readyState={debugInfo.readyState} size={debugInfo.dimensions}</p>
                     <p>detector={debugInfo.detector} lastAttempt={debugInfo.lastAttempt || 'none'}</p>
-                    <p className="break-all">lastRaw={debugInfo.lastRawValue || 'none'}</p>
+                    <p className="break-all">lastDetected={lastDetectedQrRef.current || debugInfo.lastRawValue || 'none'}</p>
                     <p className="break-all">lastApi={debugInfo.lastApiResult || 'none'}</p>
+                    <p className="break-all">lastError={debugInfo.lastError || 'none'}</p>
                   </div>
                 ) : null}
               </section>
@@ -621,10 +768,12 @@ export default function StaffTicketValidationPage() {
                     <span className="material-symbols-outlined">qr_code_scanner</span>
                     {loading ? 'Validating...' : 'Validate ticket'}
                   </button>
-                  <button className="inline-flex items-center justify-center gap-2 rounded-full border border-cyan-200 bg-white px-6 py-3 font-black text-cyan-700 hover:bg-cyan-50 transition" onClick={() => setQrCode('ASMS:MOCK:VALID')} type="button">
-                    <span className="material-symbols-outlined">science</span>
-                    Demo valid
-                  </button>
+                  {import.meta.env.DEV && import.meta.env.VITE_ENABLE_MOCK_VALIDATION === 'true' ? (
+                    <button className="inline-flex items-center justify-center gap-2 rounded-full border border-cyan-200 bg-white px-6 py-3 font-black text-cyan-700 hover:bg-cyan-50 transition" onClick={() => setQrCode('ASMS:MOCK:VALID')} type="button">
+                      <span className="material-symbols-outlined">science</span>
+                      Demo valid
+                    </button>
+                  ) : null}
                 </div>
               </form>
 
