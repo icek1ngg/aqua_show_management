@@ -55,8 +55,8 @@ public class TicketValidationServiceImpl implements TicketValidationService {
             Optional<Ticket> optionalTicket = ticketRepository.findByQrCodeWithBooking(qrCode);
 
             if (optionalTicket.isEmpty()) {
-                CheckInLog checkInLog = checkInLogRepository.save(new CheckInLog(null, staff, CheckInResult.TICKET_NOT_FOUND, "Ticket QR code was not found"));
-                outcome = CheckInResult.TICKET_NOT_FOUND.name();
+                CheckInLog checkInLog = checkInLogRepository.save(new CheckInLog(null, staff, CheckInResult.INVALID_QR, "Ticket QR code was not found"));
+                outcome = "TICKET_NOT_FOUND";
                 return new ValidateQrResponse("TICKET_NOT_FOUND", "Ticket QR code was not found", null, null, null, checkInLog.getCheckInTime(), checkInLog.getId());
             }
 
@@ -81,8 +81,8 @@ public class TicketValidationServiceImpl implements TicketValidationService {
             }
 
             if (ticket.getStatus() != TicketStatus.VALID) {
-                outcome = CheckInResult.INVALID_STATUS.name();
-                return failure(ticket, staff, CheckInResult.INVALID_STATUS, "Ticket status is not valid for check-in");
+                outcome = "INVALID_STATUS";
+                return failure(ticket, staff, CheckInResult.INVALID_QR, "INVALID_STATUS", "Ticket status is not valid for check-in");
             }
 
             int updatedRows = ticketRepository.markUsedIfValid(ticket.getId(), TicketStatus.VALID, TicketStatus.USED, now);
@@ -97,11 +97,12 @@ public class TicketValidationServiceImpl implements TicketValidationService {
                     result = CheckInResult.EXPIRED;
                     message = "Ticket or show schedule has expired";
                 } else {
-                    result = CheckInResult.INVALID_STATUS;
+                    result = CheckInResult.INVALID_QR;
                     message = "Ticket status changed before check-in completed";
                 }
-                outcome = result.name();
-                return failure(ticket, staff, result, message);
+                String responseCode = result == CheckInResult.INVALID_QR ? "INVALID_STATUS" : result.name();
+                outcome = responseCode;
+                return failure(ticket, staff, result, responseCode, message);
             }
 
             ticket.setStatus(TicketStatus.USED);
@@ -117,18 +118,22 @@ public class TicketValidationServiceImpl implements TicketValidationService {
     }
 
     private ValidateQrResponse failure(Ticket ticket, User staff, CheckInResult result, String message) {
+        return failure(ticket, staff, result, result.name(), message);
+    }
+
+    private ValidateQrResponse failure(Ticket ticket, User staff, CheckInResult logResult, String responseCode, String message) {
         Instant checkedAfter = Instant.now().minusSeconds(DUPLICATE_FAILURE_LOG_COOLDOWN_SECONDS);
         Optional<CheckInLog> recentDuplicate = checkInLogRepository
                 .findFirstByTicket_IdAndStaff_IdAndResultAndCheckInTimeAfterOrderByCheckInTimeDesc(
                         ticket.getId(),
                         staff.getId(),
-                        result,
+                        logResult,
                         checkedAfter
                 );
         CheckInLog checkInLog = recentDuplicate.orElseGet(
-                () -> checkInLogRepository.save(new CheckInLog(ticket, staff, result, message))
+                () -> checkInLogRepository.save(new CheckInLog(ticket, staff, logResult, message))
         );
-        return toResponse(ticket, checkInLog, result.name(), message);
+        return toResponse(ticket, checkInLog, responseCode, message);
     }
 
     private ValidateQrResponse toResponse(Ticket ticket, CheckInLog log, String result, String message) {

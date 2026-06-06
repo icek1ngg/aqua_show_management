@@ -10,21 +10,18 @@ const resultMeta = {
     icon: 'verified',
     title: 'Payment confirmed',
     tone: 'text-emerald-700',
-    badge: 'bg-emerald-100 text-emerald-700 border-emerald-200',
     message: 'Your booking is paid. QR tickets and email notification are being finalized.',
   },
   failed: {
     icon: 'error',
     title: 'Payment failed',
     tone: 'text-red-700',
-    badge: 'bg-red-100 text-red-700 border-red-200',
     message: 'The payment was not completed. Review your booking before trying again.',
   },
   pending: {
     icon: 'hourglass_empty',
     title: 'Payment processing',
     tone: 'text-[#a43c12]',
-    badge: 'bg-yellow-100 text-[#a43c12] border-yellow-200',
     message: 'PayOS callback has not finished yet. This page will show the latest backend status.',
   },
 };
@@ -202,9 +199,6 @@ export default function PaymentResultPage() {
             <span className={`mx-auto flex h-20 w-20 items-center justify-center rounded-full bg-cyan-50 ${meta.tone}`}>
               <span className="material-symbols-outlined !text-5xl">{meta.icon}</span>
             </span>
-            <span className={`mt-6 inline-flex rounded-full border px-4 py-1.5 text-xs font-black uppercase tracking-[0.18em] ${meta.badge}`}>
-              UC-20 / UC-21
-            </span>
             <h1 className="mt-5 text-4xl font-black text-slate-950 md:text-5xl">{meta.title}</h1>
             <p className="mx-auto mt-4 max-w-2xl text-lg leading-8 text-slate-600">{meta.message}</p>
             {resultKey === 'pending' && bookingId ? (
@@ -232,7 +226,7 @@ export default function PaymentResultPage() {
             <section className="mt-8 rounded-[1.5rem] border border-cyan-100 bg-white p-6 shadow-sm">
               <div className="flex flex-col justify-between gap-3 sm:flex-row sm:items-end">
                 <div>
-                  <p className="text-xs font-black uppercase tracking-[0.18em] text-cyan-700">UC-13 QR tickets</p>
+                  <p className="text-xs font-black uppercase tracking-[0.18em] text-cyan-700">QR Tickets</p>
                   <h2 className="mt-2 text-2xl font-black text-slate-950">Scan these tickets at the gate</h2>
                 </div>
                 <Link className="inline-flex items-center justify-center gap-2 rounded-full border border-cyan-200 bg-cyan-50 px-5 py-3 text-sm font-black text-cyan-700 hover:bg-cyan-100" to="/staff/check-in">

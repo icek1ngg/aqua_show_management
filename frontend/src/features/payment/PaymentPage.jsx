@@ -402,7 +402,7 @@ export default function PaymentPage() {
           <div className="mb-8 flex flex-col justify-between gap-4 md:flex-row md:items-end">
             <div>
               <p className="inline-flex rounded-full bg-cyan-100 px-4 py-1.5 text-xs font-black uppercase tracking-[0.2em] text-cyan-800">
-                UC-10 Payment
+                Payment
               </p>
               <h1 className="mt-4 text-4xl font-black text-slate-950 md:text-5xl">Complete payment</h1>
               <p className="mt-3 max-w-2xl text-slate-600">PayOS checkout for your reserved AquaPulse booking.</p>

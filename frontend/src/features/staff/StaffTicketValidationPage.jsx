@@ -2,7 +2,7 @@ import { useEffect, useRef, useState } from 'react';
 import jsQR from 'jsqr';
 
 import { validateQr } from '../../services/ticketValidationService.js';
-import MainLayout from '../../shared/layouts/MainLayout.jsx';
+import StaffLayout from '../../shared/layouts/StaffLayout.jsx';
 
 const resultStyles = {
   SUCCESS: {
@@ -62,6 +62,10 @@ const resultCooldownMs = 200;
 
 function formatDateTime(value) {
   return value ? new Intl.DateTimeFormat('en-US', { dateStyle: 'medium', timeStyle: 'short' }).format(new Date(value)) : 'Unavailable';
+}
+
+function formatTicketReference(ticket) {
+  return ticket?.id ? `Ticket ${String(ticket.id).slice(0, 8).toUpperCase()}` : 'Ticket not found';
 }
 
 async function scanWithBarcodeDetector(detector, video) {
@@ -212,7 +216,7 @@ function ResultPanel({ result }) {
       <section className="rounded-[1.5rem] border border-dashed border-cyan-200 bg-white p-10 text-center">
         <span className="material-symbols-outlined text-6xl text-cyan-200">qr_code_scanner</span>
         <h2 className="mt-4 text-2xl font-black text-slate-950">Ready to validate</h2>
-        <p className="mt-2 text-slate-500">Scan or paste a ticket QR payload to check in guests.</p>
+        <p className="mt-2 text-slate-500">Use the camera or manual input to validate a ticket.</p>
       </section>
     );
   }
@@ -235,7 +239,7 @@ function ResultPanel({ result }) {
       <div className={`mt-6 grid grid-cols-1 gap-4 ${result.capturedImage ? 'md:grid-cols-3' : 'md:grid-cols-2'}`}>
         <div className="rounded-2xl bg-white/80 p-4 text-slate-700 shadow-sm">
           <p className="text-xs font-black uppercase tracking-[0.14em] text-slate-400">Ticket</p>
-          <p className="mt-2 break-all font-black">{result.ticket?.qrCode || 'Not found'}</p>
+          <p className="mt-2 font-black">{formatTicketReference(result.ticket)}</p>
           <p className="mt-2 text-sm font-semibold">Status: {result.ticket?.status || 'N/A'}</p>
         </div>
         <div className="rounded-2xl bg-white/80 p-4 text-slate-700 shadow-sm">
@@ -246,7 +250,7 @@ function ResultPanel({ result }) {
         </div>
         {result.capturedImage && (
           <div className="rounded-2xl bg-white/80 p-4 text-slate-700 shadow-sm md:col-span-1">
-            <p className="text-xs font-black uppercase tracking-[0.14em] text-slate-400">Bản chụp QR thực tế</p>
+            <p className="text-xs font-black uppercase tracking-[0.14em] text-slate-400">Captured QR</p>
             <div className="relative mt-2 overflow-hidden rounded-xl border border-white bg-slate-950 group">
               <img
                 src={result.capturedImage}
@@ -307,6 +311,7 @@ export default function StaffTicketValidationPage() {
   const cooldownTimerRef = useRef(null);
   const scannerStatus = getScannerStatus(scannerState, result);
   const cameraStarting = scannerState === scannerStates.STARTING_CAMERA;
+  const showQrDebug = import.meta.env.DEV || import.meta.env.VITE_SHOW_QR_DEBUG === 'true';
 
   useEffect(() => {
     pauseAfterScanRef.current = pauseAfterScan;
@@ -639,13 +644,12 @@ export default function StaffTicketValidationPage() {
   };
 
   return (
-    <MainLayout>
+    <StaffLayout>
       <main className="min-h-screen bg-gradient-to-b from-cyan-50 via-white to-cyan-50 px-4 py-10 sm:px-6 lg:px-8">
         <div className="mx-auto max-w-7xl">
           <header className="mb-8">
-            <p className="inline-flex rounded-full bg-cyan-100 px-4 py-1.5 text-xs font-black uppercase tracking-[0.2em] text-cyan-800">UC-13 Staff</p>
-            <h1 className="mt-4 text-4xl font-black text-slate-950 md:text-5xl">Validate QR ticket</h1>
-            <p className="mt-3 max-w-2xl text-slate-600">Check guest QR status and record every scan attempt.</p>
+            <h1 className="text-4xl font-black text-slate-950 md:text-5xl">QR Ticket Validation</h1>
+            <p className="mt-3 text-slate-600">Scan a guest ticket or enter its QR code manually.</p>
           </header>
 
           <div className="grid grid-cols-1 gap-8 lg:grid-cols-12">
@@ -653,8 +657,7 @@ export default function StaffTicketValidationPage() {
               <section className="overflow-hidden rounded-[1.5rem] border border-cyan-100 bg-white shadow-[0_16px_40px_rgba(8,145,178,0.10)]">
                 <div className="flex flex-col gap-4 border-b border-cyan-100 p-5 sm:flex-row sm:items-center sm:justify-between">
                   <div>
-                    <p className="text-xs font-black uppercase tracking-[0.18em] text-cyan-700">Camera scanner</p>
-                    <h2 className="mt-1 text-xl font-black text-slate-950">Scan ticket QR</h2>
+                    <h2 className="text-xl font-black text-slate-950">Scan Ticket</h2>
                     <p className="mt-2 inline-flex rounded-full bg-slate-100 px-3 py-1 text-xs font-black text-slate-700">{scannerStatus}</p>
                     
                     <div className="mt-3 flex items-center">
@@ -678,7 +681,7 @@ export default function StaffTicketValidationPage() {
                       type="button"
                     >
                       <span className="material-symbols-outlined">photo_camera</span>
-                      Start scan
+                      Start Camera
                     </button>
                     <button
                       className="inline-flex items-center justify-center gap-2 rounded-full border border-cyan-200 bg-white px-5 py-3 text-sm font-black text-cyan-700 hover:bg-cyan-50 disabled:text-slate-300 transition"
@@ -687,7 +690,7 @@ export default function StaffTicketValidationPage() {
                       type="button"
                     >
                       <span className="material-symbols-outlined">videocam_off</span>
-                      Stop
+                      Stop Camera
                     </button>
                   </div>
                 </div>
@@ -731,13 +734,13 @@ export default function StaffTicketValidationPage() {
                     <div className="absolute inset-x-0 bottom-0 z-20 bg-cyan-700/95 px-5 py-3 text-center text-sm font-black text-white">{scannerStatus}</div>
                   ) : null}
                 </div>
-                {scannedPayload ? (
+                {showQrDebug && scannedPayload ? (
                   <div className="border-t border-cyan-100 bg-cyan-50 px-5 py-3 text-xs font-semibold text-slate-600">
                     Last scanned: <span className="font-mono text-slate-900">{scannedPayload}</span>
                   </div>
                 ) : null}
                 {cameraError ? <p className="border-t border-red-100 bg-red-50 px-5 py-3 text-sm font-semibold text-red-700">{cameraError}</p> : null}
-                {import.meta.env.DEV ? (
+                {showQrDebug ? (
                   <div className="border-t border-slate-200 bg-slate-50 px-5 py-4 font-mono text-[11px] text-slate-600">
                     <p>
                       state={scannerState} locked={String(isDetectingRef.current || isValidatingRef.current)}
@@ -754,11 +757,11 @@ export default function StaffTicketValidationPage() {
 
               <form className="rounded-[1.5rem] border border-cyan-100 bg-white p-6 shadow-[0_16px_40px_rgba(8,145,178,0.10)]" onSubmit={handleSubmit}>
                 <label>
-                  <span className="mb-2 block text-sm font-black text-slate-600">QR payload</span>
+                  <span className="mb-2 block text-sm font-black text-slate-600">Manual QR Input</span>
                   <textarea
                     className="min-h-36 w-full rounded-2xl border border-cyan-100 bg-cyan-50/50 p-4 font-mono text-sm outline-none transition focus:border-cyan-500 focus:ring-4 focus:ring-cyan-100"
                     onChange={(event) => setQrCode(event.target.value)}
-                    placeholder="ASMS:booking-id:ticket-index:signature"
+                    placeholder="Paste QR code"
                     value={qrCode}
                   />
                 </label>
@@ -766,12 +769,12 @@ export default function StaffTicketValidationPage() {
                 <div className="mt-5 flex flex-col gap-3 sm:flex-row">
                   <button className="inline-flex items-center justify-center gap-2 rounded-full bg-cyan-700 px-6 py-3 font-black text-white hover:bg-cyan-800 disabled:bg-slate-300 transition" disabled={loading} type="submit">
                     <span className="material-symbols-outlined">qr_code_scanner</span>
-                    {loading ? 'Validating...' : 'Validate ticket'}
+                    {loading ? 'Validating...' : 'Validate'}
                   </button>
                   {import.meta.env.DEV && import.meta.env.VITE_ENABLE_MOCK_VALIDATION === 'true' ? (
                     <button className="inline-flex items-center justify-center gap-2 rounded-full border border-cyan-200 bg-white px-6 py-3 font-black text-cyan-700 hover:bg-cyan-50 transition" onClick={() => setQrCode('ASMS:MOCK:VALID')} type="button">
                       <span className="material-symbols-outlined">science</span>
-                      Demo valid
+                      Fill test code
                     </button>
                   ) : null}
                 </div>
@@ -806,7 +809,7 @@ export default function StaffTicketValidationPage() {
                               <span className="text-[10px] font-bold text-slate-400">{formatDateTime(item.checkedInAt)}</span>
                             </div>
                             <p className="mt-1.5 truncate text-sm font-black text-slate-800">{item.show?.title || item.message}</p>
-                            <p className="mt-0.5 truncate text-xs font-semibold text-slate-500 font-mono">{item.ticket?.qrCode || 'Unknown QR'}</p>
+                            <p className="mt-0.5 truncate text-xs font-semibold text-slate-500">{formatTicketReference(item.ticket)}</p>
                           </div>
                         </article>
                       );
@@ -818,6 +821,6 @@ export default function StaffTicketValidationPage() {
           </div>
         </div>
       </main>
-    </MainLayout>
+    </StaffLayout>
   );
 }
