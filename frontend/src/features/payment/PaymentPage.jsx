@@ -1,8 +1,8 @@
-import { useEffect, useMemo, useState } from 'react';
+import { useEffect, useMemo, useRef, useState } from 'react';
 import { Link, useLocation, useNavigate, useParams } from 'react-router-dom';
 
 import { getBookingDetail } from '../../services/bookingService.js';
-import { createPayment } from '../../services/paymentService.js';
+import { createPayment, reconcilePayment } from '../../services/paymentService.js';
 import MainLayout from '../../shared/layouts/MainLayout.jsx';
 import { isTerminalBookingStatus, normalizeBookingPaymentStatus } from '../../shared/utils/paymentStatus.js';
 
@@ -207,7 +207,10 @@ export default function PaymentPage() {
   const [countdownSeconds, setCountdownSeconds] = useState(null);
   const [loading, setLoading] = useState(true);
   const [submitting, setSubmitting] = useState(false);
+  const [reconciling, setReconciling] = useState(false);
+  const [reconcileMessage, setReconcileMessage] = useState('');
   const [error, setError] = useState('');
+  const hasRedirectedToTicketsRef = useRef(false);
 
   async function refreshBooking({ showLoading = false } = {}) {
     if (showLoading) {
@@ -297,6 +300,21 @@ export default function PaymentPage() {
     return () => window.clearTimeout(timeoutId);
   }, [booking]);
 
+  useEffect(() => {
+    const statusState = normalizeBookingPaymentStatus(booking, booking?.payment);
+    if (statusState.status !== 'PAID' || hasRedirectedToTicketsRef.current) {
+      return undefined;
+    }
+
+    hasRedirectedToTicketsRef.current = true;
+    setReconcileMessage('Payment completed successfully. Redirecting to your tickets...');
+    const timeoutId = window.setTimeout(() => {
+      navigate(`/payments/result?bookingId=${bookingId}&status=success`, { replace: true });
+    }, 1800);
+
+    return () => window.clearTimeout(timeoutId);
+  }, [booking, bookingId, navigate]);
+
   const normalizedStatus = normalizeBookingPaymentStatus(booking, booking?.payment);
   const effectiveStatus = normalizedStatus.status === 'PENDING_PAYMENT' && countdownSeconds === 0 ? 'EXPIRED' : normalizedStatus.status;
   const isPaid = effectiveStatus === 'PAID';
@@ -304,6 +322,7 @@ export default function PaymentPage() {
   const canPay = effectiveStatus === 'PENDING_PAYMENT';
   const statusMeta = statusCopy[effectiveStatus] || statusCopy.PROCESSING;
   const paymentStatus = isPaid ? 'SUCCESS' : normalizedStatus.paymentStatus || paymentSession?.status || (effectiveStatus === 'FAILED' ? 'FAILED' : effectiveStatus === 'EXPIRED' ? 'EXPIRED' : 'PENDING');
+  const paymentDetails = paymentSession || booking?.payment;
   const checkoutUrl = paymentSession?.checkoutUrl || paymentSession?.paymentUrl;
   const qrUrl = paymentQrImageUrl(paymentSession, booking?.totalAmount);
 
@@ -324,11 +343,7 @@ export default function PaymentPage() {
     try {
       const payment = await createPayment(bookingId);
       setPaymentSession(payment);
-
-      const nextCheckoutUrl = payment?.checkoutUrl || payment?.paymentUrl;
-      if (nextCheckoutUrl) {
-        window.open(nextCheckoutUrl, '_blank', 'noopener,noreferrer');
-      }
+      setReconcileMessage('');
     } catch (payError) {
       if (payError?.response?.status === 401) {
         navigate('/login', { replace: true, state: { from: location } });
@@ -338,6 +353,45 @@ export default function PaymentPage() {
       setError(getPaymentErrorMessage(payError));
     } finally {
       setSubmitting(false);
+    }
+  };
+
+  const handleReconcile = async () => {
+    setReconciling(true);
+    setError('');
+    setReconcileMessage('');
+
+    try {
+      const reconciliation = await reconcilePayment(bookingId);
+      setPaymentSession((current) => ({
+        ...current,
+        paymentId: reconciliation.paymentId,
+        payosOrderCode: reconciliation.orderCode,
+        status: reconciliation.paymentStatus,
+        paidAt: reconciliation.paidAt,
+      }));
+      setBooking((current) => current ? {
+        ...current,
+        status: reconciliation.bookingStatus,
+        payment: {
+          ...current.payment,
+          id: reconciliation.paymentId,
+          payosOrderCode: reconciliation.orderCode,
+          amount: current.payment?.amount || current.totalAmount,
+          status: reconciliation.paymentStatus,
+          paidAt: reconciliation.paidAt,
+        },
+      } : current);
+      setReconcileMessage(reconciliation.message);
+      await refreshBooking();
+    } catch (reconcileError) {
+      if (reconcileError?.response?.status === 401) {
+        navigate('/login', { replace: true, state: { from: location } });
+        return;
+      }
+      setError(reconcileError.response?.data?.message || 'Unable to check payment status right now.');
+    } finally {
+      setReconciling(false);
     }
   };
 
@@ -387,6 +441,11 @@ export default function PaymentPage() {
                 {error ? (
                   <div className="rounded-2xl border border-red-200 bg-red-50 px-5 py-4 text-sm font-semibold text-red-700" role="alert">
                     {error}
+                  </div>
+                ) : null}
+                {reconcileMessage ? (
+                  <div className={`rounded-2xl border px-5 py-4 text-sm font-semibold ${isPaid ? 'border-emerald-200 bg-emerald-50 text-emerald-700' : 'border-cyan-200 bg-cyan-50 text-cyan-700'}`}>
+                    {reconcileMessage}
                   </div>
                 ) : null}
 
@@ -476,7 +535,7 @@ export default function PaymentPage() {
                     </p>
                   ) : null}
 
-                  {paymentSession ? (
+                  {paymentDetails ? (
                     <div className="mt-6 rounded-2xl border border-cyan-100 bg-cyan-50 p-4">
                       <div className="flex items-center justify-between gap-3">
                         <p className="text-xs font-black uppercase tracking-[0.16em] text-cyan-800">PayOS session</p>
@@ -485,25 +544,27 @@ export default function PaymentPage() {
                         </span>
                       </div>
 
-                      {qrUrl ? (
+                      {!isPaid && qrUrl ? (
                         <img className="mx-auto mt-4 w-full max-w-[260px] rounded-2xl border border-cyan-100 bg-white p-3" alt="PayOS QR" src={qrUrl} />
-                      ) : (
+                      ) : !isPaid ? (
                         <div className="mt-4 rounded-2xl bg-white p-4 text-center text-sm font-semibold text-slate-500">
                           PayOS checkout link is ready.
                         </div>
-                      )}
+                      ) : null}
 
                       <div className="mt-4 space-y-2 text-sm font-semibold text-slate-600">
-                        <PaymentInfoRow label="Order" value={paymentSession.payosOrderCode} />
-                        <PaymentInfoRow label="Payment link" value={paymentSession.paymentLinkId} />
-                        <PaymentInfoRow label="Amount" value={formatCurrency(paymentSession.amount || booking?.totalAmount)} />
-                        <PaymentInfoRow label="Bank BIN" value={paymentSession.bankBin} />
-                        <PaymentInfoRow label="Account" value={paymentSession.accountNumber} />
-                        <PaymentInfoRow label="Account name" value={paymentSession.accountName} />
-                        <PaymentInfoRow label="Content" value={paymentSession.description} />
+                        <PaymentInfoRow label="Order" value={paymentDetails.payosOrderCode} />
+                        <PaymentInfoRow label="Amount" value={formatCurrency(paymentDetails.amount || booking?.totalAmount)} />
+                        <PaymentInfoRow label="Payment status" value={paymentStatus} />
+                        <PaymentInfoRow label="Booking status" value={effectiveStatus} />
+                        <PaymentInfoRow label="Paid at" value={isPaid ? formatDateTime(paymentDetails.paidAt) : ''} />
+                        <PaymentInfoRow label="Bank BIN" value={paymentSession?.bankBin} />
+                        <PaymentInfoRow label="Account" value={paymentSession?.accountNumber} />
+                        <PaymentInfoRow label="Account name" value={paymentSession?.accountName} />
+                        <PaymentInfoRow label="Content" value={paymentSession?.description} />
                       </div>
 
-                      {checkoutUrl ? (
+                      {!isPaid && checkoutUrl ? (
                         <a
                           className="mt-5 flex w-full items-center justify-center gap-2 rounded-full bg-white px-5 py-3 font-black text-cyan-700 ring-1 ring-cyan-200 hover:bg-cyan-50"
                           href={checkoutUrl}
@@ -515,20 +576,29 @@ export default function PaymentPage() {
                         </a>
                       ) : null}
 
+                      {!isPaid ? (
+                        <button
+                          className="mt-3 flex w-full items-center justify-center gap-2 rounded-full bg-cyan-700 px-5 py-3 font-black text-white hover:bg-cyan-800 disabled:bg-slate-300"
+                          disabled={reconciling}
+                          onClick={handleReconcile}
+                          type="button"
+                        >
+                          <span className="material-symbols-outlined">sync</span>
+                          {reconciling ? 'Checking PayOS...' : 'I have paid - Check payment status'}
+                        </button>
+                      ) : null}
+
                       <p className="mt-3 text-xs font-semibold leading-5 text-slate-500">
-                        After payment, PayOS callback updates the backend. This page checks booking status every 3 seconds.
+                        This page checks booking status every 3 seconds. Use the button above if the callback is delayed.
                       </p>
                     </div>
                   ) : null}
 
                   {isPaid ? (
-                    <Link
-                      className="mt-5 flex w-full items-center justify-center gap-2 rounded-full bg-emerald-600 px-5 py-3 font-black text-white hover:bg-emerald-700"
-                      to={`/payments/result?bookingId=${bookingId}&status=success`}
-                    >
+                    <div className="mt-5 rounded-2xl border border-emerald-200 bg-emerald-50 p-4 text-center font-black text-emerald-700">
                       <span className="material-symbols-outlined">receipt_long</span>
-                      View payment result
-                    </Link>
+                      <p className="mt-2">Payment completed successfully. Redirecting to your tickets...</p>
+                    </div>
                   ) : null}
                 </div>
               </aside>

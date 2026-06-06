@@ -6,20 +6,27 @@ import com.asms.booking.repository.BookingRepository;
 import com.asms.booking.service.RedisTicketHoldService;
 import com.asms.core.exception.BadRequestException;
 import com.asms.core.exception.NotFoundException;
+import com.asms.core.exception.UnauthorizedException;
 import com.asms.identity.entity.User;
+import com.asms.identity.enums.UserRole;
 import com.asms.payment.dto.CreatePaymentRequest;
 import com.asms.payment.dto.CreatePaymentResponse;
 import com.asms.payment.dto.PayOsCallbackRequest;
 import com.asms.payment.dto.PaymentCallbackResponse;
+import com.asms.payment.dto.PaymentReconcileRequest;
+import com.asms.payment.dto.PaymentReconcileResponse;
 import com.asms.payment.entity.Payment;
 import com.asms.payment.enums.PaymentStatus;
 import com.asms.payment.integration.PayOsClient;
 import com.asms.payment.integration.PayOsPaymentLink;
+import com.asms.payment.integration.PayOsPaymentStatus;
 import com.asms.payment.messaging.PaymentCompletedMessage;
 import com.asms.payment.messaging.PaymentCompletedPublisher;
 import com.asms.payment.repository.PaymentRepository;
 import com.asms.payment.service.PaymentService;
 import com.asms.ticketing.service.TicketGenerationService;
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 import org.springframework.transaction.support.TransactionSynchronization;
@@ -34,6 +41,9 @@ import java.util.concurrent.ThreadLocalRandom;
 
 @Service
 public class PaymentServiceImpl implements PaymentService {
+
+    private static final Logger log = LoggerFactory.getLogger(PaymentServiceImpl.class);
+    private static final Duration AUTOMATIC_RECONCILIATION_LOOKBACK = Duration.ofHours(48);
 
     private final BookingRepository bookingRepository;
     private final PaymentRepository paymentRepository;
@@ -102,56 +112,144 @@ public class PaymentServiceImpl implements PaymentService {
             return new PaymentCallbackResponse(null, orderCode, PaymentStatus.SUCCESS, null, 0);
         }
 
-        Payment payment = paymentRepository.findByPayosOrderCode(orderCode)
+        Payment payment = paymentRepository.findByPayosOrderCodeForUpdate(orderCode)
                 .orElseThrow(() -> new NotFoundException("Payment not found"));
-        Booking booking = payment.getBooking();
         PaymentStatus incomingStatus = parseStatus(request.resolvedStatus());
+        PayOsPaymentStatus providerStatus = new PayOsPaymentStatus(
+                orderCode,
+                request.resolvedStatus(),
+                incomingStatus,
+                request.resolvedTransactionId(),
+                incomingStatus == PaymentStatus.SUCCESS ? Instant.now() : null,
+                request.resolvedAmount()
+        );
+        AppliedPaymentStatus applied = applyProviderPaymentStatus(payment, providerStatus, "CALLBACK");
 
-        if (incomingStatus == PaymentStatus.SUCCESS) {
-            boolean shouldPublishPaymentCompleted = payment.getStatus() != PaymentStatus.SUCCESS || booking.getStatus() != BookingStatus.PAID;
-            int generatedTickets = markPaymentSuccessful(payment, booking, request.resolvedTransactionId());
-            if (shouldPublishPaymentCompleted) {
-                publishPaymentCompletedAfterCommit(payment);
+        return new PaymentCallbackResponse(
+                payment.getBooking().getId(),
+                payment.getPayosOrderCode(),
+                payment.getStatus(),
+                payment.getBooking().getStatus(),
+                applied.generatedTickets()
+        );
+    }
+
+    @Override
+    @Transactional
+    public PaymentReconcileResponse reconcilePayment(PaymentReconcileRequest request, User user) {
+        Payment payment = paymentRepository.findByBookingIdForUpdate(request.bookingId())
+                .orElseThrow(() -> new NotFoundException("Payment not found"));
+        verifyReconciliationAccess(payment, user);
+
+        PayOsPaymentStatus providerStatus = payOsClient.getPaymentStatus(providerLookupId(payment));
+        AppliedPaymentStatus applied = applyProviderPaymentStatus(payment, providerStatus, "MANUAL");
+        return toReconcileResponse(payment, providerStatus, applied.changed());
+    }
+
+    @Override
+    @Transactional
+    public void reconcilePendingPayments() {
+        Instant createdAfter = Instant.now().minus(AUTOMATIC_RECONCILIATION_LOOKBACK);
+        for (Payment candidate : paymentRepository.findTop100ByStatusAndCreatedAtAfterOrderByCreatedAtAsc(PaymentStatus.PENDING, createdAfter)) {
+            try {
+                Payment payment = paymentRepository.findByIdForUpdate(candidate.getId()).orElse(null);
+                if (payment == null || payment.getStatus() != PaymentStatus.PENDING) {
+                    continue;
+                }
+                PaymentStatus oldStatus = payment.getStatus();
+                PayOsPaymentStatus providerStatus = payOsClient.getPaymentStatus(providerLookupId(payment));
+                AppliedPaymentStatus applied = applyProviderPaymentStatus(payment, providerStatus, "AUTOMATIC");
+                log.info(
+                        "PayOS reconciliation paymentId={} bookingId={} orderCode={} oldStatus={} providerStatus={} newStatus={} changed={}",
+                        payment.getId(),
+                        payment.getBooking().getId(),
+                        payment.getPayosOrderCode(),
+                        oldStatus,
+                        providerStatus.providerStatus(),
+                        payment.getStatus(),
+                        applied.changed()
+                );
+            } catch (Exception exception) {
+                log.warn(
+                        "PayOS reconciliation failed paymentId={} bookingId={} orderCode={}",
+                        candidate.getId(),
+                        candidate.getBooking().getId(),
+                        candidate.getPayosOrderCode(),
+                        exception
+                );
             }
-            return new PaymentCallbackResponse(booking.getId(), payment.getPayosOrderCode(), payment.getStatus(), booking.getStatus(), generatedTickets);
+        }
+    }
+
+    private AppliedPaymentStatus applyProviderPaymentStatus(
+            Payment payment,
+            PayOsPaymentStatus providerStatus,
+            String source
+    ) {
+        Booking booking = payment.getBooking();
+        PaymentStatus oldPaymentStatus = payment.getStatus();
+        BookingStatus oldBookingStatus = booking.getStatus();
+        PaymentStatus incomingStatus = providerStatus.paymentStatus();
+
+        if (oldPaymentStatus == PaymentStatus.SUCCESS && incomingStatus != PaymentStatus.SUCCESS) {
+            return new AppliedPaymentStatus(false, 0);
+        }
+        if (
+                incomingStatus == PaymentStatus.SUCCESS
+                && providerStatus.amount() != null
+                && providerStatus.amount().compareTo(payment.getAmount()) != 0
+        ) {
+            throw new BadRequestException("PayOS paid amount does not match the booking amount");
         }
 
-        payment.setTransactionId(request.resolvedTransactionId());
-        payment.setStatus(incomingStatus);
+        if (providerStatus.transactionId() != null && !providerStatus.transactionId().isBlank()) {
+            payment.setTransactionId(providerStatus.transactionId());
+        }
 
-        if (incomingStatus == PaymentStatus.EXPIRED) {
+        int generatedTickets = 0;
+        if (incomingStatus == PaymentStatus.SUCCESS) {
+            payment.setStatus(PaymentStatus.SUCCESS);
+            if (payment.getPaidAt() == null) {
+                payment.setPaidAt(providerStatus.paidAt() == null ? Instant.now() : providerStatus.paidAt());
+            }
+            booking.setStatus(BookingStatus.PAID);
+            bookingRepository.save(booking);
+            paymentRepository.save(payment);
+            releaseHoldIfPresent(booking);
+            generatedTickets = ticketGenerationService.generateTicketsIfMissing(booking).size();
+
+            if (oldPaymentStatus != PaymentStatus.SUCCESS || oldBookingStatus != BookingStatus.PAID) {
+                publishPaymentCompletedAfterCommit(payment);
+            }
+        } else if (incomingStatus == PaymentStatus.EXPIRED && oldPaymentStatus == PaymentStatus.PENDING) {
+            payment.setStatus(PaymentStatus.EXPIRED);
             booking.setStatus(BookingStatus.EXPIRED);
             releaseHoldIfPresent(booking);
             bookingRepository.save(booking);
             paymentRepository.save(payment);
-        } else if (incomingStatus == PaymentStatus.FAILED) {
+        } else if (incomingStatus == PaymentStatus.FAILED && oldPaymentStatus == PaymentStatus.PENDING) {
+            payment.setStatus(PaymentStatus.FAILED);
             booking.setStatus(BookingStatus.FAILED);
             releaseHoldIfPresent(booking);
             bookingRepository.save(booking);
             paymentRepository.save(payment);
-        } else {
+        } else if (incomingStatus == PaymentStatus.PENDING) {
             paymentRepository.save(payment);
         }
 
-        return new PaymentCallbackResponse(booking.getId(), payment.getPayosOrderCode(), payment.getStatus(), booking.getStatus(), 0);
-    }
-
-    private int markPaymentSuccessful(Payment payment, Booking booking, String transactionId) {
-        payment.setTransactionId(transactionId);
-        payment.setStatus(PaymentStatus.SUCCESS);
-        if (payment.getPaidAt() == null) {
-            payment.setPaidAt(Instant.now());
-        }
-
-        if (booking.getStatus() != BookingStatus.PAID) {
-            booking.setStatus(BookingStatus.PAID);
-        }
-
-        bookingRepository.save(booking);
-        paymentRepository.save(payment);
-        releaseHoldIfPresent(booking);
-
-        return ticketGenerationService.generateTicketsIfMissing(booking).size();
+        boolean changed = oldPaymentStatus != payment.getStatus() || oldBookingStatus != booking.getStatus();
+        log.info(
+                "Applied provider payment status source={} paymentId={} bookingId={} orderCode={} oldPaymentStatus={} providerStatus={} newPaymentStatus={} newBookingStatus={}",
+                source,
+                payment.getId(),
+                booking.getId(),
+                payment.getPayosOrderCode(),
+                oldPaymentStatus,
+                providerStatus.providerStatus(),
+                payment.getStatus(),
+                booking.getStatus()
+        );
+        return new AppliedPaymentStatus(changed, generatedTickets);
     }
 
     private void releaseHoldIfPresent(Booking booking) {
@@ -221,6 +319,45 @@ public class PaymentServiceImpl implements PaymentService {
         payment.setPaymentDescription(payOsPaymentLink.description());
     }
 
+    private String providerLookupId(Payment payment) {
+        return hasText(payment.getPaymentLinkId()) ? payment.getPaymentLinkId() : payment.getPayosOrderCode();
+    }
+
+    private void verifyReconciliationAccess(Payment payment, User user) {
+        if (user == null) {
+            throw new UnauthorizedException("Authentication required");
+        }
+        boolean elevated = user.getRole() == UserRole.MANAGER || user.getRole() == UserRole.ADMIN;
+        boolean owner = payment.getBooking().getUser().getId().equals(user.getId());
+        if (!elevated && !owner) {
+            throw new UnauthorizedException("You cannot reconcile this payment");
+        }
+    }
+
+    private PaymentReconcileResponse toReconcileResponse(
+            Payment payment,
+            PayOsPaymentStatus providerStatus,
+            boolean changed
+    ) {
+        String message = switch (payment.getStatus()) {
+            case SUCCESS -> "Payment confirmed. Your booking is paid.";
+            case FAILED -> "Payment failed on PayOS.";
+            case EXPIRED -> "Payment expired on PayOS.";
+            case PENDING -> "Payment is still pending on PayOS. Please wait a moment.";
+        };
+        return new PaymentReconcileResponse(
+                payment.getBooking().getId(),
+                payment.getId(),
+                payment.getPayosOrderCode(),
+                providerStatus.providerStatus(),
+                payment.getStatus(),
+                payment.getBooking().getStatus(),
+                payment.getPaidAt(),
+                changed,
+                message
+        );
+    }
+
     private String generateOrderCode(UUID bookingId) {
         long base = Instant.now().toEpochMilli() % 900_000_000_000L;
         long suffix = ThreadLocalRandom.current().nextLong(100, 999);
@@ -248,9 +385,15 @@ public class PaymentServiceImpl implements PaymentService {
     }
 
     private PaymentStatus parseStatus(String rawStatus) {
+        if (rawStatus == null || rawStatus.isBlank()) {
+            return PaymentStatus.PENDING;
+        }
         String normalizedStatus = rawStatus.trim().toUpperCase(Locale.ROOT);
         if ("PAID".equals(normalizedStatus) || "SUCCESSFUL".equals(normalizedStatus)) {
             return PaymentStatus.SUCCESS;
+        }
+        if ("CANCELLED".equals(normalizedStatus) || "CANCELED".equals(normalizedStatus)) {
+            return PaymentStatus.FAILED;
         }
         return PaymentStatus.valueOf(normalizedStatus);
     }
@@ -264,5 +407,8 @@ public class PaymentServiceImpl implements PaymentService {
         return "123".equals(orderCode)
                 && BigDecimal.valueOf(3000).compareTo(request.resolvedAmount()) == 0
                 && "VQRIO123".equals(String.valueOf(description));
+    }
+
+    private record AppliedPaymentStatus(boolean changed, int generatedTickets) {
     }
 }

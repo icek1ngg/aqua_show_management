@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useState } from 'react';
+import { useEffect, useMemo, useRef, useState } from 'react';
 import { Link, useLocation, useNavigate, useSearchParams } from 'react-router-dom';
 
 import { getBookingDetail } from '../../services/bookingService.js';
@@ -109,6 +109,7 @@ export default function PaymentResultPage() {
   const [loading, setLoading] = useState(Boolean(bookingId));
   const [error, setError] = useState('');
   const [lastUpdatedAt, setLastUpdatedAt] = useState(null);
+  const ticketPollingAttemptsRef = useRef(0);
   const isMock = searchParams.get('mock') === 'true' || bookingId === 'mock';
 
   useEffect(() => {
@@ -127,7 +128,10 @@ export default function PaymentResultPage() {
           setLastUpdatedAt(new Date());
           setError('');
           const statusState = normalizeBookingPaymentStatus(detail, detail?.payment);
-          if (isTerminalBookingStatus(statusState.status)) {
+          const ticketsReady = (detail?.tickets?.total || 0) > 0;
+          if (statusState.status === 'PAID' && !ticketsReady && ticketPollingAttemptsRef.current < 10) {
+            ticketPollingAttemptsRef.current += 1;
+          } else if (isTerminalBookingStatus(statusState.status)) {
             window.clearInterval(intervalId);
           }
         }
@@ -231,6 +235,12 @@ export default function PaymentResultPage() {
                   </article>
                 ))}
               </div>
+            </section>
+          ) : resultKey === 'success' ? (
+            <section className="mt-8 rounded-[1.5rem] border border-cyan-100 bg-white p-8 text-center shadow-sm">
+              <div className="mx-auto h-10 w-10 animate-spin rounded-full border-4 border-cyan-100 border-t-cyan-600" />
+              <h2 className="mt-4 text-2xl font-black text-slate-950">Your tickets are being generated</h2>
+              <p className="mt-2 text-sm font-semibold text-slate-500">Please wait a moment. This page will refresh automatically.</p>
             </section>
           ) : null}
 

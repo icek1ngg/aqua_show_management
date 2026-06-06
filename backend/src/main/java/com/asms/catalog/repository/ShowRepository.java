@@ -22,7 +22,7 @@ public interface ShowRepository extends JpaRepository<Show, UUID> {
     @Query("""
             select s from Show s
             where (:status is null or s.status = :status)
-              and (:keyword is null or lower(s.title) like lower(concat('%', :keyword, '%'))
+              and (coalesce(:keyword, '') = '' or lower(s.title) like lower(concat('%', :keyword, '%'))
                    or lower(s.description) like lower(concat('%', :keyword, '%')))
             order by s.createdAt desc
             """)

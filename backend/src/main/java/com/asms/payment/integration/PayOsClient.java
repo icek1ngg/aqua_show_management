@@ -16,7 +16,13 @@ import java.nio.charset.StandardCharsets;
 import java.security.MessageDigest;
 import java.math.BigDecimal;
 import java.math.RoundingMode;
+import java.time.Instant;
+import java.time.LocalDateTime;
+import java.time.ZoneId;
+import java.time.format.DateTimeFormatter;
+import java.time.format.DateTimeParseException;
 import java.util.LinkedHashMap;
+import java.util.Locale;
 import java.util.Map;
 import java.util.Objects;
 import java.util.TreeMap;
@@ -116,9 +122,113 @@ public class PayOsClient {
         );
     }
 
+    public PayOsPaymentStatus getPaymentStatus(String orderCodeOrPaymentLinkId) {
+        if (orderCodeOrPaymentLinkId == null || orderCodeOrPaymentLinkId.isBlank()) {
+            throw new BadRequestException("PayOS order code is required");
+        }
+        if (clientId == null || clientId.isBlank() || apiKey == null || apiKey.isBlank()) {
+            return new PayOsPaymentStatus(
+                    orderCodeOrPaymentLinkId,
+                    "PENDING",
+                    com.asms.payment.enums.PaymentStatus.PENDING,
+                    null,
+                    null,
+                    null
+            );
+        }
+
+        JsonNode response = restClient.get()
+                .uri("/v2/payment-requests/{id}", orderCodeOrPaymentLinkId)
+                .header("x-client-id", clientId)
+                .header("x-api-key", apiKey)
+                .retrieve()
+                .body(JsonNode.class);
+
+        if (response == null || !"00".equals(response.path("code").asText())) {
+            String descriptionText = response == null
+                    ? "Unknown PayOS response"
+                    : response.path("desc").asText("Unable to query PayOS payment status");
+            throw new BadRequestException(descriptionText);
+        }
+
+        JsonNode data = response.path("data");
+        String providerStatus = data.path("status").asText("PENDING").trim().toUpperCase(Locale.ROOT);
+        JsonNode transaction = firstTransaction(data.path("transactions"));
+        String transactionId = firstText(transaction, "reference", "transactionId");
+        Instant paidAt = parsePayOsInstant(firstText(transaction, "transactionDateTime", "paidAt"));
+        BigDecimal amount = data.path("amountPaid").isNumber()
+                ? data.path("amountPaid").decimalValue()
+                : data.path("amount").isNumber() ? data.path("amount").decimalValue() : null;
+
+        return new PayOsPaymentStatus(
+                data.path("orderCode").asText(orderCodeOrPaymentLinkId),
+                providerStatus,
+                mapProviderStatus(providerStatus),
+                transactionId,
+                paidAt,
+                amount
+        );
+    }
+
     private String buildDescription(String payosOrderCode) {
         String description = "ASMS" + payosOrderCode;
         return description.substring(0, Math.min(25, description.length()));
+    }
+
+    private com.asms.payment.enums.PaymentStatus mapProviderStatus(String providerStatus) {
+        return switch (providerStatus) {
+            case "PAID", "SUCCESS", "SUCCESSFUL" -> com.asms.payment.enums.PaymentStatus.SUCCESS;
+            case "EXPIRED" -> com.asms.payment.enums.PaymentStatus.EXPIRED;
+            case "CANCELLED", "CANCELED", "FAILED", "UNDERPAID" -> com.asms.payment.enums.PaymentStatus.FAILED;
+            default -> com.asms.payment.enums.PaymentStatus.PENDING;
+        };
+    }
+
+    private JsonNode firstTransaction(JsonNode transactions) {
+        if (transactions == null || transactions.isMissingNode() || transactions.isNull()) {
+            return null;
+        }
+        if (transactions.isArray()) {
+            return transactions.isEmpty() ? null : transactions.get(0);
+        }
+        if (transactions.isObject()) {
+            if (transactions.has("reference") || transactions.has("transactionId")) {
+                return transactions;
+            }
+            var elements = transactions.elements();
+            return elements.hasNext() ? elements.next() : transactions;
+        }
+        return null;
+    }
+
+    private String firstText(JsonNode node, String... fieldNames) {
+        if (node == null) {
+            return null;
+        }
+        for (String fieldName : fieldNames) {
+            String value = node.path(fieldName).asText(null);
+            if (value != null && !value.isBlank()) {
+                return value;
+            }
+        }
+        return null;
+    }
+
+    private Instant parsePayOsInstant(String value) {
+        if (value == null || value.isBlank()) {
+            return null;
+        }
+        try {
+            return Instant.parse(value);
+        } catch (DateTimeParseException ignored) {
+            try {
+                return LocalDateTime.parse(value, DateTimeFormatter.ofPattern("yyyy-MM-dd HH:mm:ss"))
+                        .atZone(ZoneId.of("Asia/Ho_Chi_Minh"))
+                        .toInstant();
+            } catch (DateTimeParseException invalidPayOsDate) {
+                return null;
+            }
+        }
     }
 
     private long toPayOsVndAmount(BigDecimal amount) {
