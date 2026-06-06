@@ -96,7 +96,7 @@ function StatusCard({ icon, label, value, tone = 'text-cyan-700' }) {
 }
 
 function qrImageUrl(qrCode) {
-  return `https://api.qrserver.com/v1/create-qr-code/?size=220x220&data=${encodeURIComponent(qrCode)}`;
+  return `https://api.qrserver.com/v1/create-qr-code/?size=240x240&format=png&color=000000&bgcolor=FFFFFF&qzone=4&ecc=H&data=${encodeURIComponent(qrCode)}`;
 }
 
 export default function PaymentResultPage() {
@@ -109,8 +109,29 @@ export default function PaymentResultPage() {
   const [loading, setLoading] = useState(Boolean(bookingId));
   const [error, setError] = useState('');
   const [lastUpdatedAt, setLastUpdatedAt] = useState(null);
+  const [copiedTicketKey, setCopiedTicketKey] = useState('');
   const ticketPollingAttemptsRef = useRef(0);
+  const copyResetTimeoutRef = useRef(null);
   const isMock = searchParams.get('mock') === 'true' || bookingId === 'mock';
+
+  useEffect(
+    () => () => {
+      window.clearTimeout(copyResetTimeoutRef.current);
+    },
+    [],
+  );
+
+  async function copyQrCode(qrCode, ticketKey) {
+    try {
+      await navigator.clipboard.writeText(qrCode);
+      setCopiedTicketKey(ticketKey);
+      window.clearTimeout(copyResetTimeoutRef.current);
+      copyResetTimeoutRef.current = window.setTimeout(() => setCopiedTicketKey(''), 2000);
+    } catch {
+      setCopiedTicketKey('');
+      setError('Unable to copy the QR code. Select the raw code below and copy it manually.');
+    }
+  }
 
   useEffect(() => {
     let ignore = false;
@@ -220,20 +241,46 @@ export default function PaymentResultPage() {
                 </Link>
               </div>
               <div className="mt-6 grid grid-cols-1 gap-4 md:grid-cols-2">
-                {ticketItems.map((ticket, index) => (
-                  <article className="rounded-2xl border border-cyan-100 bg-cyan-50/60 p-4" key={ticket.id || ticket.qrCode}>
-                    <div className="flex flex-col gap-4 sm:flex-row">
-                      <img className="h-36 w-36 rounded-xl border border-cyan-100 bg-white p-2" alt={`Ticket QR ${index + 1}`} src={qrImageUrl(ticket.qrCode)} />
-                      <div className="min-w-0 flex-1">
-                        <div className="flex items-center justify-between gap-3">
-                          <p className="font-black text-slate-950">Ticket #{index + 1}</p>
-                          <span className="rounded-full bg-white px-3 py-1 text-xs font-black text-cyan-700">{ticket.status}</span>
+                {ticketItems.map((ticket, index) => {
+                  const ticketKey = ticket.id || ticket.qrCode;
+                  const isCopied = copiedTicketKey === ticketKey;
+
+                  return (
+                    <article className="rounded-2xl border border-cyan-100 bg-cyan-50/60 p-4" key={ticketKey}>
+                      <div className="flex flex-col gap-5">
+                        <div className="mx-auto flex h-[280px] w-[280px] max-w-full items-center justify-center bg-white p-5">
+                          <img
+                            className="block h-[240px] w-[240px] max-h-full max-w-full object-contain"
+                            alt={`Ticket QR ${index + 1}`}
+                            src={qrImageUrl(ticket.qrCode)}
+                            width="240"
+                            height="240"
+                          />
                         </div>
-                        <p className="mt-3 break-all rounded-xl bg-white p-3 text-xs font-semibold leading-5 text-slate-600">{ticket.qrCode}</p>
+                        <div className="min-w-0 flex-1">
+                          <div className="flex items-center justify-between gap-3">
+                            <p className="font-black text-slate-950">Ticket #{index + 1}</p>
+                            <span className="rounded-full bg-white px-3 py-1 text-xs font-black text-cyan-700">{ticket.status}</span>
+                          </div>
+                          <div className="mt-3 rounded-xl bg-white p-3">
+                            <div className="flex flex-wrap items-center justify-between gap-2">
+                              <p className="text-xs font-black uppercase tracking-[0.14em] text-slate-400">Raw QR code</p>
+                              <button
+                                className="inline-flex items-center gap-1.5 rounded-full border border-cyan-200 bg-cyan-50 px-3 py-1.5 text-xs font-black text-cyan-700 hover:bg-cyan-100"
+                                onClick={() => copyQrCode(ticket.qrCode, ticketKey)}
+                                type="button"
+                              >
+                                <span className="material-symbols-outlined !text-base">{isCopied ? 'check' : 'content_copy'}</span>
+                                {isCopied ? 'Copied' : 'Copy QR Code'}
+                              </button>
+                            </div>
+                            <p className="mt-3 break-all font-mono text-xs font-semibold leading-5 text-slate-700">{ticket.qrCode}</p>
+                          </div>
+                        </div>
                       </div>
-                    </div>
-                  </article>
-                ))}
+                    </article>
+                  );
+                })}
               </div>
             </section>
           ) : resultKey === 'success' ? (
