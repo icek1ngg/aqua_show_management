@@ -131,6 +131,15 @@ const loginBubbles = [
   },
 ];
 
+function getBackendOrigin() {
+  const apiBaseUrl = import.meta.env.VITE_API_BASE_URL || 'http://localhost:8080/api';
+  try {
+    return new URL(apiBaseUrl).origin;
+  } catch {
+    return 'http://localhost:8080';
+  }
+}
+
 function BubbleLayer({ bubbles }) {
   return (
     <div className="pointer-events-none absolute inset-0 z-10 overflow-hidden" aria-hidden="true">
@@ -434,7 +443,7 @@ export default function LoginPage() {
                 className="flex w-full items-center justify-center gap-3 rounded-full border border-cyan-100 bg-white/80 py-4 font-bold text-slate-700 shadow-sm transition hover:bg-cyan-50/50 hover:shadow active:scale-[0.99] duration-200"
                 type="button"
                 onClick={() => {
-                  window.location.href = 'http://localhost:8080/oauth2/authorization/google';
+                  window.location.href = `${getBackendOrigin()}/oauth2/authorization/google`;
                 }}
               >
                 <svg className="h-5 w-5" viewBox="0 0 24 24" aria-hidden="true">

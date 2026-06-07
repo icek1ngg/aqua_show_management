@@ -78,3 +78,4 @@ asms:
     client-id: "${PAYOS_CLIENT_ID:}"
     api-key: "${PAYOS_API_KEY:}"
     checksum-key: "${PAYOS_CHECKSUM_KEY:}"
+    reconcile-delay-ms: "${PAYOS_RECONCILE_DELAY_MS:90000}"

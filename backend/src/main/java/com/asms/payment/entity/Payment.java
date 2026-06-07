@@ -121,6 +121,10 @@ public class Payment {
         return paymentLink;
     }
 
+    public void setPaymentLink(String paymentLink) {
+        this.paymentLink = paymentLink;
+    }
+
     public String getQrCode() {
         return qrCode;
     }
