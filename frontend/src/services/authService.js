@@ -21,7 +21,12 @@ export async function updateProfile(payload) {
 }
 
 export async function logout() {
-  const response = await apiClient.post('/auth/logout');
+  const response = await apiClient.post('/auth/logout', null, { skipAuthClear: true, skipAuthRefresh: true });
+  return response.data;
+}
+
+export async function refreshAccessToken() {
+  const response = await apiClient.post('/auth/refresh', null, { skipAuthClear: true, skipAuthRefresh: true });
   return response.data;
 }
 

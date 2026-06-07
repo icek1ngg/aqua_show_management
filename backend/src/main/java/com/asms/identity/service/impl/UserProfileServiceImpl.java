@@ -21,6 +21,10 @@ public class UserProfileServiceImpl implements UserProfileService {
     @Override
     @Transactional(readOnly = true)
     public UserProfileResponse getProfile(User currentUser) {
+        if (currentUser == null) {
+            throw new UnauthorizedException("Authentication required");
+        }
+
         User user = userRepository.findByEmailIgnoreCase(currentUser.getEmail())
                 .orElseThrow(() -> new UnauthorizedException("Authentication required"));
         return toProfileResponse(user);
@@ -29,6 +33,10 @@ public class UserProfileServiceImpl implements UserProfileService {
     @Override
     @Transactional
     public UserProfileResponse updateProfile(User currentUser, UpdateProfileRequest request) {
+        if (currentUser == null) {
+            throw new UnauthorizedException("Authentication required");
+        }
+
         User user = userRepository.findByEmailIgnoreCase(currentUser.getEmail())
                 .orElseThrow(() -> new UnauthorizedException("Authentication required"));
 
