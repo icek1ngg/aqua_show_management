@@ -22,7 +22,7 @@ public interface VenueRepository extends JpaRepository<Venue, UUID> {
     @Query("""
             select v from Venue v
             where (:status is null or v.status = :status)
-              and (:keyword is null or lower(v.name) like lower(concat('%', :keyword, '%'))
+              and (coalesce(:keyword, '') = '' or lower(v.name) like lower(concat('%', :keyword, '%'))
                    or lower(v.location) like lower(concat('%', :keyword, '%')))
             order by v.createdAt desc
             """)

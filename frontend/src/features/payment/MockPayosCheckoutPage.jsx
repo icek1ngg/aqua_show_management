@@ -24,7 +24,7 @@ export default function MockPayosCheckoutPage() {
               </p>
               <h1 className="mt-5 text-4xl font-black text-slate-950">Payment sandbox</h1>
               <p className="mt-3 text-slate-600">
-                Quét QR hoặc dùng thông tin chuyển khoản giả lập, sau đó chọn kết quả webhook để test UC-10/UC-20/UC-21.
+                Quét QR hoặc dùng thông tin chuyển khoản thử nghiệm, sau đó chọn kết quả thanh toán.
               </p>
             </div>
             <span className="flex h-14 w-14 items-center justify-center rounded-full bg-cyan-50 text-cyan-700">

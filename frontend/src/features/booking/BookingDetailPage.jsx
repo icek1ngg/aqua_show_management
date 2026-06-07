@@ -3,6 +3,7 @@ import { Link, useLocation, useNavigate, useParams } from 'react-router-dom';
 
 import { getBookingDetail } from '../../services/bookingService.js';
 import MainLayout from '../../shared/layouts/MainLayout.jsx';
+import { normalizeBookingPaymentStatus } from '../../shared/utils/paymentStatus.js';
 
 const fallbackImageUrl =
   'https://lh3.googleusercontent.com/aida/ADBb0ujt3y3oHep8ZyS33fWXSwjI8mG8aZHbNUcl0CdGivcGyeT3du82S-KhXF_z4dlPRBUlc4EswabU5EeIcZJqXipWtpjbttrQ0GOkGXD__Ue8EUNvilyj-UDsJCa1cZbn_l6pfjV_lg7TOdizUqPdcum_qmMFI-csEQojqIgtLoSEhUsOXh1HErJxLtr4lvL3loCl2YH0XpPXQu6PYmM-OELKDDyxmjnmTGP8Zxcj3pb5flEfrV4506pYqA';
@@ -109,6 +110,7 @@ function getBookingErrorMessage(error) {
 }
 
 function normalizeBooking(booking) {
+  const normalizedStatus = normalizeBookingPaymentStatus(booking, booking?.payment);
   return {
     id: booking.id,
     bookingCode: booking.bookingCode || booking.id,
@@ -118,9 +120,14 @@ function normalizeBooking(booking) {
     quantity: booking.quantity ?? 0,
     unitPrice: booking.unitPrice,
     totalAmount: booking.totalAmount,
-    status: booking.status || 'PROCESSING',
+    status: normalizedStatus.status,
+    bookingStatus: normalizedStatus.bookingStatus,
+    paymentStatus: normalizedStatus.paymentStatus,
     createdAt: booking.createdAt,
     expiresAt: booking.expiresAt,
+    payment: booking.payment || null,
+    tickets: booking.tickets || null,
+    emailNotification: booking.emailNotification || null,
     imageUrl: fallbackImageUrl,
   };
 }
@@ -169,9 +176,10 @@ function ActionPanel({ booking }) {
 
 function StatusMessage({ booking, meta }) {
   if (booking.status === 'PAID') {
+    const ticketCount = booking.tickets?.total || 0;
     return (
       <p className="mt-3 text-sm font-semibold leading-7 text-slate-600">
-        Ticket QR and email status are available on the payment result page.
+        {ticketCount > 0 ? `${ticketCount} ticket QR code${ticketCount === 1 ? '' : 's'} generated.` : 'Ticket QR and email status are being finalized.'}
       </p>
     );
   }
@@ -246,7 +254,7 @@ function getJourneySteps(booking) {
         return { ...step, state: 'complete', time: 'Completed' };
       }
 
-      return { ...step, state: 'current', time: 'Coming soon' };
+      return { ...step, state: booking.tickets?.total > 0 ? 'complete' : 'current', time: booking.tickets?.total > 0 ? 'Ready' : 'Coming soon' };
     });
   }
 
@@ -378,6 +386,24 @@ export default function BookingDetailPage() {
       isMounted = false;
     };
   }, [id, location, navigate]);
+
+  useEffect(() => {
+    const normalizedStatus = normalizeBookingPaymentStatus(booking, booking?.payment);
+    if (normalizedStatus.status !== 'PAID' || normalizedStatus.bookingStatus === 'PAID') {
+      return undefined;
+    }
+
+    const timeoutId = window.setTimeout(async () => {
+      try {
+        const bookingDetail = await getBookingDetail(id);
+        setBooking(bookingDetail);
+      } catch {
+        // Keep the already displayed paid state; PostgreSQL is refetched again on page reload/focus.
+      }
+    }, 1200);
+
+    return () => window.clearTimeout(timeoutId);
+  }, [booking, id]);
 
   const displayBooking = useMemo(() => (booking ? normalizeBooking(booking) : null), [booking]);
   const bookingMeta = statusMeta[displayBooking?.status] || statusMeta.PROCESSING;
@@ -514,6 +540,9 @@ export default function BookingDetailPage() {
                   <DetailRow label="Created At" value={formatDateTime(displayBooking.createdAt)} />
                   <DetailRow label="Expires At" value={formatDateTime(displayBooking.expiresAt)} />
                   <DetailRow label="Status" value={displayBooking.status} />
+                  <DetailRow label="Payment" value={displayBooking.paymentStatus} />
+                  <DetailRow label="Tickets" value={`${displayBooking.tickets?.total || 0} generated`} />
+                  <DetailRow label="Email" value={displayBooking.emailNotification?.status || 'Pending'} />
                   <DetailRow label="Booking ID" value={displayBooking.id} />
                 </div>
                 <div className="mt-6 border-t-2 border-dashed border-cyan-100 pt-6">
@@ -528,6 +557,17 @@ export default function BookingDetailPage() {
                 <h4 className="text-[11px] font-black uppercase tracking-[0.24em] text-slate-400">Actions</h4>
                 <div className="mt-5 flex flex-col gap-3">
                   <ActionPanel booking={displayBooking} />
+                  {displayBooking.status === 'PAID' ? (
+                    <Link
+                      className="flex w-full items-center justify-center gap-2 rounded-full bg-emerald-600 px-6 py-4 font-bold text-white shadow-lg shadow-emerald-600/20 transition hover:bg-emerald-700 active:scale-[0.98]"
+                      to={`/payments/result?bookingId=${displayBooking.id}&status=success`}
+                    >
+                      <span className="material-symbols-outlined text-xl" aria-hidden="true">
+                        qr_code_2
+                      </span>
+                      View Tickets
+                    </Link>
+                  ) : null}
                   <Link
                     className="flex w-full items-center justify-center gap-2 rounded-full border-2 border-cyan-200 bg-white px-6 py-4 font-bold text-cyan-700 transition hover:border-cyan-400 hover:bg-cyan-50 active:scale-[0.98]"
                     to="/bookings/my"

@@ -20,3 +20,8 @@ export async function createPayment(bookingId) {
     throw error;
   }
 }
+
+export async function reconcilePayment(bookingId) {
+  const response = await apiClient.post('/payments/reconcile', { bookingId }, { skipAuthClear: true });
+  return unwrap(response);
+}
