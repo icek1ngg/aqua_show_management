@@ -5,7 +5,9 @@ import {
   clearStoredToken,
   decodeJwtPayload,
   getStoredToken,
+  getStoredUser,
   getTokenExpiresAt,
+  storeUser,
   storeToken,
 } from './authStorage.js';
 
@@ -84,8 +86,8 @@ function getErrorMessage(error, fallback) {
 }
 
 export function AuthProvider({ children }) {
-  const [user, setUser] = useState(null);
-  const [token, setToken] = useState(null);
+  const [user, setUser] = useState(() => getStoredUser());
+  const [token, setToken] = useState(() => getStoredToken()?.token ?? null);
   const [loading, setLoading] = useState(true);
 
   const logout = useCallback(async () => {
@@ -104,9 +106,27 @@ export function AuthProvider({ children }) {
     const storedToken = getStoredToken();
 
     if (!storedToken?.token) {
-      setUser(null);
-      setToken(null);
-      return null;
+      try {
+        const refreshResponse = await authService.refreshAccessToken();
+        const refreshedToken = getTokenFromLoginResponse(refreshResponse);
+        if (!refreshedToken) {
+          setUser(null);
+          setToken(null);
+          return null;
+        }
+
+        const responseData = getResponseData(refreshResponse);
+        const expiresAt = getTokenExpiresAt(refreshedToken, responseData?.expiresAt, responseData?.expiresIn);
+        const nextUser = getUserFromResponse(refreshResponse) || getUserFromToken(refreshedToken);
+        storeToken({ token: refreshedToken, expiresAt, user: nextUser });
+        setToken(refreshedToken);
+        setUser(nextUser);
+        return nextUser;
+      } catch {
+        setUser(null);
+        setToken(null);
+        return null;
+      }
     }
 
     setToken(storedToken.token);
@@ -115,6 +135,7 @@ export function AuthProvider({ children }) {
       const currentUser = await authService.getCurrentUser();
       const nextUser = getUserFromResponse(currentUser) || getResponseData(currentUser) || getUserFromToken(storedToken.token);
       setUser(nextUser);
+      storeUser(nextUser);
       return nextUser;
     } catch (error) {
       if (error.response?.status === 401) {
@@ -126,6 +147,7 @@ export function AuthProvider({ children }) {
 
       const fallbackUser = getUserFromToken(storedToken.token);
       setUser(fallbackUser);
+      storeUser(fallbackUser);
       return fallbackUser;
     }
   }, []);
@@ -137,18 +159,47 @@ export function AuthProvider({ children }) {
       const storedToken = getStoredToken();
 
       if (!storedToken?.token) {
-        if (!ignore) {
-          setLoading(false);
+        try {
+          const refreshResponse = await authService.refreshAccessToken();
+          const refreshedToken = getTokenFromLoginResponse(refreshResponse);
+          if (!refreshedToken) {
+            if (!ignore) {
+              setToken(null);
+              setUser(null);
+            }
+            return;
+          }
+
+          const responseData = getResponseData(refreshResponse);
+          const expiresAt = getTokenExpiresAt(refreshedToken, responseData?.expiresAt, responseData?.expiresIn);
+          const nextUser = getUserFromResponse(refreshResponse) || getUserFromToken(refreshedToken);
+          storeToken({ token: refreshedToken, expiresAt, user: nextUser });
+          if (!ignore) {
+            setToken(refreshedToken);
+            setUser(nextUser);
+          }
+        } catch {
+          if (!ignore) {
+            setToken(null);
+            setUser(null);
+          }
+        } finally {
+          if (!ignore) {
+            setLoading(false);
+          }
         }
         return;
       }
 
       setToken(storedToken.token);
+      setUser(getStoredUser() || getUserFromToken(storedToken.token));
 
       try {
         const currentUser = await authService.getCurrentUser();
         if (!ignore) {
-          setUser(getUserFromResponse(currentUser) || getResponseData(currentUser) || getUserFromToken(storedToken.token));
+          const nextUser = getUserFromResponse(currentUser) || getResponseData(currentUser) || getUserFromToken(storedToken.token);
+          setUser(nextUser);
+          storeUser(nextUser);
         }
       } catch (error) {
         if (!ignore) {
@@ -157,7 +208,9 @@ export function AuthProvider({ children }) {
             setToken(null);
             setUser(null);
           } else {
-            setUser(getUserFromToken(storedToken.token));
+            const fallbackUser = getStoredUser() || getUserFromToken(storedToken.token);
+            setUser(fallbackUser);
+            storeUser(fallbackUser);
           }
         }
       } finally {
@@ -179,14 +232,23 @@ export function AuthProvider({ children }) {
       setToken(null);
       setUser(null);
     };
+    const handleTokenUpdated = () => {
+      const storedToken = getStoredToken();
+      setToken(storedToken?.token ?? null);
+      setUser(getStoredUser());
+    };
 
     window.addEventListener('auth:token-cleared', handleTokenCleared);
-    return () => window.removeEventListener('auth:token-cleared', handleTokenCleared);
+    window.addEventListener('auth:token-updated', handleTokenUpdated);
+    return () => {
+      window.removeEventListener('auth:token-cleared', handleTokenCleared);
+      window.removeEventListener('auth:token-updated', handleTokenUpdated);
+    };
   }, []);
 
   const login = useCallback(async (credentials, rememberMe = false) => {
     try {
-      const response = await authService.login(credentials);
+      const response = await authService.login({ ...credentials, rememberMe });
       const nextToken = getTokenFromLoginResponse(response);
 
       if (!nextToken) {
@@ -197,7 +259,7 @@ export function AuthProvider({ children }) {
       const expiresAt = getTokenExpiresAt(nextToken, responseData?.expiresAt, responseData?.expiresIn);
       const nextUser = getUserFromResponse(response) || getUserFromToken(nextToken);
 
-      storeToken({ token: nextToken, rememberMe, expiresAt });
+      storeToken({ token: nextToken, expiresAt, user: nextUser });
       setToken(nextToken);
       setUser(nextUser);
 
@@ -218,12 +280,15 @@ export function AuthProvider({ children }) {
   const completeOAuthLogin = useCallback(async (accessToken, expiresIn) => {
     try {
       const expiresAt = getTokenExpiresAt(accessToken, null, expiresIn);
-      storeToken({ token: accessToken, rememberMe: false, expiresAt });
+      const tokenUser = getUserFromToken(accessToken);
+      storeToken({ token: accessToken, rememberMe: false, expiresAt, user: tokenUser });
       setToken(accessToken);
+      setUser(tokenUser);
 
       const currentUser = await authService.getCurrentUser();
       const nextUser = getUserFromResponse(currentUser) || getResponseData(currentUser) || getUserFromToken(accessToken);
       setUser(nextUser);
+      storeUser(nextUser);
       return nextUser;
     } catch (error) {
       clearStoredToken();

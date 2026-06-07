@@ -3,6 +3,7 @@ package com.asms.identity.service.impl;
 import com.asms.core.exception.ConflictException;
 import com.asms.core.exception.MailSendingException;
 import com.asms.core.exception.UnauthorizedException;
+import com.asms.identity.dto.AuthDtos.AuthSession;
 import com.asms.identity.dto.AuthDtos.LoginRequest;
 import com.asms.identity.dto.AuthDtos.LoginResponse;
 import com.asms.identity.dto.AuthDtos.RegisterRequest;
@@ -15,6 +16,10 @@ import com.asms.identity.repository.UserRepository;
 import com.asms.identity.security.JwtService;
 import com.asms.identity.service.AuthService;
 import com.asms.identity.service.EmailVerificationService;
+import com.asms.identity.service.RefreshTokenService;
+import com.asms.identity.service.RefreshTokenService.RefreshTokenIssue;
+import com.asms.identity.service.RefreshTokenService.RefreshTokenRotation;
+import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.security.crypto.password.PasswordEncoder;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
@@ -26,6 +31,22 @@ public class AuthServiceImpl implements AuthService {
     private final PasswordEncoder passwordEncoder;
     private final JwtService jwtService;
     private final EmailVerificationService emailVerificationService;
+    private final RefreshTokenService refreshTokenService;
+
+    @Autowired
+    public AuthServiceImpl(
+            UserRepository userRepository,
+            PasswordEncoder passwordEncoder,
+            JwtService jwtService,
+            EmailVerificationService emailVerificationService,
+            RefreshTokenService refreshTokenService
+    ) {
+        this.userRepository = userRepository;
+        this.passwordEncoder = passwordEncoder;
+        this.jwtService = jwtService;
+        this.emailVerificationService = emailVerificationService;
+        this.refreshTokenService = refreshTokenService;
+    }
 
     public AuthServiceImpl(
             UserRepository userRepository,
@@ -33,10 +54,7 @@ public class AuthServiceImpl implements AuthService {
             JwtService jwtService,
             EmailVerificationService emailVerificationService
     ) {
-        this.userRepository = userRepository;
-        this.passwordEncoder = passwordEncoder;
-        this.jwtService = jwtService;
-        this.emailVerificationService = emailVerificationService;
+        this(userRepository, passwordEncoder, jwtService, emailVerificationService, null);
     }
 
     @Override
@@ -64,8 +82,8 @@ public class AuthServiceImpl implements AuthService {
     }
 
     @Override
-    @Transactional(readOnly = true)
-    public LoginResponse login(LoginRequest request) {
+    @Transactional
+    public AuthSession login(LoginRequest request) {
         User user = userRepository.findByEmailIgnoreCase(normalizeEmail(request.email()))
                 .orElseThrow(() -> new UnauthorizedException("Invalid email or password"));
 
@@ -81,12 +99,31 @@ public class AuthServiceImpl implements AuthService {
         }
 
         String accessToken = jwtService.generateToken(user);
-        return new LoginResponse(accessToken, "Bearer", jwtService.getExpirationSeconds(), toProfileResponse(user));
+        LoginResponse response = new LoginResponse(accessToken, "Bearer", jwtService.getExpirationSeconds(), toProfileResponse(user));
+
+        if (refreshTokenService == null) {
+            return new AuthSession(response, "", -1);
+        }
+
+        RefreshTokenIssue refreshToken = refreshTokenService.createRefreshToken(user, Boolean.TRUE.equals(request.rememberMe()));
+        return new AuthSession(response, refreshToken.token(), refreshToken.cookieMaxAgeSeconds());
     }
 
     @Override
-    public void logout() {
-        // JWT logout is stateless for now. Token revocation can be added when a blacklist store is introduced.
+    @Transactional(readOnly = true)
+    public AuthSession refresh(String refreshToken) {
+        RefreshTokenRotation rotatedRefreshToken = refreshTokenService.rotateRefreshToken(refreshToken);
+        User user = rotatedRefreshToken.user();
+        String accessToken = jwtService.generateToken(user);
+        LoginResponse response = new LoginResponse(accessToken, "Bearer", jwtService.getExpirationSeconds(), toProfileResponse(user));
+        return new AuthSession(response, rotatedRefreshToken.token(), rotatedRefreshToken.cookieMaxAgeSeconds());
+    }
+
+    @Override
+    public void logout(String refreshToken) {
+        if (refreshTokenService != null) {
+            refreshTokenService.revokeRefreshToken(refreshToken);
+        }
     }
 
     private UserProfileResponse toProfileResponse(User user) {

@@ -40,7 +40,7 @@ public class JwtAuthenticationFilter extends OncePerRequestFilter {
         }
 
         String token = authorizationHeader.substring(7);
-        if (SecurityContextHolder.getContext().getAuthentication() == null && jwtService.isValid(token)) {
+        if (shouldAuthenticateWithJwt() && jwtService.isValid(token)) {
             String email = jwtService.extractSubject(token);
             userRepository.findByEmailIgnoreCase(email)
                     .filter(User::isEnabled)
@@ -56,5 +56,10 @@ public class JwtAuthenticationFilter extends OncePerRequestFilter {
         }
 
         filterChain.doFilter(request, response);
+    }
+
+    private boolean shouldAuthenticateWithJwt() {
+        var authentication = SecurityContextHolder.getContext().getAuthentication();
+        return authentication == null || !(authentication.getPrincipal() instanceof User);
     }
 }
