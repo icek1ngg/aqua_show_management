@@ -6,7 +6,9 @@ function unwrap(response) {
 }
 
 function shouldUseMock(error) {
-  return import.meta.env.DEV && (!error.response || [400, 401, 403, 404].includes(error.response.status));
+  return import.meta.env.DEV
+    && import.meta.env.VITE_ENABLE_MOCK_VALIDATION === 'true'
+    && !error.response;
 }
 
 export async function validateQr(qrCode) {

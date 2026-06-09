@@ -1,35 +1,34 @@
-import { useEffect, useMemo, useState } from 'react';
+import { useEffect, useMemo, useRef, useState } from 'react';
 import { Link, useLocation, useNavigate, useSearchParams } from 'react-router-dom';
 
 import { getBookingDetail } from '../../services/bookingService.js';
 import MainLayout from '../../shared/layouts/MainLayout.jsx';
+import { isTerminalBookingStatus, normalizeBookingPaymentStatus } from '../../shared/utils/paymentStatus.js';
 
 const resultMeta = {
   success: {
     icon: 'verified',
     title: 'Payment confirmed',
     tone: 'text-emerald-700',
-    badge: 'bg-emerald-100 text-emerald-700 border-emerald-200',
     message: 'Your booking is paid. QR tickets and email notification are being finalized.',
   },
   failed: {
     icon: 'error',
     title: 'Payment failed',
     tone: 'text-red-700',
-    badge: 'bg-red-100 text-red-700 border-red-200',
     message: 'The payment was not completed. Review your booking before trying again.',
   },
   pending: {
     icon: 'hourglass_empty',
     title: 'Payment processing',
     tone: 'text-[#a43c12]',
-    badge: 'bg-yellow-100 text-[#a43c12] border-yellow-200',
     message: 'PayOS callback has not finished yet. This page will show the latest backend status.',
   },
 };
 
 function inferResult(searchStatus, booking, isMock) {
   const raw = searchStatus?.toLowerCase();
+  const statusState = normalizeBookingPaymentStatus(booking, booking?.payment);
   if (isMock || !booking) {
     if (raw === 'success' || raw === 'paid') {
       return 'success';
@@ -38,33 +37,31 @@ function inferResult(searchStatus, booking, isMock) {
       return 'failed';
     }
   }
-  if (booking?.status === 'PAID') {
+  if (statusState.status === 'PAID') {
     return 'success';
   }
-  if (['FAILED', 'EXPIRED'].includes(booking?.status)) {
+  if (['FAILED', 'EXPIRED'].includes(statusState.status)) {
     return 'failed';
   }
   return 'pending';
 }
 
 function getPaymentStatus(booking, resultKey) {
-  if (booking?.payment?.status) {
-    return booking.payment.status;
-  }
+  const statusState = normalizeBookingPaymentStatus(booking, booking?.payment);
 
-  if (resultKey === 'success') {
+  if (statusState.status === 'PAID' || resultKey === 'success') {
     return 'SUCCESS';
   }
 
-  if (booking?.status === 'FAILED') {
+  if (statusState.status === 'FAILED') {
     return 'FAILED';
   }
 
-  if (booking?.status === 'EXPIRED') {
+  if (statusState.status === 'EXPIRED') {
     return 'EXPIRED';
   }
 
-  return 'PENDING';
+  return statusState.paymentStatus || 'PENDING';
 }
 
 function getTicketStatus(booking, resultKey) {
@@ -96,7 +93,7 @@ function StatusCard({ icon, label, value, tone = 'text-cyan-700' }) {
 }
 
 function qrImageUrl(qrCode) {
-  return `https://api.qrserver.com/v1/create-qr-code/?size=220x220&data=${encodeURIComponent(qrCode)}`;
+  return `https://api.qrserver.com/v1/create-qr-code/?size=240x240&format=png&color=000000&bgcolor=FFFFFF&qzone=4&ecc=H&data=${encodeURIComponent(qrCode)}`;
 }
 
 export default function PaymentResultPage() {
@@ -109,7 +106,29 @@ export default function PaymentResultPage() {
   const [loading, setLoading] = useState(Boolean(bookingId));
   const [error, setError] = useState('');
   const [lastUpdatedAt, setLastUpdatedAt] = useState(null);
+  const [copiedTicketKey, setCopiedTicketKey] = useState('');
+  const ticketPollingAttemptsRef = useRef(0);
+  const copyResetTimeoutRef = useRef(null);
   const isMock = searchParams.get('mock') === 'true' || bookingId === 'mock';
+
+  useEffect(
+    () => () => {
+      window.clearTimeout(copyResetTimeoutRef.current);
+    },
+    [],
+  );
+
+  async function copyQrCode(qrCode, ticketKey) {
+    try {
+      await navigator.clipboard.writeText(qrCode);
+      setCopiedTicketKey(ticketKey);
+      window.clearTimeout(copyResetTimeoutRef.current);
+      copyResetTimeoutRef.current = window.setTimeout(() => setCopiedTicketKey(''), 2000);
+    } catch {
+      setCopiedTicketKey('');
+      setError('Unable to copy the QR code. Select the raw code below and copy it manually.');
+    }
+  }
 
   useEffect(() => {
     let ignore = false;
@@ -126,7 +145,11 @@ export default function PaymentResultPage() {
           setBooking(detail);
           setLastUpdatedAt(new Date());
           setError('');
-          if (['PAID', 'FAILED', 'EXPIRED'].includes(detail?.status)) {
+          const statusState = normalizeBookingPaymentStatus(detail, detail?.payment);
+          const ticketsReady = (detail?.tickets?.total || 0) > 0;
+          if (statusState.status === 'PAID' && !ticketsReady && ticketPollingAttemptsRef.current < 10) {
+            ticketPollingAttemptsRef.current += 1;
+          } else if (isTerminalBookingStatus(statusState.status)) {
             window.clearInterval(intervalId);
           }
         }
@@ -155,15 +178,16 @@ export default function PaymentResultPage() {
   }, [bookingId, location, navigate]);
 
   const resultKey = inferResult(searchStatus, booking, isMock);
+  const normalizedStatus = normalizeBookingPaymentStatus(booking, booking?.payment);
   const meta = resultMeta[resultKey];
   const processingItems = useMemo(
     () => [
       { icon: 'payments', label: 'Payment', value: getPaymentStatus(booking, resultKey), tone: meta.tone },
-      { icon: 'event_available', label: 'Booking', value: booking?.status || 'PENDING_PAYMENT', tone: meta.tone },
+      { icon: 'event_available', label: 'Booking', value: normalizedStatus.status || 'PENDING_PAYMENT', tone: meta.tone },
       { icon: 'qr_code_2', label: 'Tickets', value: getTicketStatus(booking, resultKey), tone: 'text-cyan-700' },
       { icon: 'outgoing_mail', label: 'Email', value: getEmailStatus(booking, resultKey), tone: 'text-cyan-700' },
     ],
-    [booking, meta.tone, resultKey],
+    [booking, meta.tone, normalizedStatus.status, resultKey],
   );
   const ticketItems = booking?.tickets?.items || [];
 
@@ -174,9 +198,6 @@ export default function PaymentResultPage() {
           <section className="rounded-[1.5rem] border border-cyan-100 bg-white p-8 text-center shadow-[0_16px_40px_rgba(8,145,178,0.10)] md:p-12">
             <span className={`mx-auto flex h-20 w-20 items-center justify-center rounded-full bg-cyan-50 ${meta.tone}`}>
               <span className="material-symbols-outlined !text-5xl">{meta.icon}</span>
-            </span>
-            <span className={`mt-6 inline-flex rounded-full border px-4 py-1.5 text-xs font-black uppercase tracking-[0.18em] ${meta.badge}`}>
-              UC-20 / UC-21
             </span>
             <h1 className="mt-5 text-4xl font-black text-slate-950 md:text-5xl">{meta.title}</h1>
             <p className="mx-auto mt-4 max-w-2xl text-lg leading-8 text-slate-600">{meta.message}</p>
@@ -205,7 +226,7 @@ export default function PaymentResultPage() {
             <section className="mt-8 rounded-[1.5rem] border border-cyan-100 bg-white p-6 shadow-sm">
               <div className="flex flex-col justify-between gap-3 sm:flex-row sm:items-end">
                 <div>
-                  <p className="text-xs font-black uppercase tracking-[0.18em] text-cyan-700">UC-13 QR tickets</p>
+                  <p className="text-xs font-black uppercase tracking-[0.18em] text-cyan-700">QR Tickets</p>
                   <h2 className="mt-2 text-2xl font-black text-slate-950">Scan these tickets at the gate</h2>
                 </div>
                 <Link className="inline-flex items-center justify-center gap-2 rounded-full border border-cyan-200 bg-cyan-50 px-5 py-3 text-sm font-black text-cyan-700 hover:bg-cyan-100" to="/staff/check-in">
@@ -214,21 +235,53 @@ export default function PaymentResultPage() {
                 </Link>
               </div>
               <div className="mt-6 grid grid-cols-1 gap-4 md:grid-cols-2">
-                {ticketItems.map((ticket, index) => (
-                  <article className="rounded-2xl border border-cyan-100 bg-cyan-50/60 p-4" key={ticket.id || ticket.qrCode}>
-                    <div className="flex flex-col gap-4 sm:flex-row">
-                      <img className="h-36 w-36 rounded-xl border border-cyan-100 bg-white p-2" alt={`Ticket QR ${index + 1}`} src={qrImageUrl(ticket.qrCode)} />
-                      <div className="min-w-0 flex-1">
-                        <div className="flex items-center justify-between gap-3">
-                          <p className="font-black text-slate-950">Ticket #{index + 1}</p>
-                          <span className="rounded-full bg-white px-3 py-1 text-xs font-black text-cyan-700">{ticket.status}</span>
+                {ticketItems.map((ticket, index) => {
+                  const ticketKey = ticket.id || ticket.qrCode;
+                  const isCopied = copiedTicketKey === ticketKey;
+
+                  return (
+                    <article className="rounded-2xl border border-cyan-100 bg-cyan-50/60 p-4" key={ticketKey}>
+                      <div className="flex flex-col gap-5">
+                        <div className="mx-auto flex h-[280px] w-[280px] max-w-full items-center justify-center bg-white p-5">
+                          <img
+                            className="block h-[240px] w-[240px] max-h-full max-w-full object-contain"
+                            alt={`Ticket QR ${index + 1}`}
+                            src={qrImageUrl(ticket.qrCode)}
+                            width="240"
+                            height="240"
+                          />
                         </div>
-                        <p className="mt-3 break-all rounded-xl bg-white p-3 text-xs font-semibold leading-5 text-slate-600">{ticket.qrCode}</p>
+                        <div className="min-w-0 flex-1">
+                          <div className="flex items-center justify-between gap-3">
+                            <p className="font-black text-slate-950">Ticket #{index + 1}</p>
+                            <span className="rounded-full bg-white px-3 py-1 text-xs font-black text-cyan-700">{ticket.status}</span>
+                          </div>
+                          <div className="mt-3 rounded-xl bg-white p-3">
+                            <div className="flex flex-wrap items-center justify-between gap-2">
+                              <p className="text-xs font-black uppercase tracking-[0.14em] text-slate-400">Raw QR code</p>
+                              <button
+                                className="inline-flex items-center gap-1.5 rounded-full border border-cyan-200 bg-cyan-50 px-3 py-1.5 text-xs font-black text-cyan-700 hover:bg-cyan-100"
+                                onClick={() => copyQrCode(ticket.qrCode, ticketKey)}
+                                type="button"
+                              >
+                                <span className="material-symbols-outlined !text-base">{isCopied ? 'check' : 'content_copy'}</span>
+                                {isCopied ? 'Copied' : 'Copy QR Code'}
+                              </button>
+                            </div>
+                            <p className="mt-3 break-all font-mono text-xs font-semibold leading-5 text-slate-700">{ticket.qrCode}</p>
+                          </div>
+                        </div>
                       </div>
-                    </div>
-                  </article>
-                ))}
+                    </article>
+                  );
+                })}
               </div>
+            </section>
+          ) : resultKey === 'success' ? (
+            <section className="mt-8 rounded-[1.5rem] border border-cyan-100 bg-white p-8 text-center shadow-sm">
+              <div className="mx-auto h-10 w-10 animate-spin rounded-full border-4 border-cyan-100 border-t-cyan-600" />
+              <h2 className="mt-4 text-2xl font-black text-slate-950">Your tickets are being generated</h2>
+              <p className="mt-2 text-sm font-semibold text-slate-500">Please wait a moment. This page will refresh automatically.</p>
             </section>
           ) : null}
 

@@ -10,6 +10,7 @@ import com.asms.identity.enums.AuthProvider;
 import com.asms.identity.enums.UserStatus;
 import com.asms.identity.repository.PasswordResetTokenRepository;
 import com.asms.identity.repository.UserRepository;
+import com.asms.identity.security.RefreshTokenCookieService;
 import com.asms.identity.service.impl.PasswordResetServiceImpl;
 import jakarta.mail.internet.MimeMessage;
 import org.junit.jupiter.api.BeforeEach;
@@ -180,6 +181,7 @@ class PasswordResetTest {
                 mock(com.asms.identity.service.AuthService.class),
                 mock(com.asms.identity.service.EmailVerificationService.class),
                 passwordResetService,
+                mock(RefreshTokenCookieService.class),
                 "http://localhost:5173"
         );
 

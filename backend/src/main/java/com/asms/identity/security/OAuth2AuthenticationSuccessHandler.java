@@ -3,9 +3,12 @@ package com.asms.identity.security;
 import com.asms.identity.entity.User;
 import com.asms.identity.enums.AuthProvider;
 import com.asms.identity.repository.UserRepository;
+import com.asms.identity.service.RefreshTokenService;
+import com.asms.identity.service.RefreshTokenService.RefreshTokenIssue;
 import jakarta.servlet.ServletException;
 import jakarta.servlet.http.HttpServletRequest;
 import jakarta.servlet.http.HttpServletResponse;
+import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.beans.factory.annotation.Value;
 import org.springframework.security.core.Authentication;
 import org.springframework.security.oauth2.core.user.OAuth2User;
@@ -22,15 +25,34 @@ public class OAuth2AuthenticationSuccessHandler implements AuthenticationSuccess
 
     private final UserRepository userRepository;
     private final JwtService jwtService;
+    private final RefreshTokenService refreshTokenService;
+    private final RefreshTokenCookieService refreshTokenCookieService;
     private final String frontendBaseUrl;
 
+    @Autowired
     public OAuth2AuthenticationSuccessHandler(
             UserRepository userRepository,
             JwtService jwtService,
+            RefreshTokenService refreshTokenService,
+            RefreshTokenCookieService refreshTokenCookieService,
             @Value("${asms.frontend.base-url}") String frontendBaseUrl
     ) {
         this.userRepository = userRepository;
         this.jwtService = jwtService;
+        this.refreshTokenService = refreshTokenService;
+        this.refreshTokenCookieService = refreshTokenCookieService;
+        this.frontendBaseUrl = removeTrailingSlash(frontendBaseUrl);
+    }
+
+    public OAuth2AuthenticationSuccessHandler(
+            UserRepository userRepository,
+            JwtService jwtService,
+            String frontendBaseUrl
+    ) {
+        this.userRepository = userRepository;
+        this.jwtService = jwtService;
+        this.refreshTokenService = null;
+        this.refreshTokenCookieService = null;
         this.frontendBaseUrl = removeTrailingSlash(frontendBaseUrl);
     }
 
@@ -45,6 +67,10 @@ public class OAuth2AuthenticationSuccessHandler implements AuthenticationSuccess
         User user = findOrCreateGoogleUser(principal);
 
         String accessToken = jwtService.generateToken(user);
+        if (refreshTokenService != null && refreshTokenCookieService != null) {
+            RefreshTokenIssue refreshToken = refreshTokenService.createRefreshToken(user, true);
+            refreshTokenCookieService.addRefreshTokenCookie(response, refreshToken.token(), refreshToken.cookieMaxAgeSeconds());
+        }
         String redirectUrl = UriComponentsBuilder
                 .fromUriString(frontendBaseUrl + "/oauth2/success")
                 .queryParam("accessToken", accessToken)

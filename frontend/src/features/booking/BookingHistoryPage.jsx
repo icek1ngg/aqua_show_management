@@ -1,8 +1,9 @@
-import { useEffect, useMemo, useState } from 'react';
+import { useCallback, useEffect, useMemo, useState } from 'react';
 import { Link, useLocation, useNavigate } from 'react-router-dom';
 
 import { getMyBookings } from '../../services/bookingService.js';
 import MainLayout from '../../shared/layouts/MainLayout.jsx';
+import { normalizeBookingPaymentStatus } from '../../shared/utils/paymentStatus.js';
 
 const fallbackImageUrl =
   'https://lh3.googleusercontent.com/aida-public/AB6AXuBQJ-Fo4HDO72JbLax0CiFqctWCGXvU4YEfKNT6BKoii53LhvXYm3tK9deyNpu3SQhQuDwXH4brHWFob4XTMXC0igb1FTIelijgurjSK40wqc_V-h4hB2iXApJSw4tuIL9RRKwcdhGhhcgV9V5pOtwPQGvlVc5CRVwmmWl5xWGLSkDEXdqrpRF327LZc7RzHHIIOK5u5seDmxx49urrFLxksqEEDJ5_xPJn8EULd2-53B3FmPiCpcXrt3oMMoWR8T3lZdXTQe3xXQ';
@@ -99,6 +100,7 @@ function getBookingErrorMessage(error) {
 }
 
 function normalizeBooking(booking) {
+  const normalizedStatus = normalizeBookingPaymentStatus(booking, booking?.payment);
   return {
     id: booking.id,
     bookingCode: booking.bookingCode || booking.id,
@@ -107,9 +109,14 @@ function normalizeBooking(booking) {
     ticketType: booking.ticketType || 'Standard Entry',
     quantity: booking.quantity ?? 0,
     totalAmount: booking.totalAmount,
-    status: booking.status || 'PROCESSING',
+    status: normalizedStatus.status,
+    bookingStatus: normalizedStatus.bookingStatus,
+    paymentStatus: normalizedStatus.paymentStatus,
     createdAt: booking.createdAt,
     expiresAt: booking.expiresAt,
+    payment: booking.payment || null,
+    tickets: booking.tickets || null,
+    emailNotification: booking.emailNotification || null,
     imageUrl: fallbackImageUrl,
   };
 }
@@ -175,18 +182,14 @@ export default function BookingHistoryPage() {
   const navigate = useNavigate();
   const location = useLocation();
 
-  useEffect(() => {
-    let isMounted = true;
-
-    async function loadBookings() {
+  const loadBookings = useCallback(
+    async ({ showLoading = true } = {}) => {
       try {
-        setIsLoading(true);
+        if (showLoading) {
+          setIsLoading(true);
+        }
         setLoadError('');
         const bookingPage = await getMyBookings({ page: currentPage, size: pageSize });
-        if (!isMounted) {
-          return;
-        }
-
         const items = Array.isArray(bookingPage?.items) ? bookingPage.items : [];
         setBookings(items.map(normalizeBooking));
         setPagination({
@@ -198,10 +201,6 @@ export default function BookingHistoryPage() {
           hasPrevious: Boolean(bookingPage?.hasPrevious),
         });
       } catch (error) {
-        if (!isMounted) {
-          return;
-        }
-
         if (error?.response?.status === 401) {
           navigate('/login', { replace: true, state: { from: location } });
           return;
@@ -209,18 +208,39 @@ export default function BookingHistoryPage() {
 
         setLoadError(getBookingErrorMessage(error));
       } finally {
-        if (isMounted) {
+        if (showLoading) {
           setIsLoading(false);
         }
       }
+    },
+    [currentPage, location, navigate],
+  );
+
+  useEffect(() => {
+    let isMounted = true;
+
+    async function guardedLoadBookings() {
+      await loadBookings();
+      if (!isMounted) {
+        return;
+      }
     }
 
-    loadBookings();
+    guardedLoadBookings();
 
     return () => {
       isMounted = false;
     };
-  }, [currentPage, location, navigate]);
+  }, [loadBookings]);
+
+  useEffect(() => {
+    function refetchOnFocus() {
+      loadBookings({ showLoading: false });
+    }
+
+    window.addEventListener('focus', refetchOnFocus);
+    return () => window.removeEventListener('focus', refetchOnFocus);
+  }, [loadBookings]);
 
   const visibleBookings = useMemo(() => {
     const normalizedSearchTerm = searchTerm.trim().toLowerCase();

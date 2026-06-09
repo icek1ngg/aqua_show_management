@@ -6,6 +6,8 @@ import com.asms.payment.dto.CreatePaymentRequest;
 import com.asms.payment.dto.CreatePaymentResponse;
 import com.asms.payment.dto.PayOsCallbackRequest;
 import com.asms.payment.dto.PaymentCallbackResponse;
+import com.asms.payment.dto.PaymentReconcileRequest;
+import com.asms.payment.dto.PaymentReconcileResponse;
 import com.asms.payment.service.PaymentService;
 import jakarta.validation.Valid;
 import org.springframework.security.core.annotation.AuthenticationPrincipal;
@@ -32,5 +34,13 @@ public class PaymentController {
     @PostMapping("/callback")
     public ApiResponse<PaymentCallbackResponse> callback(@Valid @RequestBody PayOsCallbackRequest request) {
         return ApiResponse.success("PayOS callback processed", paymentService.processCallback(request));
+    }
+
+    @PostMapping("/reconcile")
+    public ApiResponse<PaymentReconcileResponse> reconcile(
+            @Valid @RequestBody PaymentReconcileRequest request,
+            @AuthenticationPrincipal User user
+    ) {
+        return ApiResponse.success("Payment reconciliation completed", paymentService.reconcilePayment(request, user));
     }
 }

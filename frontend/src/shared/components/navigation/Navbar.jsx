@@ -98,6 +98,7 @@ function LoggedInActions({ user, onLogout }) {
   const [isDropdownOpen, setIsDropdownOpen] = useState(false);
   const dropdownRef = useRef(null);
   const displayEmail = displayUser.email || displayUser.gmail || displayUser.name || defaultMockUser.email;
+  const isStaff = hasRole(displayUser, 'STAFF');
 
   useEffect(() => {
     if (!isDropdownOpen) {
@@ -138,15 +139,17 @@ function LoggedInActions({ user, onLogout }) {
           className="absolute right-0 top-full z-50 mt-3 w-56 overflow-hidden rounded-2xl border border-cyan-100 bg-white p-2 shadow-xl shadow-cyan-950/10"
           role="menu"
         >
-          <Link
-            className="flex items-center gap-2 rounded-xl px-4 py-3 text-sm font-semibold text-slate-700 transition hover:bg-cyan-50 hover:text-cyan-800"
-            role="menuitem"
-            to="/profile"
-            onClick={() => setIsDropdownOpen(false)}
-          >
-            <span className="material-symbols-outlined text-lg text-cyan-700">person</span>
-            Profile
-          </Link>
+          {!isStaff ? (
+            <Link
+              className="flex items-center gap-2 rounded-xl px-4 py-3 text-sm font-semibold text-slate-700 transition hover:bg-cyan-50 hover:text-cyan-800"
+              role="menuitem"
+              to="/profile"
+              onClick={() => setIsDropdownOpen(false)}
+            >
+              <span className="material-symbols-outlined text-lg text-cyan-700">person</span>
+              Profile
+            </Link>
+          ) : null}
           <button
             className="flex w-full items-center gap-2 rounded-xl px-4 py-3 text-left text-sm font-semibold text-slate-700 transition hover:bg-red-50 hover:text-red-700"
             role="menuitem"
@@ -168,6 +171,7 @@ export default function Navbar() {
   const [isMobileOpen, setIsMobileOpen] = useState(false);
   const [isMobileUserMenuOpen, setIsMobileUserMenuOpen] = useState(false);
   const [isTicketDrawerOpen, setIsTicketDrawerOpen] = useState(false);
+  const isStaff = hasRole(user, 'STAFF');
 
   useEffect(() => {
     const handleOpenDrawer = () => {
@@ -205,13 +209,15 @@ export default function Navbar() {
 
           <div className="hidden items-center gap-4 md:flex">
             {isAuthenticated ? <LoggedInActions user={user} onLogout={handleLogout} /> : !loading && <LoggedOutActions />}
-            <button
-              className="rounded-full bg-gradient-to-r from-cyan-500 via-teal-500 to-cyan-700 px-6 py-3 text-sm font-bold text-white shadow-lg shadow-cyan-700/20 transition hover:-translate-y-0.5 hover:shadow-cyan-700/30 active:translate-y-0"
-              type="button"
-              onClick={openTicketDrawer}
-            >
-              Book Now
-            </button>
+            {!isStaff ? (
+              <button
+                className="rounded-full bg-gradient-to-r from-cyan-500 via-teal-500 to-cyan-700 px-6 py-3 text-sm font-bold text-white shadow-lg shadow-cyan-700/20 transition hover:-translate-y-0.5 hover:shadow-cyan-700/30 active:translate-y-0"
+                type="button"
+                onClick={openTicketDrawer}
+              >
+                Book Now
+              </button>
+            ) : null}
           </div>
 
           <button
@@ -249,15 +255,17 @@ export default function Navbar() {
                   </button>
                   {isMobileUserMenuOpen && (
                     <div className="rounded-2xl border border-cyan-100 bg-white p-2 shadow-lg" role="menu">
-                      <Link
-                        className="flex items-center gap-2 rounded-xl px-3 py-2 text-sm font-semibold text-slate-600 hover:bg-cyan-50"
-                        role="menuitem"
-                        to="/profile"
-                        onClick={closeMobileMenu}
-                      >
-                        <span className="material-symbols-outlined text-lg text-cyan-700">person</span>
-                        Profile
-                      </Link>
+                      {!isStaff ? (
+                        <Link
+                          className="flex items-center gap-2 rounded-xl px-3 py-2 text-sm font-semibold text-slate-600 hover:bg-cyan-50"
+                          role="menuitem"
+                          to="/profile"
+                          onClick={closeMobileMenu}
+                        >
+                          <span className="material-symbols-outlined text-lg text-cyan-700">person</span>
+                          Profile
+                        </Link>
+                      ) : null}
                       <button
                         className="flex w-full items-center gap-2 rounded-xl px-3 py-2 text-left text-sm font-semibold text-slate-600 hover:bg-red-50 hover:text-red-700"
                         role="menuitem"
@@ -282,19 +290,21 @@ export default function Navbar() {
                   </Link>
                 </div>
               ) : null}
-              <button
-                className="rounded-full bg-gradient-to-r from-cyan-500 via-teal-500 to-cyan-700 px-5 py-3 text-center text-sm font-bold text-white shadow-lg shadow-cyan-700/20"
-                type="button"
-                onClick={openTicketDrawer}
-              >
-                Book Now
-              </button>
+              {!isStaff ? (
+                <button
+                  className="rounded-full bg-gradient-to-r from-cyan-500 via-teal-500 to-cyan-700 px-5 py-3 text-center text-sm font-bold text-white shadow-lg shadow-cyan-700/20"
+                  type="button"
+                  onClick={openTicketDrawer}
+                >
+                  Book Now
+                </button>
+              ) : null}
             </div>
           </div>
         )}
       </header>
 
-      <TicketSearchDrawer open={isTicketDrawerOpen} onClose={closeTicketDrawer} />
+      {!isStaff ? <TicketSearchDrawer open={isTicketDrawerOpen} onClose={closeTicketDrawer} /> : null}
     </>
   );
 }
