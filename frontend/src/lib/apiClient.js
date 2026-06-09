@@ -66,7 +66,14 @@ apiClient.interceptors.request.use((config) => {
   const token = getAccessToken();
 
   if (token) {
-    config.headers.Authorization = `Bearer ${token}`;
+    if (typeof config.headers?.set === 'function') {
+      config.headers.set('Authorization', `Bearer ${token}`);
+    } else {
+      config.headers = {
+        ...config.headers,
+        Authorization: `Bearer ${token}`,
+      };
+    }
   }
 
   return config;
@@ -74,30 +81,15 @@ apiClient.interceptors.request.use((config) => {
 
 apiClient.interceptors.response.use(
   (response) => response,
-  async (error) => {
-    const originalRequest = error.config;
-    const token = getAccessToken();
+  (error) => {
+    const requestHeaders = error.config?.headers;
+    const hadAuthHeader = Boolean(
+      requestHeaders?.Authorization ||
+      requestHeaders?.authorization ||
+      (typeof requestHeaders?.get === 'function' && requestHeaders.get('Authorization')),
+    );
 
-    if (
-      error.response?.status === 401 &&
-      token &&
-      !originalRequest?._retry &&
-      !originalRequest?.skipAuthRefresh
-    ) {
-      originalRequest._retry = true;
-
-      try {
-        const nextToken = await refreshAccessToken();
-        originalRequest.headers = originalRequest.headers || {};
-        originalRequest.headers.Authorization = `Bearer ${nextToken}`;
-        return apiClient(originalRequest);
-      } catch (refreshError) {
-        clearStoredToken();
-        return Promise.reject(refreshError);
-      }
-    }
-
-    if (error.response?.status === 401 && token && !originalRequest?.skipAuthClear) {
+    if (error.response?.status === 401 && hadAuthHeader && !error.config?.skipAuthClear) {
       clearStoredToken();
     }
 

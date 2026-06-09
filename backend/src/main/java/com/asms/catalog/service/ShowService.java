@@ -11,6 +11,7 @@ import com.asms.core.exception.NotFoundException;
 import com.asms.core.response.PageResponse;
 import org.springframework.data.domain.Page;
 import org.springframework.data.domain.PageRequest;
+import org.springframework.data.domain.Sort;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
@@ -29,7 +30,16 @@ public class ShowService {
 
     @Transactional(readOnly = true)
     public PageResponse<ShowManagementResponse> getShows(String keyword, ShowStatus status, int page, int size) {
-        Page<Show> shows = showRepository.search(normalizeKeyword(keyword), status, PageRequest.of(Math.max(page, 0), sanitizeSize(size)));
+        String normalizedKeyword = normalizeKeyword(keyword);
+        PageRequest pageRequest = PageRequest.of(Math.max(page, 0), sanitizeSize(size), Sort.by(Sort.Direction.DESC, "createdAt"));
+        Page<Show> shows;
+        if (normalizedKeyword != null) {
+            shows = showRepository.searchByKeyword(normalizedKeyword, status, pageRequest);
+        } else if (status != null) {
+            shows = showRepository.findByStatusOrderByCreatedAtDesc(status, pageRequest);
+        } else {
+            shows = showRepository.findAll(pageRequest);
+        }
         return PageResponse.from(shows, shows.getContent().stream().map(CatalogMapper::toShowManagement).toList());
     }
 

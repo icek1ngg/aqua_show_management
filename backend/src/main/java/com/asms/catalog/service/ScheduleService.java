@@ -20,6 +20,8 @@ import com.asms.core.exception.NotFoundException;
 import com.asms.core.response.PageResponse;
 import org.springframework.data.domain.Page;
 import org.springframework.data.domain.PageRequest;
+import org.springframework.data.domain.Sort;
+import org.springframework.data.jpa.domain.Specification;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
@@ -60,7 +62,10 @@ public class ScheduleService {
             int page,
             int size
     ) {
-        Page<ShowSchedule> schedules = scheduleRepository.search(showId, venueId, status, fromTime, toTime, PageRequest.of(Math.max(page, 0), sanitizeSize(size)));
+        Page<ShowSchedule> schedules = scheduleRepository.findAll(
+                scheduleSpecification(showId, venueId, status, fromTime, toTime),
+                PageRequest.of(Math.max(page, 0), sanitizeSize(size), Sort.by(Sort.Direction.DESC, "startTime"))
+        );
         return PageResponse.from(schedules, schedules.getContent().stream().map(CatalogMapper::toScheduleManagement).toList());
     }
 
@@ -169,5 +174,35 @@ public class ScheduleService {
             return 10;
         }
         return Math.min(size, 100);
+    }
+
+    private Specification<ShowSchedule> scheduleSpecification(
+            UUID showId,
+            UUID venueId,
+            ScheduleStatus status,
+            LocalDateTime fromTime,
+            LocalDateTime toTime
+    ) {
+        return (root, query, criteriaBuilder) -> {
+            var predicate = criteriaBuilder.conjunction();
+
+            if (showId != null) {
+                predicate = criteriaBuilder.and(predicate, criteriaBuilder.equal(root.get("show").get("id"), showId));
+            }
+            if (venueId != null) {
+                predicate = criteriaBuilder.and(predicate, criteriaBuilder.equal(root.get("venue").get("id"), venueId));
+            }
+            if (status != null) {
+                predicate = criteriaBuilder.and(predicate, criteriaBuilder.equal(root.get("status"), status));
+            }
+            if (fromTime != null) {
+                predicate = criteriaBuilder.and(predicate, criteriaBuilder.greaterThanOrEqualTo(root.get("startTime"), fromTime));
+            }
+            if (toTime != null) {
+                predicate = criteriaBuilder.and(predicate, criteriaBuilder.lessThanOrEqualTo(root.get("startTime"), toTime));
+            }
+
+            return predicate;
+        };
     }
 }

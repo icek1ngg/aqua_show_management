@@ -30,14 +30,9 @@ export function getRedirectPathByRole(role) {
 }
 
 export function getRedirectPathAfterLogin(user, returnUrl) {
-  const role = getPrimaryUserRole(user);
-  if (role === 'STAFF') {
-    return getRedirectPathByRole(role);
-  }
-
   if (returnUrl && !returnUrl.startsWith('/login')) {
     return returnUrl;
   }
 
-  return getRedirectPathByRole(role);
+  return getRedirectPathByRole(getPrimaryUserRole(user));
 }
