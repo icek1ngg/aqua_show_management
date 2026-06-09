@@ -4,6 +4,28 @@ function unwrapApiResponse(response) {
   return response.data?.data ?? response.data;
 }
 
+export function buildBookingUrl({
+  showId,
+  scheduleId,
+  showName,
+  showDate,
+  quantity = 1,
+  ticketType = 'Standard Entry',
+}) {
+  const params = [
+    ['showId', showId],
+    ['scheduleId', scheduleId],
+    ['show', showName],
+    ['date', showDate],
+    ['quantity', String(quantity)],
+    ['ticketType', ticketType],
+  ];
+
+  return `/bookings/create?${params
+    .map(([key, value]) => `${key}=${encodeURIComponent(value ?? '')}`)
+    .join('&')}`;
+}
+
 export async function createBooking(payload) {
   const response = await apiClient.post('/bookings', payload);
   return unwrapApiResponse(response);

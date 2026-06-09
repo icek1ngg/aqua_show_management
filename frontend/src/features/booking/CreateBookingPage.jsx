@@ -103,6 +103,26 @@ function getBookingErrorMessage(error) {
   return responseData?.message || 'Could not create booking. Please try again.';
 }
 
+function isUuid(value) {
+  return /^[0-9a-f]{8}-[0-9a-f]{4}-[1-5][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i.test(value || '');
+}
+
+function validateBookingPayload(payload) {
+  if (!payload.scheduleId || !isUuid(payload.scheduleId)) {
+    return 'Please select a show schedule again.';
+  }
+  if (!payload.showId || !isUuid(payload.showId)) {
+    return 'Please select a show again.';
+  }
+  if (!payload.showName || !payload.showDate || !payload.ticketType) {
+    return 'Show, date, and ticket type are required.';
+  }
+  if (!Number.isInteger(payload.quantity) || payload.quantity < 1 || payload.quantity > 10) {
+    return 'Quantity must be a number from 1 to 10.';
+  }
+  return '';
+}
+
 export default function CreateBookingPage() {
   const [searchParams, setSearchParams] = useSearchParams();
   const navigate = useNavigate();
@@ -131,7 +151,8 @@ export default function CreateBookingPage() {
   }, [quantityParam]);
 
   // Check if required params are missing
-  const isParamsMissing = !showIdParam || !scheduleIdParam || !showNameParam || !dateParam || isNaN(quantityParam) || quantityParam < 1;
+  const isScheduleMissing = !scheduleIdParam;
+  const isParamsMissing = !showIdParam || isScheduleMissing || !showNameParam || !dateParam || isNaN(quantityParam) || quantityParam < 1;
 
   if (isParamsMissing) {
     return (
@@ -142,7 +163,9 @@ export default function CreateBookingPage() {
           </div>
           <h1 className="text-4xl font-black tracking-tight text-slate-950">Select Tickets to Continue</h1>
           <p className="mt-4 text-base text-slate-600 max-w-md">
-            Please search for a show, date, and ticket quantity using the Ticket Search Drawer to start your booking.
+            {isScheduleMissing
+              ? 'Please select a show schedule again.'
+              : 'Please search for a show, date, and ticket quantity using the Ticket Search Drawer to start your booking.'}
           </p>
           <div className="mt-8 flex flex-col justify-center gap-4 sm:flex-row w-full sm:w-auto px-4">
             <button
@@ -165,7 +188,10 @@ export default function CreateBookingPage() {
   }
 
   // Load show details from mock database
-  const showData = showDatabase[showNameParam] || showDatabase['Symphony of Lights'];
+  const showData = {
+    ...(showDatabase[showNameParam] || showDatabase['Symphony of Lights']),
+    name: showNameParam,
+  };
 
   // Calculate ticket pricing based on ticketType
   // TEMPORARY: Front-end price estimation only. Not trusted for backend transactions.
@@ -232,21 +258,6 @@ export default function CreateBookingPage() {
     setBookingError('');
     setBookingStatusMessage('');
 
-    if (!showIdParam || !scheduleIdParam) {
-      setBookingError('Selected show schedule is required. Please search for tickets again.');
-      return;
-    }
-
-    if (!showNameParam || !dateParam) {
-      setBookingError('Selected show and date are required.');
-      return;
-    }
-
-    if (!Number.isInteger(quantity) || quantity < 1 || quantity > showData.maxQuantity) {
-      setBookingError(`Quantity must be a number from 1 to ${showData.maxQuantity}.`);
-      return;
-    }
-
     const payload = {
       showId: showIdParam,
       scheduleId: scheduleIdParam,
@@ -255,14 +266,34 @@ export default function CreateBookingPage() {
       ticketType: ticketTypeParam,
       quantity,
     };
+    const payloadError = validateBookingPayload(payload);
+    if (payloadError) {
+      setBookingError(payloadError);
+      return;
+    }
+
+    if (import.meta.env.DEV) {
+      console.debug('[booking] validated create payload', {
+        showId: payload.showId,
+        scheduleId: payload.scheduleId,
+        showDate: payload.showDate,
+        ticketType: payload.ticketType,
+        quantity: payload.quantity,
+      });
+    }
 
     try {
       setSubmitState('creating');
       setBookingStatusMessage('Creating booking...');
       const result = await createBooking(payload);
 
+      if (result?.bookingId) {
+        navigate(`/bookings/${result.bookingId}/payment`);
+        return;
+      }
+
       if (!result?.holdId) {
-        throw new Error('Booking hold was not returned.');
+        throw new Error('Booking reference was not returned.');
       }
 
       setSubmitState('processing');
@@ -272,7 +303,7 @@ export default function CreateBookingPage() {
       if (!found) {
         setSubmitState('idle');
         setBookingStatusMessage('');
-        setBookingError('Your booking is still processing. Please check My Bookings shortly.');
+        setBookingError('Booking is still processing. Please make sure RabbitMQ is running, or check My Bookings later.');
       }
     } catch (error) {
       setSubmitState('idle');

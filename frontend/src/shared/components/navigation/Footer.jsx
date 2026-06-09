@@ -7,7 +7,7 @@ const quickLinks = [
   { label: 'Shows', to: '/shows' },
   { label: 'Schedules', to: '/#schedules' },
   { label: 'My Bookings', to: '/bookings/my' },
-  { label: 'Book Tickets', to: '/bookings/create' },
+  { label: 'Book Tickets', to: '/shows' },
 ];
 const supportLinks = [
   { label: 'Login', to: '/login' },

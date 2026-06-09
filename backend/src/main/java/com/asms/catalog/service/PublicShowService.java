@@ -76,6 +76,7 @@ public class PublicShowService {
                 show.getImageUrl(),
                 shortDescription(show.getDescription()),
                 show.getDurationMinutes(),
+                nextSchedule == null ? null : nextSchedule.getId(),
                 nextSchedule == null ? null : nextSchedule.getStartTime(),
                 nextSchedule == null ? null : CatalogMapper.venueName(nextSchedule)
         );

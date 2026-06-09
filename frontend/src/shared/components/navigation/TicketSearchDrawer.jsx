@@ -1,34 +1,37 @@
 import { useEffect, useState } from 'react';
 import { useNavigate } from 'react-router-dom';
 
+import { buildBookingUrl } from '../../../services/bookingService.js';
+import { getShowSchedules, getShows } from '../../../services/showService.js';
 import {
-  isTodayOrFuture,
   sanitizeDigits,
   validateRequired,
 } from '../../utils/validation.js';
 
-const showOptions = ['Symphony of Lights', 'Ocean Dreams', 'Aqua Parade', 'Mermaid Splash'];
 const ticketTypes = ['Standard Entry', 'VIP Entry', 'Family Package'];
 
-// Mock mapping for future-proof query parameters (Temporary / Frontend-only)
-const showIds = {
-  'Symphony of Lights': 'show_symphony_lights',
-  'Ocean Dreams': 'show_ocean_dreams',
-  'Aqua Parade': 'show_aqua_parade',
-  'Mermaid Splash': 'show_mermaid_splash',
-};
+function formatScheduleOption(schedule) {
+  const date = new Date(schedule.startTime);
+  if (Number.isNaN(date.getTime())) {
+    return 'Schedule time unavailable';
+  }
+  return date.toLocaleString('en-US', {
+    month: 'short',
+    day: 'numeric',
+    year: 'numeric',
+    hour: '2-digit',
+    minute: '2-digit',
+  });
+}
 
-const scheduleIds = {
-  'Symphony of Lights': 'sch_symphony_lights_8pm',
-  'Ocean Dreams': 'sch_ocean_dreams_2pm',
-  'Aqua Parade': 'sch_aqua_parade_430pm',
-  'Mermaid Splash': 'sch_mermaid_splash_11am',
-};
-
-function getTodayDateInputValue() {
-  const today = new Date();
-  const timezoneOffset = today.getTimezoneOffset() * 60000;
-  return new Date(today.getTime() - timezoneOffset).toISOString().slice(0, 10);
+function isScheduleBookable(schedule) {
+  const startTime = schedule?.startTime ? new Date(schedule.startTime) : null;
+  return Boolean(
+    startTime
+    && !Number.isNaN(startTime.getTime())
+    && startTime.getTime() > Date.now() + 30 * 60 * 1000
+    && Number(schedule.availableTickets) > 0,
+  );
 }
 
 function FieldError({ children }) {
@@ -42,11 +45,15 @@ function FieldError({ children }) {
 export default function TicketSearchDrawer({ open, onClose }) {
   const navigate = useNavigate();
   const [formValues, setFormValues] = useState({
-    show: '',
-    date: '',
+    showId: '',
+    scheduleId: '',
     quantity: '',
     ticketType: '',
   });
+  const [shows, setShows] = useState([]);
+  const [schedules, setSchedules] = useState([]);
+  const [isLoadingOptions, setIsLoadingOptions] = useState(false);
+  const [optionsError, setOptionsError] = useState('');
   const [fieldErrors, setFieldErrors] = useState({});
 
   useEffect(() => {
@@ -64,11 +71,74 @@ export default function TicketSearchDrawer({ open, onClose }) {
     return () => window.removeEventListener('keydown', handleKeyDown);
   }, [onClose, open]);
 
+  useEffect(() => {
+    if (!open) {
+      return;
+    }
+
+    let active = true;
+    setIsLoadingOptions(true);
+    setOptionsError('');
+    getShows({ page: 0, size: 50 })
+      .then((response) => {
+        if (active) {
+          setShows(Array.isArray(response?.items) ? response.items : []);
+        }
+      })
+      .catch(() => {
+        if (active) {
+          setOptionsError('Could not load available shows.');
+        }
+      })
+      .finally(() => {
+        if (active) {
+          setIsLoadingOptions(false);
+        }
+      });
+
+    return () => {
+      active = false;
+    };
+  }, [open]);
+
+  useEffect(() => {
+    if (!formValues.showId) {
+      setSchedules([]);
+      return;
+    }
+
+    let active = true;
+    setIsLoadingOptions(true);
+    setOptionsError('');
+    getShowSchedules(formValues.showId)
+      .then((response) => {
+        if (active) {
+          setSchedules(Array.isArray(response) ? response : []);
+        }
+      })
+      .catch(() => {
+        if (active) {
+          setSchedules([]);
+          setOptionsError('Could not load schedules for this show.');
+        }
+      })
+      .finally(() => {
+        if (active) {
+          setIsLoadingOptions(false);
+        }
+      });
+
+    return () => {
+      active = false;
+    };
+  }, [formValues.showId]);
+
   const handleChange = (event) => {
     const { name, value } = event.target;
     setFormValues((currentValues) => ({
       ...currentValues,
       [name]: name === 'quantity' ? sanitizeDigits(value, 2) : value,
+      ...(name === 'showId' ? { scheduleId: '' } : {}),
     }));
     setFieldErrors((currentErrors) => {
       if (!currentErrors[name]) {
@@ -86,8 +156,8 @@ export default function TicketSearchDrawer({ open, onClose }) {
 
     const quantityNumber = Number(formValues.quantity);
     const nextErrors = {
-      show: validateRequired(formValues.show, 'Show'),
-      date: validateRequired(formValues.date, 'Date') || (isTodayOrFuture(formValues.date) ? '' : 'Date cannot be in the past.'),
+      showId: validateRequired(formValues.showId, 'Show'),
+      scheduleId: validateRequired(formValues.scheduleId, 'Schedule'),
       quantity: validateRequired(formValues.quantity, 'Quantity')
         || (Number.isInteger(quantityNumber) && quantityNumber >= 1 && quantityNumber <= 10
           ? ''
@@ -101,19 +171,21 @@ export default function TicketSearchDrawer({ open, onClose }) {
       return;
     }
 
-    const params = new URLSearchParams();
-    const showId = showIds[formValues.show] || '';
-    const scheduleId = scheduleIds[formValues.show] || '';
-
-    if (showId) params.set('showId', showId);
-    if (scheduleId) params.set('scheduleId', scheduleId);
-    if (formValues.show) params.set('show', formValues.show);
-    if (formValues.date) params.set('date', formValues.date);
-    if (formValues.quantity) params.set('quantity', formValues.quantity);
-    if (formValues.ticketType) params.set('ticketType', formValues.ticketType);
+    const selectedShow = shows.find((show) => show.id === formValues.showId);
+    const selectedSchedule = schedules.find((schedule) => schedule.id === formValues.scheduleId);
+    const showDate = selectedSchedule?.startTime
+      ? String(selectedSchedule.startTime).slice(0, 10)
+      : '';
 
     onClose();
-    navigate(`/bookings/create?${params.toString()}`);
+    navigate(buildBookingUrl({
+      showId: formValues.showId,
+      scheduleId: formValues.scheduleId,
+      showName: selectedShow?.title,
+      showDate,
+      quantity: formValues.quantity,
+      ticketType: formValues.ticketType,
+    }));
   };
 
   if (!open) {
@@ -170,14 +242,14 @@ export default function TicketSearchDrawer({ open, onClose }) {
                 <select
                   className="w-full appearance-none rounded-2xl border border-cyan-100 bg-cyan-50/70 py-4 pl-12 pr-10 text-sm font-semibold text-slate-800 outline-none transition focus:border-cyan-500 focus:bg-white focus:ring-2 focus:ring-cyan-200"
                   id="ticket-show"
-                  name="show"
-                  value={formValues.show}
+                  name="showId"
+                  value={formValues.showId}
                   onChange={handleChange}
                 >
-                  <option value="">Select a show</option>
-                  {showOptions.map((show) => (
-                    <option key={show} value={show}>
-                      {show}
+                  <option value="">{isLoadingOptions && shows.length === 0 ? 'Loading shows...' : 'Select a show'}</option>
+                  {shows.map((show) => (
+                    <option key={show.id} value={show.id}>
+                      {show.title}
                     </option>
                   ))}
                 </select>
@@ -185,28 +257,38 @@ export default function TicketSearchDrawer({ open, onClose }) {
                   expand_more
                 </span>
               </div>
-              <FieldError>{fieldErrors.show}</FieldError>
+              <FieldError>{fieldErrors.showId}</FieldError>
             </div>
 
             <div className="space-y-2">
-              <label className="ml-1 block text-sm font-bold text-slate-700" htmlFor="ticket-date">
-                Select Date
+              <label className="ml-1 block text-sm font-bold text-slate-700" htmlFor="ticket-schedule">
+                Select Schedule
               </label>
               <div className="relative">
                 <span className="material-symbols-outlined absolute left-4 top-1/2 -translate-y-1/2 text-cyan-700">
                   calendar_month
                 </span>
-                <input
-                  className="w-full rounded-2xl border border-cyan-100 bg-cyan-50/70 py-4 pl-12 pr-4 text-sm font-semibold text-slate-800 outline-none transition focus:border-cyan-500 focus:bg-white focus:ring-2 focus:ring-cyan-200"
-                  id="ticket-date"
-                  min={getTodayDateInputValue()}
-                  name="date"
-                  type="date"
-                  value={formValues.date}
+                <select
+                  className="w-full appearance-none rounded-2xl border border-cyan-100 bg-cyan-50/70 py-4 pl-12 pr-10 text-sm font-semibold text-slate-800 outline-none transition focus:border-cyan-500 focus:bg-white focus:ring-2 focus:ring-cyan-200"
+                  disabled={!formValues.showId || isLoadingOptions}
+                  id="ticket-schedule"
+                  name="scheduleId"
+                  value={formValues.scheduleId}
                   onChange={handleChange}
-                />
+                >
+                  <option value="">{isLoadingOptions && formValues.showId ? 'Loading schedules...' : 'Select a schedule'}</option>
+                  {schedules.map((schedule) => (
+                    <option disabled={!isScheduleBookable(schedule)} key={schedule.id} value={schedule.id}>
+                      {formatScheduleOption(schedule)}
+                      {Number(schedule.availableTickets) <= 0 ? ' - Sold out' : !isScheduleBookable(schedule) ? ' - Booking closed' : ''}
+                    </option>
+                  ))}
+                </select>
+                <span className="material-symbols-outlined pointer-events-none absolute right-4 top-1/2 -translate-y-1/2 text-slate-400">
+                  expand_more
+                </span>
               </div>
-              <FieldError>{fieldErrors.date}</FieldError>
+              <FieldError>{fieldErrors.scheduleId}</FieldError>
             </div>
 
             <div className="grid gap-4 sm:grid-cols-2">
@@ -273,9 +355,7 @@ export default function TicketSearchDrawer({ open, onClose }) {
               Search Tickets
             </button>
 
-            <p className="text-center text-xs leading-5 text-slate-500">
-              This search uses mock values only. Ticket availability will be connected in a later phase.
-            </p>
+            {optionsError && <p className="text-center text-sm font-semibold text-red-600">{optionsError}</p>}
           </div>
         </form>
       </aside>

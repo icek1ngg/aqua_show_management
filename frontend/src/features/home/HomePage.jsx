@@ -1,8 +1,12 @@
 import { useEffect, useMemo, useState } from 'react';
 import { Link, useLocation } from 'react-router-dom';
 
+import { buildBookingUrl } from '../../services/bookingService.js';
 import { getShows } from '../../services/showService.js';
 import MainLayout from '../../shared/layouts/MainLayout.jsx';
+
+const fallbackShowImage =
+  'https://lh3.googleusercontent.com/aida-public/AB6AXuANv7I9nTUaKmdiA6IfaIaY0YwJUIWoqM0X6m_tgMmcJ71PacmGbCJL7U7jN8rhBXSUuV7fovx9LDsAc6N5PhTyiCp6LssLe6FgDdZmMcwFIlWNhrmPMXPWNaNGaENraIJuHz9U8O5qXFdHXwD12d0tWFF6pkX61XHVJWiPscKVSeVXPJHPLntIinpKKiq48E_jrrE2A6BF6g5CVGhbzwWhTMCs07mHdwovKDWCZJwE9QP5SidUIrVjslByRhoxaZve3By201M-MkjJ';
 
 const featuredShows = [
   {
@@ -122,6 +126,21 @@ function scheduleStatus(show) {
       };
 }
 
+function bookingUrlForShow(show, quantity = 1, ticketType = 'Standard Entry') {
+  if (!show?.id || !show?.nextScheduleId || !show?.nextStartTime) {
+    return null;
+  }
+
+  return buildBookingUrl({
+    showId: show.id,
+    scheduleId: show.nextScheduleId,
+    showName: show.title,
+    showDate: String(show.nextStartTime).slice(0, 10),
+    quantity,
+    ticketType,
+  });
+}
+
 export default function HomePage() {
   const location = useLocation();
   const [shows, setShows] = useState([]);
@@ -139,6 +158,9 @@ export default function HomePage() {
   const [isLoadingShows, setIsLoadingShows] = useState(true);
   const [showsError, setShowsError] = useState('');
   const [reloadKey, setReloadKey] = useState(0);
+  const [selectedShowId, setSelectedShowId] = useState('');
+  const [ticketQuantity, setTicketQuantity] = useState(1);
+  const [ticketType, setTicketType] = useState('Standard Entry');
 
   useEffect(() => {
     const sectionId = location.hash?.replace('#', '') || (location.pathname === '/shows' || location.pathname === '/public/shows' ? 'shows' : '');
@@ -207,13 +229,17 @@ export default function HomePage() {
   const upcomingSchedules = useMemo(
     () =>
       shows
-        .filter((show) => show.nextStartTime)
+        .filter((show) => show.nextScheduleId && show.nextStartTime)
         .map((show) => ({ ...show, formattedSchedule: formatScheduleDate(show.nextStartTime) }))
         .filter((show) => show.formattedSchedule)
         .sort((first, second) => new Date(first.nextStartTime).getTime() - new Date(second.nextStartTime).getTime())
         .slice(0, 3),
     [shows],
   );
+  const firstBookableShow = upcomingSchedules.find((show) => show.nextScheduleId);
+  const selectedShow = shows.find((show) => show.id === selectedShowId);
+  const selectedBookingUrl = bookingUrlForShow(selectedShow, ticketQuantity, ticketType);
+  const heroBookingUrl = bookingUrlForShow(firstBookableShow);
 
   const handleShowSearch = (event) => {
     event.preventDefault();
@@ -252,7 +278,7 @@ export default function HomePage() {
               Experience the harmony of light, water, and music.
             </p>
             <div className="mt-10 flex flex-wrap gap-4">
-              <Link className="rounded-full bg-gradient-to-r from-cyan-500 to-teal-700 px-10 py-4 font-bold text-white shadow-2xl shadow-cyan-950/30 transition hover:-translate-y-0.5 hover:shadow-cyan-950/40 active:translate-y-0" to="/bookings/create">
+              <Link className="rounded-full bg-gradient-to-r from-cyan-500 to-teal-700 px-10 py-4 font-bold text-white shadow-2xl shadow-cyan-950/30 transition hover:-translate-y-0.5 hover:shadow-cyan-950/40 active:translate-y-0" to={heroBookingUrl || '/shows'}>
                 Book Tickets
               </Link>
               <a className="rounded-full border-2 border-white/30 bg-white/10 px-10 py-4 font-bold text-white backdrop-blur-md transition hover:bg-white/20" href="#shows">
@@ -271,9 +297,13 @@ export default function HomePage() {
                 <span className="material-symbols-outlined text-cyan-700">water_drop</span>
                 Select Show
               </span>
-              <select className="w-full rounded-full border border-cyan-100 bg-cyan-50/70 px-5 py-3 text-slate-700 focus:border-cyan-400 focus:outline-none focus:ring-2 focus:ring-cyan-200">
-                <option>{isLoadingShows ? 'Loading active shows...' : 'Choose an active show'}</option>
-                {shows.map((show) => (
+              <select
+                className="w-full rounded-full border border-cyan-100 bg-cyan-50/70 px-5 py-3 text-slate-700 focus:border-cyan-400 focus:outline-none focus:ring-2 focus:ring-cyan-200"
+                value={selectedShowId}
+                onChange={(event) => setSelectedShowId(event.target.value)}
+              >
+                <option value="">{isLoadingShows ? 'Loading active shows...' : 'Choose an active show'}</option>
+                {shows.filter((show) => show.nextScheduleId).map((show) => (
                   <option key={show.id} value={show.id}>
                     {show.title}
                   </option>
@@ -286,7 +316,12 @@ export default function HomePage() {
                 <span className="material-symbols-outlined text-cyan-700">calendar_month</span>
                 Select Date
               </span>
-              <input className="w-full rounded-full border border-cyan-100 bg-cyan-50/70 px-5 py-3 text-slate-700 focus:border-cyan-400 focus:outline-none focus:ring-2 focus:ring-cyan-200" type="date" />
+              <input
+                className="w-full rounded-full border border-cyan-100 bg-cyan-50/70 px-5 py-3 text-slate-700 focus:border-cyan-400 focus:outline-none focus:ring-2 focus:ring-cyan-200"
+                type="date"
+                value={selectedShow?.nextStartTime ? String(selectedShow.nextStartTime).slice(0, 10) : ''}
+                readOnly
+              />
             </label>
 
             <label className="space-y-2">
@@ -294,7 +329,14 @@ export default function HomePage() {
                 <span className="material-symbols-outlined text-cyan-700">numbers</span>
                 Quantity
               </span>
-              <input className="w-full rounded-full border border-cyan-100 bg-cyan-50/70 px-5 py-3 text-slate-700 focus:border-cyan-400 focus:outline-none focus:ring-2 focus:ring-cyan-200" min="1" placeholder="Ticket quantity" type="number" />
+              <input
+                className="w-full rounded-full border border-cyan-100 bg-cyan-50/70 px-5 py-3 text-slate-700 focus:border-cyan-400 focus:outline-none focus:ring-2 focus:ring-cyan-200"
+                min="1"
+                max="10"
+                type="number"
+                value={ticketQuantity}
+                onChange={(event) => setTicketQuantity(Math.min(10, Math.max(1, Number(event.target.value) || 1)))}
+              />
             </label>
 
             <label className="space-y-2">
@@ -302,18 +344,29 @@ export default function HomePage() {
                 <span className="material-symbols-outlined text-cyan-700">confirmation_number</span>
                 Ticket Type
               </span>
-              <select className="w-full rounded-full border border-cyan-100 bg-cyan-50/70 px-5 py-3 text-slate-700 focus:border-cyan-400 focus:outline-none focus:ring-2 focus:ring-cyan-200">
+              <select
+                className="w-full rounded-full border border-cyan-100 bg-cyan-50/70 px-5 py-3 text-slate-700 focus:border-cyan-400 focus:outline-none focus:ring-2 focus:ring-cyan-200"
+                value={ticketType}
+                onChange={(event) => setTicketType(event.target.value)}
+              >
                 <option>Standard Entry</option>
-                <option>VIP Experience</option>
-                <option>Family Pass</option>
+                <option>VIP Entry</option>
+                <option>Family Package</option>
               </select>
             </label>
           </div>
 
-          <Link className="flex w-full items-center justify-center gap-2 whitespace-nowrap rounded-full bg-cyan-700 px-10 py-4 font-bold text-white shadow-lg shadow-cyan-900/20 transition hover:bg-cyan-800 md:w-auto" to="/bookings/create">
-            <span className="material-symbols-outlined">search</span>
-            Search Tickets
-          </Link>
+          {selectedBookingUrl ? (
+            <Link className="flex w-full items-center justify-center gap-2 whitespace-nowrap rounded-full bg-cyan-700 px-10 py-4 font-bold text-white shadow-lg shadow-cyan-900/20 transition hover:bg-cyan-800 md:w-auto" to={selectedBookingUrl}>
+              <span className="material-symbols-outlined">search</span>
+              Search Tickets
+            </Link>
+          ) : (
+            <button className="flex w-full cursor-not-allowed items-center justify-center gap-2 whitespace-nowrap rounded-full bg-slate-300 px-10 py-4 font-bold text-slate-600 md:w-auto" disabled type="button">
+              <span className="material-symbols-outlined">search</span>
+              Search Tickets
+            </button>
+          )}
         </div>
       </div>
 
@@ -508,7 +561,7 @@ export default function HomePage() {
                     <span className={`h-2 w-2 rounded-full ${status.dotClass}`} />
                     {status.label}
                   </span>
-                  <Link className="rounded-full bg-cyan-700 px-8 py-3.5 font-bold text-white shadow-md transition hover:bg-cyan-800" to={`/shows/${schedule.id}`}>
+                  <Link className="rounded-full bg-cyan-700 px-8 py-3.5 font-bold text-white shadow-md transition hover:bg-cyan-800" to={bookingUrlForShow(schedule)}>
                     Book Now
                   </Link>
                 </div>
@@ -538,7 +591,7 @@ export default function HomePage() {
                 Family Bundle
               </h3>
               <p className="max-w-sm text-lg text-white/80">Get 4 tickets for the price of 3 plus free snacks and drinks for the kids.</p>
-              <Link className="mt-4 block w-fit rounded-full bg-yellow-300 px-10 py-4 font-black text-slate-950 transition hover:shadow-xl active:scale-95" to="/bookings/create">
+              <Link className="mt-4 block w-fit rounded-full bg-yellow-300 px-10 py-4 font-black text-slate-950 transition hover:shadow-xl active:scale-95" to="/shows">
                 Grab Offer
               </Link>
             </div>
@@ -558,7 +611,7 @@ export default function HomePage() {
                 Early Access
               </h3>
               <p className="max-w-sm text-lg text-white/80">Enjoy unlimited entries and priority seating for all premium shows this season.</p>
-              <Link className="mt-4 block w-fit rounded-full bg-white px-10 py-4 font-black text-cyan-800 transition hover:shadow-xl active:scale-95" to="/bookings/create">
+              <Link className="mt-4 block w-fit rounded-full bg-white px-10 py-4 font-black text-cyan-800 transition hover:shadow-xl active:scale-95" to="/shows">
                 Explore Perks
               </Link>
             </div>

@@ -167,6 +167,28 @@ class BookingServiceControllerTest {
     }
 
     @Test
+    void createBookingRejectsNonUuidScheduleIdBeforeRepositoryLookup() {
+        User user = user("user@example.com");
+        ShowSchedule schedule = schedule();
+        when(userRepository.findByEmailIgnoreCase("user@example.com")).thenReturn(Optional.of(user));
+        CreateBookingRequest request = new CreateBookingRequest(
+                schedule.getShow().getId().toString(),
+                "SCHEDULE-DEMO-AQUA",
+                schedule.getShow().getTitle(),
+                schedule.getStartTime().toLocalDate(),
+                "STANDARD",
+                1
+        );
+
+        assertThatThrownBy(() -> bookingService.createBooking(request, "user@example.com"))
+                .isInstanceOf(BadRequestException.class)
+                .hasMessage("Schedule ID is invalid");
+
+        verify(scheduleRepository, never()).findById(any(UUID.class));
+        verify(redisTicketHoldService, never()).holdTickets(any(), any(), any(Integer.class), any());
+    }
+
+    @Test
     void createBookingThrowsConflictWhenRedisHoldFails() {
         User user = user("user@example.com");
         ShowSchedule schedule = schedule();

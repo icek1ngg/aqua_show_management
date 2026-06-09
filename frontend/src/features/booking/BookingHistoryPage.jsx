@@ -363,7 +363,7 @@ export default function BookingHistoryPage() {
             <h2 className="mt-3 text-2xl font-black text-slate-950">You have no bookings yet.</h2>
             <p className="mt-2 text-slate-500">Choose an AquaPulse show and your booking history will appear here.</p>
             <div className="mt-8 flex flex-col justify-center gap-3 sm:flex-row">
-              <Link className="rounded-full bg-cyan-700 px-6 py-3 font-bold text-white transition hover:bg-cyan-800" to="/bookings/create">
+              <Link className="rounded-full bg-cyan-700 px-6 py-3 font-bold text-white transition hover:bg-cyan-800" to="/shows">
                 Book Now
               </Link>
               <Link className="rounded-full border border-cyan-200 bg-white px-6 py-3 font-bold text-cyan-700 transition hover:bg-cyan-50" to="/">
