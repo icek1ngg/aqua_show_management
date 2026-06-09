@@ -49,6 +49,7 @@ public final class BookingDtos {
 
     public record CreateBookingResponse(
             UUID requestId,
+            UUID bookingId,
             String holdId,
             BookingStatus status,
             String message,

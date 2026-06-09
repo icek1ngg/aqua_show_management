@@ -99,31 +99,62 @@ public class PaymentServiceImpl implements PaymentService {
     @Override
     @Transactional
     public PaymentCallbackResponse processCallback(PayOsCallbackRequest request) {
-        if (!payOsClient.isValidCallback(request)) {
+        String orderCode = request == null ? null : request.resolvedOrderCode();
+        boolean signaturePresent = request != null && request.signature() != null && !request.signature().isBlank();
+        log.info(
+                "PayOS callback received orderCode={} signaturePresent={}",
+                orderCode,
+                signaturePresent
+        );
+
+        boolean validSignature = payOsClient.isValidCallback(request);
+        log.info("PayOS callback signature validation orderCode={} valid={}", orderCode, validSignature);
+        if (!validSignature) {
             throw new BadRequestException("Invalid PayOS callback signature");
         }
 
-        String orderCode = request.resolvedOrderCode();
         if (orderCode == null || orderCode.isBlank()) {
             throw new BadRequestException("Missing PayOS order code");
         }
+        String callbackStatus = request.resolvedStatus();
+        BigDecimal callbackAmount = request.resolvedAmount();
+        log.info(
+                "PayOS callback verified orderCode={} status={} amount={}",
+                orderCode,
+                callbackStatus,
+                callbackAmount
+        );
 
         if (isPayOsWebhookVerificationSample(request, orderCode)) {
+            log.info("PayOS webhook verification sample accepted orderCode={} amount={}", orderCode, callbackAmount);
             return new PaymentCallbackResponse(null, orderCode, PaymentStatus.SUCCESS, null, 0);
         }
 
         Payment payment = paymentRepository.findByPayosOrderCodeForUpdate(orderCode)
                 .orElseThrow(() -> new NotFoundException("Payment not found"));
-        PaymentStatus incomingStatus = parseStatus(request.resolvedStatus());
+        log.info(
+                "PayOS callback payment found orderCode={} paymentId={} bookingId={}",
+                orderCode,
+                payment.getId(),
+                payment.getBooking().getId()
+        );
+        PaymentStatus incomingStatus = parseStatus(callbackStatus);
         PayOsPaymentStatus providerStatus = new PayOsPaymentStatus(
                 orderCode,
-                request.resolvedStatus(),
+                callbackStatus,
                 incomingStatus,
                 request.resolvedTransactionId(),
                 incomingStatus == PaymentStatus.SUCCESS ? Instant.now() : null,
-                request.resolvedAmount()
+                callbackAmount
         );
         AppliedPaymentStatus applied = applyProviderPaymentStatus(payment, providerStatus, "CALLBACK");
+        log.info(
+                "PayOS callback processed orderCode={} paymentId={} bookingId={} ticketsGenerated={}",
+                orderCode,
+                payment.getId(),
+                payment.getBooking().getId(),
+                applied.generatedTickets()
+        );
 
         return new PaymentCallbackResponse(
                 payment.getBooking().getId(),
@@ -194,12 +225,13 @@ public class PaymentServiceImpl implements PaymentService {
         if (oldPaymentStatus == PaymentStatus.SUCCESS && incomingStatus != PaymentStatus.SUCCESS) {
             return new AppliedPaymentStatus(false, 0);
         }
-        if (
-                incomingStatus == PaymentStatus.SUCCESS
-                && providerStatus.amount() != null
-                && providerStatus.amount().compareTo(payment.getAmount()) != 0
-        ) {
-            throw new BadRequestException("PayOS paid amount does not match the booking amount");
+        if (incomingStatus == PaymentStatus.SUCCESS) {
+            if (providerStatus.amount() == null) {
+                throw new BadRequestException("PayOS paid amount is required");
+            }
+            if (providerStatus.amount().compareTo(payment.getAmount()) != 0) {
+                throw new BadRequestException("PayOS paid amount does not match the booking amount");
+            }
         }
 
         if (providerStatus.transactionId() != null && !providerStatus.transactionId().isBlank()) {
@@ -208,6 +240,8 @@ public class PaymentServiceImpl implements PaymentService {
 
         int generatedTickets = 0;
         if (incomingStatus == PaymentStatus.SUCCESS) {
+            boolean firstSuccessfulTransition =
+                    oldPaymentStatus != PaymentStatus.SUCCESS || oldBookingStatus != BookingStatus.PAID;
             payment.setStatus(PaymentStatus.SUCCESS);
             if (payment.getPaidAt() == null) {
                 payment.setPaidAt(providerStatus.paidAt() == null ? Instant.now() : providerStatus.paidAt());
@@ -215,10 +249,9 @@ public class PaymentServiceImpl implements PaymentService {
             booking.setStatus(BookingStatus.PAID);
             bookingRepository.save(booking);
             paymentRepository.save(payment);
-            releaseHoldIfPresent(booking);
-            generatedTickets = ticketGenerationService.generateTicketsIfMissing(booking).size();
-
-            if (oldPaymentStatus != PaymentStatus.SUCCESS || oldBookingStatus != BookingStatus.PAID) {
+            if (firstSuccessfulTransition) {
+                releaseHoldIfPresent(booking);
+                generatedTickets = ticketGenerationService.generateTicketsIfMissing(booking).size();
                 publishPaymentCompletedAfterCommit(payment);
             }
         } else if (incomingStatus == PaymentStatus.EXPIRED && oldPaymentStatus == PaymentStatus.PENDING) {

@@ -3,12 +3,16 @@ package com.asms.payment.integration;
 import com.asms.booking.entity.Booking;
 import com.asms.core.exception.BadRequestException;
 import com.asms.payment.dto.PayOsCallbackRequest;
+import com.fasterxml.jackson.core.JsonProcessingException;
 import com.fasterxml.jackson.databind.JsonNode;
+import com.fasterxml.jackson.databind.ObjectMapper;
 import org.springframework.beans.factory.annotation.Value;
 import org.springframework.http.MediaType;
 import org.springframework.stereotype.Component;
 import org.springframework.web.client.RestClient;
 import org.springframework.web.util.UriComponentsBuilder;
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
 
 import javax.crypto.Mac;
 import javax.crypto.spec.SecretKeySpec;
@@ -22,15 +26,16 @@ import java.time.ZoneId;
 import java.time.format.DateTimeFormatter;
 import java.time.format.DateTimeParseException;
 import java.util.LinkedHashMap;
+import java.util.List;
 import java.util.Locale;
 import java.util.Map;
-import java.util.Objects;
 import java.util.TreeMap;
 import java.util.HexFormat;
 
 @Component
 public class PayOsClient {
 
+    private static final Logger log = LoggerFactory.getLogger(PayOsClient.class);
     private static final String HMAC_SHA256 = "HmacSHA256";
     private static final String PAYOS_BASE_URL = "https://api-merchant.payos.vn";
     private static final BigDecimal MINIMUM_VND_AMOUNT = new BigDecimal("2000");
@@ -38,19 +43,28 @@ public class PayOsClient {
     private final String clientId;
     private final String apiKey;
     private final String checksumKey;
+    private final boolean allowUnsignedCallbacks;
+    private final String activeProfiles;
     private final String frontendBaseUrl;
     private final RestClient restClient;
+    private final ObjectMapper objectMapper;
 
     public PayOsClient(
             @Value("${asms.payos.client-id}") String clientId,
             @Value("${asms.payos.api-key}") String apiKey,
             @Value("${asms.payos.checksum-key}") String checksumKey,
-            @Value("${asms.frontend.base-url}") String frontendBaseUrl
+            @Value("${asms.payos.allow-unsigned-callbacks:false}") boolean allowUnsignedCallbacks,
+            @Value("${spring.profiles.active:}") String activeProfiles,
+            @Value("${asms.frontend.base-url}") String frontendBaseUrl,
+            ObjectMapper objectMapper
     ) {
         this.clientId = clientId;
         this.apiKey = apiKey;
         this.checksumKey = checksumKey;
+        this.allowUnsignedCallbacks = allowUnsignedCallbacks;
+        this.activeProfiles = activeProfiles == null ? "" : activeProfiles;
         this.frontendBaseUrl = frontendBaseUrl;
+        this.objectMapper = objectMapper;
         this.restClient = RestClient.builder()
                 .baseUrl(PAYOS_BASE_URL)
                 .build();
@@ -259,49 +273,97 @@ public class PayOsClient {
     }
 
     public boolean isValidCallback(PayOsCallbackRequest request) {
+        if (request == null) {
+            return false;
+        }
         if (checksumKey == null || checksumKey.isBlank()) {
+            if (!allowUnsignedCallbacks || isProductionProfile()) {
+                return false;
+            }
+            log.warn("PayOS callback signature validation is disabled because unsigned callbacks are explicitly allowed");
             return true;
         }
 
         if (request.signature() == null || request.signature().isBlank()) {
             return false;
         }
-
-        String payload;
-        if (request.data() != null && !request.data().isEmpty()) {
-            payload = canonicalData(request.data());
-        } else {
-            payload = request.resolvedOrderCode()
-                    + "|"
-                    + request.resolvedAmount().stripTrailingZeros().toPlainString()
-                    + "|"
-                    + request.resolvedStatus()
-                    + "|"
-                    + (request.resolvedTransactionId() == null ? "" : request.resolvedTransactionId());
+        if (request.data() == null || request.data().isEmpty()) {
+            return false;
         }
-        String expected = hmacSha256Hex(payload);
 
-        return MessageDigest.isEqual(
-                expected.toLowerCase().getBytes(StandardCharsets.UTF_8),
-                request.signature().toLowerCase().getBytes(StandardCharsets.UTF_8)
-        );
+        try {
+            String payload = canonicalData(request.data());
+            String expected = hmacSha256Hex(payload);
+            return MessageDigest.isEqual(
+                    expected.toLowerCase(Locale.ROOT).getBytes(StandardCharsets.UTF_8),
+                    request.signature().toLowerCase(Locale.ROOT).getBytes(StandardCharsets.UTF_8)
+            );
+        } catch (RuntimeException exception) {
+            log.warn("Unable to canonicalize PayOS callback data for signature validation");
+            return false;
+        }
+    }
+
+    private boolean isProductionProfile() {
+        return java.util.Arrays.stream(activeProfiles.split(","))
+                .map(String::trim)
+                .anyMatch((profile) -> profile.equalsIgnoreCase("prod") || profile.equalsIgnoreCase("production"));
     }
 
     private String canonicalData(Map<String, Object> data) {
         TreeMap<String, Object> sortedData = new TreeMap<>(data);
         return sortedData.entrySet()
                 .stream()
-                .filter((entry) -> entry.getValue() != null)
                 .map((entry) -> entry.getKey() + "=" + stringify(entry.getValue()))
                 .reduce((first, second) -> first + "&" + second)
                 .orElse("");
     }
 
     private String stringify(Object value) {
+        if (value == null || "null".equals(value) || "undefined".equals(value)) {
+            return "";
+        }
         if (value instanceof Number number) {
             return new java.math.BigDecimal(number.toString()).stripTrailingZeros().toPlainString();
         }
-        return Objects.toString(value, "");
+        if (value instanceof Map<?, ?> map) {
+            return writeCanonicalJson(sortNestedMap(map));
+        }
+        if (value instanceof Iterable<?> iterable) {
+            List<Object> normalized = new java.util.ArrayList<>();
+            iterable.forEach((item) -> normalized.add(normalizeNestedValue(item)));
+            return writeCanonicalJson(normalized);
+        }
+        return String.valueOf(value);
+    }
+
+    private Map<String, Object> sortNestedMap(Map<?, ?> map) {
+        TreeMap<String, Object> sorted = new TreeMap<>();
+        map.forEach((key, value) -> sorted.put(String.valueOf(key), normalizeNestedValue(value)));
+        return sorted;
+    }
+
+    private Object normalizeNestedValue(Object value) {
+        if (value instanceof Map<?, ?> map) {
+            return sortNestedMap(map);
+        }
+        if (value instanceof Iterable<?> iterable) {
+            List<Object> normalized = new java.util.ArrayList<>();
+            iterable.forEach((item) -> normalized.add(normalizeNestedValue(item)));
+            return normalized;
+        }
+        if (value instanceof Number number) {
+            return new java.math.BigDecimal(number.toString()).stripTrailingZeros();
+        }
+        return value;
+    }
+
+    private String writeCanonicalJson(Object value) {
+        try {
+            return objectMapper.writeValueAsString(value);
+        } catch (JsonProcessingException exception) {
+            throw new IllegalStateException("Unable to canonicalize PayOS callback data", exception);
+        }
     }
 
     private String hmacSha256Hex(String payload) {

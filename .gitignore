@@ -103,6 +103,7 @@ data/
 # =========================
 # Temporary files
 # =========================
+.codex-run/
 tmp/
 temp/
 *.tmp
