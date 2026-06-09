@@ -21,8 +21,8 @@ const ticketTimeoutMs = 30000;
 function resolveResultState(booking) {
   const bookingStatus = String(booking?.status || '').trim().toUpperCase();
   const { status } = normalizeBookingPaymentStatus(booking, booking?.payment);
-  if (bookingStatus === 'PAID') {
-    return Number(booking?.tickets?.total || 0) > 0
+  if (status === 'PAID') {
+    return bookingStatus === 'PAID' && Number(booking?.tickets?.total || 0) > 0
       ? resultStates.PAYMENT_SUCCESS_TICKETS_READY
       : resultStates.PAYMENT_SUCCESS_TICKETS_PROCESSING;
   }
@@ -133,11 +133,11 @@ export default function PaymentResultPage() {
     checkBooking();
   };
 
-  const ticketCount = Number(booking?.tickets?.total || 0);
   const successState = [
     resultStates.PAYMENT_SUCCESS_TICKETS_PROCESSING,
     resultStates.PAYMENT_SUCCESS_TICKETS_READY,
   ].includes(resultState);
+  const ticketsReady = resultState === resultStates.PAYMENT_SUCCESS_TICKETS_READY;
 
   return (
     <MainLayout>
@@ -146,8 +146,8 @@ export default function PaymentResultPage() {
           {resultState === resultStates.VERIFYING_PAYMENT ? (
             <StateCard
               icon="progress_activity"
-              title="Đang xác minh thanh toán..."
-              message="Vui lòng chờ trong giây lát. Hệ thống đang kiểm tra trạng thái booking từ máy chủ."
+              title="Verifying payment..."
+              message="Please wait while we check your booking status."
             >
               <div className="mx-auto mt-6 h-10 w-10 animate-spin rounded-full border-4 border-cyan-200 border-t-cyan-700" />
             </StateCard>
@@ -159,20 +159,23 @@ export default function PaymentResultPage() {
                 <span className="mx-auto flex h-20 w-20 items-center justify-center rounded-full bg-emerald-100 text-emerald-700">
                   <span className="material-symbols-outlined !text-5xl" aria-hidden="true">verified</span>
                 </span>
-                <h1 id="payment-success-title" className="mt-5 text-3xl font-black text-slate-950">Thanh toán thành công!</h1>
-                <p className="mt-3 text-base font-semibold leading-7 text-slate-600">
-                  Cảm ơn bạn. Thanh toán của bạn đã được xác nhận.
-                </p>
+                <h1 id="payment-success-title" className="mt-5 text-3xl font-black text-slate-950">Payment successful!</h1>
 
                 {resultState === resultStates.PAYMENT_SUCCESS_TICKETS_PROCESSING && !ticketsTimedOut ? (
                   <p className="mt-5 rounded-2xl bg-cyan-50 px-5 py-4 font-semibold leading-7 text-cyan-800">
-                    Vé QR của bạn đang được chuẩn bị, vui lòng chờ trong giây lát...
+                    Your QR ticket is being prepared. Please wait a moment...
+                  </p>
+                ) : null}
+
+                {resultState === resultStates.PAYMENT_SUCCESS_TICKETS_READY ? (
+                  <p className="mt-5 rounded-2xl bg-emerald-50 px-5 py-4 font-semibold leading-7 text-emerald-800">
+                    Your QR ticket is ready.
                   </p>
                 ) : null}
 
                 {ticketsTimedOut ? (
                   <p className="mt-5 rounded-2xl bg-yellow-50 px-5 py-4 font-semibold leading-7 text-[#a43c12]">
-                    Thanh toán đã thành công, nhưng vé QR đang được xử lý lâu hơn bình thường.
+                    Payment was successful, but your QR ticket is taking longer than expected to prepare.
                   </p>
                 ) : null}
 
@@ -180,12 +183,12 @@ export default function PaymentResultPage() {
                   {!ticketsTimedOut ? (
                     <button
                       className="inline-flex min-h-12 items-center justify-center gap-2 rounded-full bg-emerald-600 px-6 py-3 text-base font-black text-white transition hover:bg-emerald-700 disabled:cursor-not-allowed disabled:bg-slate-300"
-                      disabled={ticketCount === 0}
-                      onClick={() => navigate(`/bookings/${bookingId}`)}
+                      disabled={!ticketsReady}
+                      onClick={() => navigate(`/bookings/${booking?.id || bookingId}`, { replace: true })}
                       type="button"
                     >
-                      <span className="material-symbols-outlined" aria-hidden="true">{ticketCount > 0 ? 'qr_code_2' : 'hourglass_empty'}</span>
-                      {ticketCount > 0 ? 'View My Ticket' : 'Preparing ticket...'}
+                      <span className="material-symbols-outlined" aria-hidden="true">{ticketsReady ? 'qr_code_2' : 'hourglass_empty'}</span>
+                      {ticketsReady ? 'View My Ticket' : 'Preparing ticket...'}
                     </button>
                   ) : (
                     <>
@@ -203,19 +206,19 @@ export default function PaymentResultPage() {
           ) : null}
 
           {resultState === resultStates.PAYMENT_PENDING ? (
-            <StateCard icon="hourglass_empty" title="Thanh toán đang được xử lý" message="PayOS chưa xác nhận thanh toán. Trang này sẽ tự động kiểm tra lại từ máy chủ." />
+            <StateCard icon="hourglass_empty" title="Payment is processing" message="PayOS has not confirmed the payment yet. This page will keep checking the backend." />
           ) : null}
 
           {resultState === resultStates.PAYMENT_FAILED ? (
-            <StateCard icon="error" title="Thanh toán thất bại" message="Thanh toán chưa được hoàn tất. Vui lòng kiểm tra booking của bạn." tone="red" />
+            <StateCard icon="error" title="Payment failed" message="The payment was not completed. Please review your booking." tone="red" />
           ) : null}
 
           {resultState === resultStates.PAYMENT_EXPIRED ? (
-            <StateCard icon="timer_off" title="Thanh toán đã hết hạn" message="Booking này không thể thanh toán lại. Vui lòng tạo booking mới." tone="slate" />
+            <StateCard icon="timer_off" title="Payment expired" message="This booking can no longer be paid. Please create a new booking." tone="slate" />
           ) : null}
 
           {resultState === resultStates.ERROR ? (
-            <StateCard icon="cloud_off" title="Không thể xác minh thanh toán" message={error || 'Đã xảy ra lỗi khi tải trạng thái booking.'} tone="red">
+            <StateCard icon="cloud_off" title="Unable to verify payment" message={error || 'An error occurred while loading the booking status.'} tone="red">
               <button className="mt-6 rounded-full bg-cyan-700 px-6 py-3 font-black text-white hover:bg-cyan-800" onClick={checkAgain} type="button">
                 Check Again
               </button>

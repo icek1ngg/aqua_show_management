@@ -7,50 +7,50 @@ import StaffLayout from '../../shared/layouts/StaffLayout.jsx';
 const resultStyles = {
   SUCCESS: {
     icon: 'verified',
-    title: 'Vé hợp lệ',
-    message: 'Cho phép vào cổng',
+    title: 'Valid ticket',
+    message: 'Entry allowed.',
     className: 'border-emerald-200 bg-emerald-50 text-emerald-700',
   },
   ALREADY_USED: {
     icon: 'history',
-    title: 'Vé đã được sử dụng',
-    message: 'Không cho phép vào cổng',
+    title: 'Ticket already used',
+    message: 'Entry denied. This ticket has already been checked in.',
     className: 'border-yellow-200 bg-yellow-50 text-[#a43c12]',
   },
   EXPIRED: {
     icon: 'timer_off',
-    title: 'Vé đã hết hạn',
-    message: 'Không cho phép vào cổng',
+    title: 'Ticket expired',
+    message: 'Entry denied. This ticket is no longer valid.',
     className: 'border-red-200 bg-red-50 text-red-700',
   },
   INVALID_QR: {
     icon: 'qr_code_scanner',
-    title: 'QR không hợp lệ',
-    message: 'Không tìm thấy vé hoặc mã QR không đúng',
+    title: 'Invalid QR code',
+    message: 'Entry denied. This QR code is invalid or cannot be found.',
     className: 'border-red-200 bg-red-50 text-red-700',
   },
   BOOKING_NOT_PAID: {
     icon: 'block',
-    title: 'Booking chưa thanh toán',
-    message: 'Không cho phép vào cổng',
+    title: 'Booking not paid',
+    message: 'Entry denied. This booking has not been paid.',
     className: 'border-red-200 bg-red-50 text-red-700',
   },
   TICKET_NOT_FOUND: {
     icon: 'search_off',
-    title: 'QR không hợp lệ',
-    message: 'Không tìm thấy vé hoặc mã QR không đúng',
+    title: 'Invalid QR code',
+    message: 'Entry denied. This QR code is invalid or cannot be found.',
     className: 'border-red-200 bg-red-50 text-red-700',
   },
   INVALID_STATUS: {
     icon: 'block',
-    title: 'Trạng thái vé không hợp lệ',
-    message: 'Không cho phép vào cổng',
+    title: 'Invalid ticket status',
+    message: 'Entry denied. This ticket cannot be used for check-in.',
     className: 'border-red-200 bg-red-50 text-red-700',
   },
   ERROR: {
     icon: 'cloud_off',
-    title: 'Không thể xác thực vé',
-    message: 'Vui lòng thử quét lại.',
+    title: 'Unable to verify ticket',
+    message: 'Please try scanning again.',
     className: 'border-red-200 bg-red-50 text-red-700',
   },
 };
@@ -238,7 +238,7 @@ function ResultPanel({ result }) {
             <span className="material-symbols-outlined !text-3xl">{style.icon}</span>
           </span>
           <h2 className="mt-4 text-3xl font-black">{style.title}</h2>
-          <p className="mt-2 font-semibold">{result.message}</p>
+          <p className="mt-2 font-semibold">{style.message}</p>
         </div>
         <span className="rounded-full bg-white/80 px-4 py-1.5 text-xs font-black uppercase tracking-[0.16em] shadow-sm">{result.result}</span>
       </div>
@@ -291,7 +291,6 @@ function ResultModal({ result, onScanNext }) {
           </span>
           <h2 id="scan-result-title" className="mt-5 text-3xl font-black sm:text-4xl">{style.title}</h2>
           <p className="mt-3 text-lg font-black">{style.message}</p>
-          {result.result === 'ERROR' && result.detail ? <p className="mt-2 text-sm font-semibold opacity-80">{result.detail}</p> : null}
         </div>
 
         <dl className="mt-7 grid grid-cols-1 gap-3 rounded-2xl bg-white/85 p-5 text-slate-700 sm:grid-cols-2">
@@ -321,6 +320,18 @@ function ResultModal({ result, onScanNext }) {
           <span className="material-symbols-outlined" aria-hidden="true">qr_code_scanner</span>
           Scan Next
         </button>
+      </section>
+    </div>
+  );
+}
+
+function ProcessingModal() {
+  return (
+    <div className="fixed inset-0 z-50 flex items-center justify-center bg-slate-950/70 p-4 backdrop-blur-sm" role="dialog" aria-modal="true" aria-labelledby="scan-processing-title">
+      <section className="w-full max-w-md rounded-[2rem] border border-cyan-200 bg-white p-8 text-center shadow-2xl">
+        <div className="mx-auto h-14 w-14 animate-spin rounded-full border-4 border-cyan-100 border-t-cyan-700" />
+        <h2 id="scan-processing-title" className="mt-5 text-3xl font-black text-slate-950">Checking ticket...</h2>
+        <p className="mt-3 text-base font-semibold leading-7 text-slate-600">Please wait while we verify this QR code.</p>
       </section>
     </div>
   );
@@ -419,6 +430,7 @@ export default function StaffTicketValidationPage() {
   const resumeScanning = () => {
     clearScannerTimers();
     setResult(null);
+    setScannedPayload('');
     setCapturedImage(null);
     setCameraError('');
     isDetectingRef.current = false;
@@ -498,8 +510,7 @@ export default function StaffTicketValidationPage() {
       rememberProcessedQr(normalizedQr, 'ERROR');
       const errorResult = {
         result: 'ERROR',
-        message: 'Vui lòng thử quét lại.',
-        detail: message,
+        message: 'Please try scanning again.',
         attemptedAt: new Date().toISOString(),
         capturedImage: capturedImg,
       };
@@ -642,6 +653,9 @@ export default function StaffTicketValidationPage() {
                 lastDetectedAtRef.current = detectedAt;
               }
             } else if (normalizedQr) {
+              if (scannerStateRef.current !== scannerStates.SCANNING || isValidatingRef.current) {
+                return;
+              }
               processedQrCacheRef.current.delete(normalizedQr);
               transitionScanner(scannerStates.PROCESSING);
               lastDetectedQrRef.current = normalizedQr;
@@ -835,7 +849,7 @@ export default function StaffTicketValidationPage() {
                               <span className={`rounded-full px-3 py-0.5 text-xs font-black ${style.className}`}>{item.result}</span>
                               <span className="text-[10px] font-bold text-slate-400">{formatDateTime(item.checkedInAt || item.attemptedAt)}</span>
                             </div>
-                            <p className="mt-1.5 truncate text-sm font-black text-slate-800">{item.show?.title || item.message}</p>
+                            <p className="mt-1.5 truncate text-sm font-black text-slate-800">{item.show?.title || style.title}</p>
                             <p className="mt-0.5 truncate text-xs font-semibold text-slate-500">{formatTicketReference(item.ticket)}</p>
                           </div>
                         </article>
@@ -848,6 +862,7 @@ export default function StaffTicketValidationPage() {
           </div>
         </div>
       </main>
+      {scannerState === scannerStates.PROCESSING ? <ProcessingModal /> : null}
       <ResultModal result={scannerState === scannerStates.RESULT ? result : null} onScanNext={resumeScanning} />
     </StaffLayout>
   );

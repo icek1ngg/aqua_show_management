@@ -169,7 +169,7 @@ function StatusMessage({ booking, meta }) {
       <p className="mt-3 text-sm font-semibold leading-7 text-slate-600">
         {ticketCount > 0
           ? `${ticketCount} ticket QR code${ticketCount === 1 ? '' : 's'} generated.`
-          : 'Thanh toán đã thành công. Vé QR đang được chuẩn bị...'}
+          : 'Payment was successful. Your QR ticket is being prepared...'}
       </p>
     );
   }
@@ -379,20 +379,26 @@ export default function BookingDetailPage() {
 
   useEffect(() => {
     const normalizedStatus = normalizeBookingPaymentStatus(booking, booking?.payment);
-    if (normalizedStatus.status !== 'PAID' || normalizedStatus.bookingStatus === 'PAID') {
+    if (normalizedStatus.status !== 'PAID' || Number(booking?.tickets?.total || 0) > 0) {
       return undefined;
     }
 
-    const timeoutId = window.setTimeout(async () => {
+    let cancelled = false;
+    const intervalId = window.setInterval(async () => {
       try {
         const bookingDetail = await getBookingDetail(id);
-        setBooking(bookingDetail);
+        if (!cancelled) {
+          setBooking(bookingDetail);
+        }
       } catch {
-        // Keep the already displayed paid state; PostgreSQL is refetched again on page reload/focus.
+        // Keep the confirmed paid state and retry while the ticket generation task finishes.
       }
-    }, 1200);
+    }, 1500);
 
-    return () => window.clearTimeout(timeoutId);
+    return () => {
+      cancelled = true;
+      window.clearInterval(intervalId);
+    };
   }, [booking, id]);
 
   const displayBooking = useMemo(() => (booking ? normalizeBooking(booking) : null), [booking]);
