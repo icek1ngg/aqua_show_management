@@ -1,7 +1,9 @@
 package com.asms.identity.controller;
 
 import com.asms.core.exception.BadRequestException;
+import com.asms.core.exception.UnauthorizedException;
 import com.asms.core.response.ApiResponse;
+import com.asms.identity.dto.AuthDtos.AuthSession;
 import com.asms.identity.dto.AuthDtos.ForgotPasswordRequest;
 import com.asms.identity.dto.AuthDtos.LoginRequest;
 import com.asms.identity.dto.AuthDtos.LoginResponse;
@@ -12,9 +14,11 @@ import com.asms.identity.dto.AuthDtos.ResetPasswordRequest;
 import com.asms.identity.service.AuthService;
 import com.asms.identity.service.EmailVerificationService;
 import com.asms.identity.service.PasswordResetService;
+import com.asms.identity.security.RefreshTokenCookieService;
 import jakarta.servlet.http.HttpServletResponse;
 import jakarta.validation.Valid;
 import org.springframework.beans.factory.annotation.Value;
+import org.springframework.web.bind.annotation.CookieValue;
 import org.springframework.web.bind.annotation.GetMapping;
 import org.springframework.web.bind.annotation.PostMapping;
 import org.springframework.web.bind.annotation.RequestBody;
@@ -31,17 +35,20 @@ public class AuthController {
     private final AuthService authService;
     private final EmailVerificationService emailVerificationService;
     private final PasswordResetService passwordResetService;
+    private final RefreshTokenCookieService refreshTokenCookieService;
     private final String frontendBaseUrl;
 
     public AuthController(
             AuthService authService,
             EmailVerificationService emailVerificationService,
             PasswordResetService passwordResetService,
+            RefreshTokenCookieService refreshTokenCookieService,
             @Value("${asms.frontend.base-url}") String frontendBaseUrl
     ) {
         this.authService = authService;
         this.emailVerificationService = emailVerificationService;
         this.passwordResetService = passwordResetService;
+        this.refreshTokenCookieService = refreshTokenCookieService;
         this.frontendBaseUrl = frontendBaseUrl;
     }
 
@@ -51,14 +58,43 @@ public class AuthController {
     }
 
     @PostMapping("/login")
-    public ApiResponse<LoginResponse> login(@Valid @RequestBody LoginRequest request) {
-        return ApiResponse.success("Login successfully", authService.login(request));
+    public ApiResponse<LoginResponse> login(@Valid @RequestBody LoginRequest request, HttpServletResponse response) {
+        AuthSession authSession = authService.login(request);
+        refreshTokenCookieService.addRefreshTokenCookie(
+                response,
+                authSession.refreshToken(),
+                authSession.refreshTokenCookieMaxAgeSeconds()
+        );
+        return ApiResponse.success("Login successfully", authSession.response());
     }
 
     @PostMapping("/logout")
-    public ApiResponse<Void> logout() {
-        authService.logout();
+    public ApiResponse<Void> logout(
+            @CookieValue(name = RefreshTokenCookieService.REFRESH_TOKEN_COOKIE_NAME, required = false) String refreshToken,
+            HttpServletResponse response
+    ) {
+        authService.logout(refreshToken);
+        refreshTokenCookieService.clearRefreshTokenCookie(response);
         return ApiResponse.success("Logout successfully");
+    }
+
+    @PostMapping("/refresh")
+    public ApiResponse<LoginResponse> refresh(
+            @CookieValue(name = RefreshTokenCookieService.REFRESH_TOKEN_COOKIE_NAME, required = false) String refreshToken,
+            HttpServletResponse response
+    ) {
+        try {
+            AuthSession authSession = authService.refresh(refreshToken);
+            refreshTokenCookieService.addRefreshTokenCookie(
+                    response,
+                    authSession.refreshToken(),
+                    authSession.refreshTokenCookieMaxAgeSeconds()
+            );
+            return ApiResponse.success("Token refreshed successfully", authSession.response());
+        } catch (UnauthorizedException exception) {
+            refreshTokenCookieService.clearRefreshTokenCookie(response);
+            throw exception;
+        }
     }
 
     @PostMapping("/resend-verification")

@@ -19,12 +19,14 @@ public interface ShowRepository extends JpaRepository<Show, UUID> {
 
     Optional<Show> findByIdAndStatus(UUID id, ShowStatus status);
 
+    Page<Show> findByStatusOrderByCreatedAtDesc(ShowStatus status, Pageable pageable);
+
     @Query("""
             select s from Show s
             where (:status is null or s.status = :status)
-              and (coalesce(:keyword, '') = '' or lower(s.title) like lower(concat('%', :keyword, '%'))
+              and (lower(s.title) like lower(concat('%', :keyword, '%'))
                    or lower(s.description) like lower(concat('%', :keyword, '%')))
             order by s.createdAt desc
             """)
-    Page<Show> search(@Param("keyword") String keyword, @Param("status") ShowStatus status, Pageable pageable);
+    Page<Show> searchByKeyword(@Param("keyword") String keyword, @Param("status") ShowStatus status, Pageable pageable);
 }

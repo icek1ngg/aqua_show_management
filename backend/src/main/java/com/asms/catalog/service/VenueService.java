@@ -11,6 +11,8 @@ import com.asms.core.exception.NotFoundException;
 import com.asms.core.response.PageResponse;
 import org.springframework.data.domain.Page;
 import org.springframework.data.domain.PageRequest;
+import org.springframework.data.domain.Sort;
+import org.springframework.data.jpa.domain.Specification;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
@@ -27,7 +29,10 @@ public class VenueService {
 
     @Transactional(readOnly = true)
     public PageResponse<VenueResponse> getVenues(String keyword, VenueStatus status, int page, int size) {
-        Page<Venue> venues = venueRepository.search(normalizeKeyword(keyword), status, PageRequest.of(Math.max(page, 0), sanitizeSize(size)));
+        Page<Venue> venues = venueRepository.findAll(
+                venueSpecification(normalizeKeyword(keyword), status),
+                PageRequest.of(Math.max(page, 0), sanitizeSize(size), Sort.by(Sort.Direction.DESC, "createdAt"))
+        );
         return PageResponse.from(venues, venues.getContent().stream().map(CatalogMapper::toVenue).toList());
     }
 
@@ -97,5 +102,27 @@ public class VenueService {
             return 10;
         }
         return Math.min(size, 100);
+    }
+
+    private Specification<Venue> venueSpecification(String keyword, VenueStatus status) {
+        return (root, query, criteriaBuilder) -> {
+            var predicate = criteriaBuilder.conjunction();
+
+            if (status != null) {
+                predicate = criteriaBuilder.and(predicate, criteriaBuilder.equal(root.get("status"), status));
+            }
+            if (keyword != null) {
+                String likePattern = "%" + keyword.toLowerCase() + "%";
+                predicate = criteriaBuilder.and(
+                        predicate,
+                        criteriaBuilder.or(
+                                criteriaBuilder.like(criteriaBuilder.lower(root.get("name")), likePattern),
+                                criteriaBuilder.like(criteriaBuilder.lower(root.get("location")), likePattern)
+                        )
+                );
+            }
+
+            return predicate;
+        };
     }
 }

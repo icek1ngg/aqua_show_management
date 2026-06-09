@@ -53,8 +53,13 @@ public final class AuthDtos {
             String email,
 
             @NotBlank(message = "Password is required")
-            String password
+            String password,
+
+            Boolean rememberMe
     ) {
+        public LoginRequest(String email, String password) {
+            this(email, password, false);
+        }
     }
 
     public record LoginResponse(
@@ -62,6 +67,13 @@ public final class AuthDtos {
             String tokenType,
             long expiresIn,
             UserProfileResponse user
+    ) {
+    }
+
+    public record AuthSession(
+            LoginResponse response,
+            String refreshToken,
+            long refreshTokenCookieMaxAgeSeconds
     ) {
     }
 

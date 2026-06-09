@@ -1,9 +1,9 @@
 const ACCESS_TOKEN_KEY = 'accessToken';
+const ACCESS_TOKEN_ALIASES = ['accessToken', 'token', 'jwt', 'authToken', 'access_token'];
 const ACCESS_TOKEN_EXPIRES_AT_KEY = 'accessTokenExpiresAt';
-
-function getStorage(rememberMe) {
-  return rememberMe ? window.localStorage : window.sessionStorage;
-}
+const USER_KEY = 'user';
+const TOKEN_UPDATED_EVENT = 'auth:token-updated';
+const TOKEN_CLEARED_EVENT = 'auth:token-cleared';
 
 function safeParseJson(value) {
   try {
@@ -50,28 +50,56 @@ export function isTokenExpired(expiresAt) {
   return Boolean(expiresAt && Number(expiresAt) <= Date.now());
 }
 
-export function storeToken({ token, rememberMe = false, expiresAt = null }) {
-  clearStoredToken();
+export function storeUser(user) {
+  if (!user) {
+    window.localStorage.removeItem(USER_KEY);
+    return;
+  }
 
-  const storage = getStorage(rememberMe);
-  storage.setItem(ACCESS_TOKEN_KEY, token);
+  window.localStorage.setItem(USER_KEY, JSON.stringify(user));
+}
+
+export function getStoredUser() {
+  const savedUser = window.localStorage.getItem(USER_KEY) || window.sessionStorage.getItem(USER_KEY);
+  if (!savedUser) {
+    return null;
+  }
+
+  return safeParseJson(savedUser);
+}
+
+function removeStoredAuth() {
+  [window.localStorage, window.sessionStorage].forEach((storage) => {
+    ACCESS_TOKEN_ALIASES.forEach((key) => storage.removeItem(key));
+    storage.removeItem(ACCESS_TOKEN_EXPIRES_AT_KEY);
+    storage.removeItem(USER_KEY);
+  });
+}
+
+export function storeToken({ token, expiresAt = null, user = null }) {
+  removeStoredAuth();
+
+  window.localStorage.setItem(ACCESS_TOKEN_KEY, token);
 
   if (expiresAt) {
-    storage.setItem(ACCESS_TOKEN_EXPIRES_AT_KEY, String(expiresAt));
+    window.localStorage.setItem(ACCESS_TOKEN_EXPIRES_AT_KEY, String(expiresAt));
   }
+
+  if (user) {
+    storeUser(user);
+  }
+
+  window.dispatchEvent(new Event(TOKEN_UPDATED_EVENT));
 }
 
 export function clearStoredToken() {
-  [window.localStorage, window.sessionStorage].forEach((storage) => {
-    storage.removeItem(ACCESS_TOKEN_KEY);
-    storage.removeItem(ACCESS_TOKEN_EXPIRES_AT_KEY);
-  });
+  removeStoredAuth();
 
-  window.dispatchEvent(new Event('auth:token-cleared'));
+  window.dispatchEvent(new Event(TOKEN_CLEARED_EVENT));
 }
 
 export function getStoredToken() {
-  const localToken = window.localStorage.getItem(ACCESS_TOKEN_KEY);
+  const localToken = ACCESS_TOKEN_ALIASES.map((key) => window.localStorage.getItem(key)).find(Boolean);
   const localExpiresAt = window.localStorage.getItem(ACCESS_TOKEN_EXPIRES_AT_KEY);
 
   if (localToken) {
@@ -83,7 +111,7 @@ export function getStoredToken() {
     return { token: localToken, expiresAt: localExpiresAt ? Number(localExpiresAt) : null, storage: 'localStorage' };
   }
 
-  const sessionToken = window.sessionStorage.getItem(ACCESS_TOKEN_KEY);
+  const sessionToken = ACCESS_TOKEN_ALIASES.map((key) => window.sessionStorage.getItem(key)).find(Boolean);
   const sessionExpiresAt = window.sessionStorage.getItem(ACCESS_TOKEN_EXPIRES_AT_KEY);
 
   if (sessionToken) {
@@ -92,12 +120,26 @@ export function getStoredToken() {
       return null;
     }
 
-    return { token: sessionToken, expiresAt: sessionExpiresAt ? Number(sessionExpiresAt) : null, storage: 'sessionStorage' };
+    window.localStorage.setItem(ACCESS_TOKEN_KEY, sessionToken);
+    if (sessionExpiresAt) {
+      window.localStorage.setItem(ACCESS_TOKEN_EXPIRES_AT_KEY, sessionExpiresAt);
+    }
+
+    const sessionUser = window.sessionStorage.getItem(USER_KEY);
+    if (sessionUser && !window.localStorage.getItem(USER_KEY)) {
+      window.localStorage.setItem(USER_KEY, sessionUser);
+    }
+
+    window.sessionStorage.removeItem(ACCESS_TOKEN_KEY);
+    window.sessionStorage.removeItem(ACCESS_TOKEN_EXPIRES_AT_KEY);
+    window.sessionStorage.removeItem(USER_KEY);
+
+    return { token: sessionToken, expiresAt: sessionExpiresAt ? Number(sessionExpiresAt) : null, storage: 'localStorage' };
   }
 
   return null;
 }
 
 export function getAccessToken() {
-  return getStoredToken()?.token || null;
+  return window.localStorage.getItem(ACCESS_TOKEN_KEY) || window.sessionStorage.getItem(ACCESS_TOKEN_KEY) || null;
 }
