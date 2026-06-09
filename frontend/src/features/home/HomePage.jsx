@@ -261,89 +261,14 @@ export default function HomePage() {
     setCurrentPage(0);
   };
 
-  useEffect(() => {
-    let isActive = true;
-
-    async function loadShows() {
-      setIsLoadingShows(true);
-      setShowsError('');
-
-      try {
-        const response = await getShows({ keyword: submittedKeyword, page: currentPage, size: pagination.size });
-        if (!isActive) {
-          return;
-        }
-
-        const items = Array.isArray(response?.items) ? response.items : [];
-        setShows(items);
-        setPagination({
-          page: response?.page ?? currentPage,
-          size: response?.size ?? pagination.size,
-          totalItems: response?.totalItems ?? items.length,
-          totalPages: response?.totalPages ?? (items.length ? 1 : 0),
-          hasNext: Boolean(response?.hasNext),
-          hasPrevious: Boolean(response?.hasPrevious),
-        });
-      } catch (error) {
-        if (!isActive) {
-          return;
-        }
-
-        setShows([]);
-        setPagination((current) => ({
-          ...current,
-          page: currentPage,
-          totalItems: 0,
-          totalPages: 0,
-          hasNext: false,
-          hasPrevious: false,
-        }));
-        setShowsError(getShowsErrorMessage(error));
-      } finally {
-        if (isActive) {
-          setIsLoadingShows(false);
-        }
-      }
-    }
-
-    loadShows();
-
-    return () => {
-      isActive = false;
-    };
-  }, [currentPage, pagination.size, reloadKey, submittedKeyword]);
-
-  const upcomingSchedules = useMemo(
-    () =>
-      shows
-        .filter((show) => show.nextStartTime)
-        .map((show) => ({ ...show, formattedSchedule: formatScheduleDate(show.nextStartTime) }))
-        .filter((show) => show.formattedSchedule)
-        .sort((first, second) => new Date(first.nextStartTime).getTime() - new Date(second.nextStartTime).getTime())
-        .slice(0, 3),
-    [shows],
-  );
-
-  const handleShowSearch = (event) => {
-    event.preventDefault();
-    setCurrentPage(0);
-    setSubmittedKeyword(keyword.trim());
-  };
-
-  const clearShowSearch = () => {
-    setKeyword('');
-    setSubmittedKeyword('');
-    setCurrentPage(0);
-  };
-
   return (
     <MainLayout>
       <section className="relative flex min-h-[600px] scroll-mt-24 items-center overflow-hidden lg:min-h-[720px]" id="home">
         <div className="absolute inset-0 z-0">
           <img
-            alt="Spectacular water fountain show"
+            alt="Water park pool with turquoise slides"
             className="h-full w-full object-cover"
-            src="https://lh3.googleusercontent.com/aida-public/AB6AXuDMtU715udYhrKO5UD5Z7WcmQPqPLM3sfRoUqm0yo9QyXaYviVVdqfJqXGt-R8q7yRyVJLCg-7yNQpxuClsEjazci4FKUvmHD8-h7VkaJqEUvZ5LGrgQc6OPyIHDftuWq5GrkH069uG0kIWEZVuOUHlSyRsz1ONwEJ_UsC5FRcoEUREr1YT7NhxEjLc3llvHYb1puPSJd-SvHfPyVBIZ0PfNO2dLzosiECIC6e8l0yAD35mD5_rDkKbENd7IbpmBKPOWznJiquMbA"
+            src="https://lh3.googleusercontent.com/aida-public/AB6AXuCgzaSFnyz7iKGePZ5TabB9udRC0EcNUR3yhdm7OyJ3OiwcUtjU0AHotDlyrp9pA5qRT5z8GNIN8EzOHNBu13xLQNct58ZuRMuLrJMoxb9hHewFYarnfzmif7OdsjSa---CyMk438S72vZPxg-WaVLK9tC-cLUchVjqaxCEHGGYL5sOkylNY525zr42reb2ZjlNRNyOkbPDMhnNOlqaEtQ4jaOI314DgcQ1O175xjmG8frEXsnc5kfVX2-NpBxsb6obzW4Im-5pGp8"
           />
           <div className="absolute inset-0 bg-gradient-to-r from-slate-950/75 via-cyan-950/35 to-transparent" />
         </div>
