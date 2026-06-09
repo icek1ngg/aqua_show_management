@@ -70,6 +70,8 @@ public class SecurityConfig {
                         .requestMatchers(HttpMethod.GET, "/api/bookings/dev-samples").hasAnyRole("USER", "STAFF", "MANAGER", "ADMIN")
                         .requestMatchers(HttpMethod.POST, "/api/notifications/bookings/*/resend-ticket-email").hasAnyRole("USER", "STAFF", "MANAGER", "ADMIN")
                         .requestMatchers(HttpMethod.POST, "/api/tickets/validate").hasRole("STAFF")
+                        .requestMatchers("/api/manager/**").hasRole("MANAGER")
+                        .requestMatchers("/api/admin/**").hasRole("ADMIN")
                         .requestMatchers("/oauth2/**", "/login/oauth2/**").permitAll()
                         .requestMatchers("/error").permitAll()
                         .anyRequest().authenticated()
