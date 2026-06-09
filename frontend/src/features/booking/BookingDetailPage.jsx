@@ -556,7 +556,7 @@ export default function BookingDetailPage() {
                   {displayBooking.status === 'PAID' && Number(displayBooking.tickets?.total || 0) > 0 ? (
                     <Link
                       className="flex w-full items-center justify-center gap-2 rounded-full bg-emerald-600 px-6 py-4 font-bold text-white shadow-lg shadow-emerald-600/20 transition hover:bg-emerald-700 active:scale-[0.98]"
-                      to={`/payments/result?bookingId=${displayBooking.id}`}
+                      to={`/my-tickets?bookingId=${encodeURIComponent(displayBooking.id)}`}
                     >
                       <span className="material-symbols-outlined text-xl" aria-hidden="true">
                         qr_code_2

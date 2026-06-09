@@ -2,6 +2,7 @@ import { useCallback, useEffect, useRef, useState } from 'react';
 import { Link, useLocation, useNavigate, useSearchParams } from 'react-router-dom';
 
 import { getBookingDetail } from '../../services/bookingService.js';
+import { reconcilePayment } from '../../services/paymentService.js';
 import MainLayout from '../../shared/layouts/MainLayout.jsx';
 import { normalizeBookingPaymentStatus } from '../../shared/utils/paymentStatus.js';
 
@@ -33,6 +34,12 @@ function resolveResultState(booking) {
     return resultStates.PAYMENT_EXPIRED;
   }
   return resultStates.PAYMENT_PENDING;
+}
+
+function isReconciliationPaid(reconciliation) {
+  const paymentStatus = String(reconciliation?.paymentStatus || '').trim().toUpperCase();
+  const bookingStatus = String(reconciliation?.bookingStatus || '').trim().toUpperCase();
+  return paymentStatus === 'SUCCESS' || bookingStatus === 'PAID';
 }
 
 function StateCard({ icon, title, message, tone = 'cyan', children }) {
@@ -67,6 +74,8 @@ export default function PaymentResultPage() {
   const pollingStartedAtRef = useRef(Date.now());
   const pollTimerRef = useRef(null);
   const mountedRef = useRef(true);
+  const reconciledBookingIdRef = useRef(null);
+  const reconciliationConfirmedPaymentRef = useRef(false);
 
   const stopPolling = useCallback(() => {
     window.clearTimeout(pollTimerRef.current);
@@ -81,14 +90,54 @@ export default function PaymentResultPage() {
       return;
     }
 
+    if (reconciledBookingIdRef.current !== bookingId) {
+      reconciledBookingIdRef.current = bookingId;
+      reconciliationConfirmedPaymentRef.current = false;
+      try {
+        const reconciliation = await reconcilePayment(bookingId);
+        reconciliationConfirmedPaymentRef.current = isReconciliationPaid(reconciliation);
+        if (mountedRef.current && reconciliationConfirmedPaymentRef.current) {
+          setBooking((current) => ({
+            ...current,
+            id: current?.id || bookingId,
+            status: 'PAID',
+            payment: {
+              ...current?.payment,
+              status: 'SUCCESS',
+              paidAt: reconciliation?.paidAt || current?.payment?.paidAt,
+            },
+          }));
+          setResultState(resultStates.PAYMENT_SUCCESS_TICKETS_PROCESSING);
+          setError('');
+        }
+      } catch {
+        // The callback may already have completed or PayOS may be temporarily unavailable.
+      }
+    }
+
     try {
       const detail = await getBookingDetail(bookingId);
       if (!mountedRef.current) {
         return;
       }
 
-      const nextState = resolveResultState(detail);
-      setBooking(detail);
+      let nextState = resolveResultState(detail);
+      let displayDetail = detail;
+      if (reconciliationConfirmedPaymentRef.current && nextState === resultStates.PAYMENT_PENDING) {
+        displayDetail = {
+          ...detail,
+          status: 'PAID',
+          payment: {
+            ...detail?.payment,
+            status: 'SUCCESS',
+          },
+        };
+        nextState = resultStates.PAYMENT_SUCCESS_TICKETS_PROCESSING;
+      }
+      if ([resultStates.PAYMENT_SUCCESS_TICKETS_PROCESSING, resultStates.PAYMENT_SUCCESS_TICKETS_READY].includes(nextState)) {
+        reconciliationConfirmedPaymentRef.current = true;
+      }
+      setBooking(displayDetail);
       setResultState(nextState);
       setError('');
 
@@ -107,6 +156,17 @@ export default function PaymentResultPage() {
       }
       if (loadError?.response?.status === 401) {
         navigate('/login', { replace: true, state: { from: location } });
+        return;
+      }
+      const shouldRetry = reconciliationConfirmedPaymentRef.current
+        || !loadError?.response
+        || Number(loadError.response.status) >= 500;
+      if (shouldRetry) {
+        if (!reconciliationConfirmedPaymentRef.current) {
+          setResultState(resultStates.PAYMENT_PENDING);
+        }
+        setError('');
+        pollTimerRef.current = window.setTimeout(checkBooking, pollIntervalMs);
         return;
       }
       setError(loadError?.response?.data?.message || loadError?.message || 'Unable to verify payment.');
@@ -137,8 +197,6 @@ export default function PaymentResultPage() {
     resultStates.PAYMENT_SUCCESS_TICKETS_PROCESSING,
     resultStates.PAYMENT_SUCCESS_TICKETS_READY,
   ].includes(resultState);
-  const ticketsReady = resultState === resultStates.PAYMENT_SUCCESS_TICKETS_READY;
-
   return (
     <MainLayout>
       <main className="min-h-screen bg-gradient-to-b from-cyan-50 via-white to-cyan-50 px-4 py-12 sm:px-6 lg:px-8">
@@ -163,13 +221,13 @@ export default function PaymentResultPage() {
 
                 {resultState === resultStates.PAYMENT_SUCCESS_TICKETS_PROCESSING && !ticketsTimedOut ? (
                   <p className="mt-5 rounded-2xl bg-cyan-50 px-5 py-4 font-semibold leading-7 text-cyan-800">
-                    Your QR ticket is being prepared. Please wait a moment...
+                    Payment was successful. Your ticket is being prepared.
                   </p>
                 ) : null}
 
                 {resultState === resultStates.PAYMENT_SUCCESS_TICKETS_READY ? (
                   <p className="mt-5 rounded-2xl bg-emerald-50 px-5 py-4 font-semibold leading-7 text-emerald-800">
-                    Your QR ticket is ready.
+                    Your ticket is ready.
                   </p>
                 ) : null}
 
@@ -180,26 +238,19 @@ export default function PaymentResultPage() {
                 ) : null}
 
                 <div className="mt-7 flex flex-col gap-3">
-                  {!ticketsTimedOut ? (
-                    <button
-                      className="inline-flex min-h-12 items-center justify-center gap-2 rounded-full bg-emerald-600 px-6 py-3 text-base font-black text-white transition hover:bg-emerald-700 disabled:cursor-not-allowed disabled:bg-slate-300"
-                      disabled={!ticketsReady}
-                      onClick={() => navigate(`/bookings/${booking?.id || bookingId}`, { replace: true })}
-                      type="button"
-                    >
-                      <span className="material-symbols-outlined" aria-hidden="true">{ticketsReady ? 'qr_code_2' : 'hourglass_empty'}</span>
-                      {ticketsReady ? 'View My Ticket' : 'Preparing ticket...'}
+                  <button
+                    className="inline-flex min-h-12 items-center justify-center gap-2 rounded-full bg-emerald-600 px-6 py-3 text-base font-black text-white transition hover:bg-emerald-700"
+                    onClick={() => navigate(`/my-tickets?bookingId=${encodeURIComponent(booking?.id || bookingId)}`, { replace: true })}
+                    type="button"
+                  >
+                    <span className="material-symbols-outlined" aria-hidden="true">qr_code_2</span>
+                    View My Ticket
+                  </button>
+                  {ticketsTimedOut ? (
+                    <button className="min-h-12 rounded-full border border-cyan-200 bg-white px-6 py-3 font-black text-cyan-700 hover:bg-cyan-50" onClick={checkAgain} type="button">
+                      Check Again
                     </button>
-                  ) : (
-                    <>
-                      <button className="min-h-12 rounded-full bg-cyan-700 px-6 py-3 font-black text-white hover:bg-cyan-800" onClick={checkAgain} type="button">
-                        Check Again
-                      </button>
-                      <button className="min-h-12 rounded-full border border-cyan-200 bg-white px-6 py-3 font-black text-cyan-700 hover:bg-cyan-50" onClick={() => navigate('/bookings/my')} type="button">
-                        Go to My Bookings
-                      </button>
-                    </>
-                  )}
+                  ) : null}
                 </div>
               </section>
             </div>
