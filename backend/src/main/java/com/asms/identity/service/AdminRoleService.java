@@ -58,7 +58,7 @@ public class AdminRoleService {
         return switch (role) {
             case USER -> "Can book tickets, pay, and view booking history";
             case STAFF -> "Can validate QR tickets and check in guests";
-            case MANAGER -> "Can manage shows, venues, schedules, bookings, and reports";
+            case MANAGER -> "Can manage shows, schedules, bookings, and reports";
             case ADMIN -> "Can manage users, roles, and administrative access";
         };
     }

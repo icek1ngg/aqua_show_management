@@ -1,11 +1,11 @@
-import { Link } from 'react-router-dom';
+import { Link, useLocation, useNavigate } from 'react-router-dom';
 
 import Logo from './Logo.jsx';
 
 const quickLinks = [
-  { label: 'Home', to: '/' },
-  { label: 'Shows', to: '/shows' },
-  { label: 'Schedules', to: '/#schedules' },
+  { label: 'Home', sectionId: 'home' },
+  { label: 'Shows', sectionId: 'shows' },
+  { label: 'Schedule', sectionId: 'schedule' },
   { label: 'My Bookings', to: '/bookings/my' },
   { label: 'Book Tickets', to: '/bookings/create' },
 ];
@@ -15,13 +15,21 @@ const supportLinks = [
   { label: 'Profile', to: '/profile' },
   { label: 'Support Center', href: 'mailto:support@aquashow.local' },
   { label: 'Contact Us', href: 'mailto:support@aquashow.local' },
-  { label: 'FAQs', to: '/#shows' },
+  { label: 'FAQs', sectionId: 'shows' },
   { label: 'Terms & Conditions', to: '/' },
 ];
 const socialIcons = ['public', 'photo_camera', 'play_circle'];
 
-function FooterLink({ link }) {
-  const className = 'transition hover:text-cyan-200';
+function FooterLink({ link, onSectionNavigate }) {
+  const className = 'text-left transition hover:text-cyan-200';
+
+  if (link.sectionId) {
+    return (
+      <button className={className} type="button" onClick={() => onSectionNavigate(link.sectionId)}>
+        {link.label}
+      </button>
+    );
+  }
 
   if (link.to) {
     return (
@@ -39,6 +47,26 @@ function FooterLink({ link }) {
 }
 
 export default function Footer({ compact = false }) {
+  const location = useLocation();
+  const navigate = useNavigate();
+  const isHomepageRoute = ['/', '/shows', '/public/shows'].includes(location.pathname);
+  const scrollToSection = (sectionId) => {
+    if (sectionId === 'home') {
+      window.scrollTo({ top: 0, behavior: 'smooth' });
+      return;
+    }
+
+    document.getElementById(sectionId)?.scrollIntoView({ behavior: 'smooth', block: 'start' });
+  };
+  const handleSectionNavigate = (sectionId) => {
+    if (isHomepageRoute) {
+      scrollToSection(sectionId);
+      return;
+    }
+
+    navigate('/', { state: { scrollTo: sectionId } });
+  };
+
   return (
     <footer className="relative overflow-hidden bg-gradient-to-br from-slate-950 via-cyan-950 to-teal-950 text-cyan-50">
       <div className="absolute inset-x-0 top-0 h-px bg-gradient-to-r from-transparent via-cyan-300/60 to-transparent" />
@@ -77,7 +105,7 @@ export default function Footer({ compact = false }) {
             <ul className="space-y-3 text-sm text-cyan-100/75">
               {quickLinks.map((link) => (
                 <li key={link.label}>
-                  <FooterLink link={link} />
+                  <FooterLink link={link} onSectionNavigate={handleSectionNavigate} />
                 </li>
               ))}
             </ul>
@@ -88,7 +116,7 @@ export default function Footer({ compact = false }) {
             <ul className="space-y-3 text-sm text-cyan-100/75">
               {supportLinks.map((link) => (
                 <li key={link.label}>
-                  <FooterLink link={link} />
+                  <FooterLink link={link} onSectionNavigate={handleSectionNavigate} />
                 </li>
               ))}
             </ul>

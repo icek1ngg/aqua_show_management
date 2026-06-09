@@ -1,9 +1,12 @@
 import { useEffect, useMemo, useState } from 'react';
-import { Link } from 'react-router-dom';
 
 import { getManagerBookingDetail, getManagerBookings } from '../services/managerBookingService.js';
 import { getManagerShows } from '../services/managerShowService.js';
 import { getSchedules } from '../services/scheduleService.js';
+import ManagerActionBar from '../features/manager/components/ManagerActionBar.jsx';
+import ManagerLayout from '../features/manager/components/ManagerLayout.jsx';
+import ManagerPageHeader from '../features/manager/components/ManagerPageHeader.jsx';
+import ManagerStatCard from '../features/manager/components/ManagerStatCard.jsx';
 
 const bookingStatuses = ['PROCESSING', 'PENDING_PAYMENT', 'PAID', 'EXPIRED', 'FAILED'];
 
@@ -98,44 +101,6 @@ function statusBadge(status) {
   }
 
   return `${base} bg-surface-container-highest text-on-surface-variant`;
-}
-
-function SidebarLink({ active, icon, label, to }) {
-  return (
-    <Link
-      className={[
-        'flex items-center gap-unit-md px-unit-lg py-unit-md transition-all',
-        active
-          ? 'border-l-4 border-primary-fixed bg-on-secondary-fixed-variant/30 text-primary-fixed'
-          : 'text-on-secondary-fixed-variant hover:bg-on-secondary-fixed-variant/20 hover:text-primary-fixed',
-      ].join(' ')}
-      to={to}
-    >
-      <span className="material-symbols-outlined">{icon}</span>
-      <span className="font-body-md">{label}</span>
-    </Link>
-  );
-}
-
-function StatCard({ label, value, icon, tone = 'primary' }) {
-  const toneClass = {
-    primary: 'bg-primary/10 text-primary',
-    tertiary: 'bg-tertiary-container/25 text-on-tertiary-container',
-    error: 'bg-error/10 text-error',
-    neutral: 'bg-surface-container-high text-on-surface-variant',
-  }[tone];
-
-  return (
-    <div className="glass-panel rounded-xl p-unit-lg">
-      <div className="flex items-center justify-between">
-        <div>
-          <p className="text-label-md text-on-surface-variant">{label}</p>
-          <h3 className="mt-1 text-headline-lg font-bold text-on-surface">{value}</h3>
-        </div>
-        <span className={`material-symbols-outlined rounded-full p-unit-sm ${toneClass}`}>{icon}</span>
-      </div>
-    </div>
-  );
 }
 
 function DetailRow({ label, value }) {
@@ -525,57 +490,24 @@ export default function ManageBookingsPage() {
             font-variation-settings: 'FILL' 0, 'wght' 400, 'GRAD' 0, 'opsz' 24;
         }`}</style>
 
-      <aside className="fixed left-0 top-0 z-50 flex h-full w-sidebar-width flex-col bg-on-secondary-fixed py-unit-lg shadow-lg">
-        <div className="mb-unit-xl px-unit-lg">
-          <h1 className="font-headline-md text-headline-md font-bold text-primary-fixed">AquaShow MS</h1>
-          <p className="font-label-md text-on-secondary-fixed-variant">Management System</p>
-        </div>
-        <nav className="flex-1 space-y-unit-xs">
-          <SidebarLink icon="dashboard" label="Dashboard" to="/manager/dashboard" />
-          <SidebarLink icon="theater_comedy" label="Shows" to="/manager/shows" />
-          <SidebarLink icon="water_drop" label="Venues" to="/manager/venues" />
-          <SidebarLink icon="calendar_month" label="Schedules" to="/manager/schedules" />
-          <SidebarLink active icon="event_seat" label="Bookings" to="/manager/bookings" />
-          <SidebarLink icon="analytics" label="Reports" to="/manager/reports" />
-          <SidebarLink icon="group" label="Users" to="/admin/users" />
-          <SidebarLink icon="admin_panel_settings" label="Roles" to="/admin/roles" />
-        </nav>
-        <div className="mt-auto px-unit-lg">
-          <Link className="flex w-full items-center justify-center gap-unit-sm rounded-lg bg-primary-fixed py-unit-md font-label-lg text-on-primary-fixed transition-all hover:opacity-90" to="/manager/schedules">
-            <span className="material-symbols-outlined">add</span>
-            Quick Schedule
-          </Link>
-        </div>
-      </aside>
-
-      <main className="relative ml-sidebar-width flex h-full w-[calc(100%-theme(spacing.sidebar-width))] flex-col">
-        <header className="sticky top-0 z-40 flex w-full items-center justify-between border-b border-outline-variant/20 bg-surface/70 px-unit-lg py-unit-sm shadow-sm backdrop-blur-md">
-          <div className="flex items-center gap-unit-lg">
-            <h2 className="font-headline-md text-headline-md font-extrabold text-primary">Manage Bookings</h2>
-            <div className="hidden text-body-sm text-on-surface-variant lg:block">Read-only booking, payment, and ticket monitoring</div>
-          </div>
-          <div className="flex items-center gap-unit-md">
-            <button className="rounded-full p-unit-sm text-on-surface-variant transition-colors hover:bg-surface-container-high/50" type="button">
-              <span className="material-symbols-outlined">notifications</span>
-            </button>
-            <button className="rounded-full p-unit-sm text-on-surface-variant transition-colors hover:bg-surface-container-high/50" type="button">
-              <span className="material-symbols-outlined">settings</span>
-            </button>
-            <div className="flex h-10 w-10 items-center justify-center rounded-full border-2 border-primary/20 bg-primary/10 text-primary">
-              <span className="material-symbols-outlined">admin_panel_settings</span>
-            </div>
-          </div>
-        </header>
-
-        <div className="custom-scrollbar flex-1 space-y-unit-lg overflow-y-auto p-unit-lg">
+      <ManagerLayout
+        className="relative flex h-full w-[calc(100%-theme(spacing.sidebar-width))] flex-col"
+        contentClassName="custom-scrollbar flex-1 space-y-unit-lg overflow-y-auto p-unit-lg"
+        headerTitle="Manage Bookings"
+        headerDescription="Read-only booking, payment, and ticket monitoring"
+      >
+          <ManagerPageHeader
+            title="Booking Operations"
+            description="Review booking, payment, and ticket state without administrator user or role controls."
+          />
           <section className="grid grid-cols-1 gap-unit-md md:grid-cols-2 xl:grid-cols-4">
-            <StatCard icon="event_seat" label="Total Bookings" value={stats.total} />
-            <StatCard icon="check_circle" label="Paid On Page" tone="primary" value={stats.paid} />
-            <StatCard icon="hourglass_empty" label="Pending On Page" tone="tertiary" value={stats.pending} />
-            <StatCard icon="payments" label="Paid Revenue On Page" tone="neutral" value={formatMoney(stats.revenue)} />
+            <ManagerStatCard icon="event_seat" label="Total Bookings" value={stats.total} />
+            <ManagerStatCard icon="check_circle" label="Paid On Page" tone="primary" value={stats.paid} />
+            <ManagerStatCard icon="hourglass_empty" label="Pending On Page" tone="tertiary" value={stats.pending} />
+            <ManagerStatCard icon="payments" label="Paid Revenue On Page" tone="neutral" value={formatMoney(stats.revenue)} />
           </section>
 
-          <section className="glass-panel flex flex-wrap items-end gap-unit-md rounded-xl p-unit-md">
+          <ManagerActionBar className="glass-panel items-end rounded-xl">
             <div className="flex min-w-[220px] flex-col gap-1">
               <label className="px-1 text-label-md text-on-surface-variant" htmlFor="booking-show-filter">Show</label>
               <select
@@ -664,7 +596,7 @@ export default function ManageBookingsPage() {
                 Reset
               </button>
             </div>
-          </section>
+          </ManagerActionBar>
 
           {referenceError && (
             <div className="rounded-lg border border-error/20 bg-error/10 p-unit-md text-body-sm font-bold text-error">
@@ -779,7 +711,6 @@ export default function ManageBookingsPage() {
               </div>
             </div>
           </section>
-        </div>
 
         {selectedBookingId && (
           <BookingDetailPanel
@@ -791,7 +722,7 @@ export default function ManageBookingsPage() {
             onRetry={() => loadBookingDetail(selectedBookingId)}
           />
         )}
-      </main>
+      </ManagerLayout>
     </div>
   );
 }

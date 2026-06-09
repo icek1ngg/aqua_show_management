@@ -17,13 +17,14 @@ import HomePage from '../features/home/HomePage.jsx';
 import EditProfilePage from '../features/profile/EditProfilePage.jsx';
 import ProfilePage from '../features/profile/ProfilePage.jsx';
 import StaffTicketValidationPage from '../features/staff/StaffTicketValidationPage.jsx';
-import ManageBookingsPage from '../stitch-react/ManageBookingsPage.jsx';
-import ManageRolesPage from '../stitch-react/ManageRolesPage.jsx';
-import ManageSchedulesPage from '../stitch-react/ManageSchedulesPage.jsx';
-import ManageShowsPage from '../stitch-react/ManageShowsPage.jsx';
-import ManageUsersPage from '../stitch-react/ManageUsersPage.jsx';
-import ManageVenuesPage from '../stitch-react/ManageVenuesPage.jsx';
-import ReportsAndAnalyticsPage from '../stitch-react/ReportsAndAnalyticsPage.jsx';
+import AdminDashboard from '../features/admin/pages/AdminDashboard.jsx';
+import AdminManageRolesPage from '../features/admin/pages/ManageRolesPage.jsx';
+import AdminManageUsersPage from '../features/admin/pages/ManageUsersPage.jsx';
+import ManagerDashboard from '../features/manager/pages/ManagerDashboard.jsx';
+import ManageBookingsPage from '../features/manager/pages/ManageBookingsPage.jsx';
+import ManageSchedulesPage from '../features/manager/pages/ManageSchedulesPage.jsx';
+import ManageShowsPage from '../features/manager/pages/ManageShowsPage.jsx';
+import ReportsPage from '../features/manager/pages/ReportsPage.jsx';
 import ShowDetailPage from '../stitch-react/ShowDetailPage.jsx';
 
 export const router = createBrowserRouter([
@@ -158,31 +159,23 @@ export const router = createBrowserRouter([
       {
         path: 'manager/dashboard',
         element: (
-          <ProtectedRoute allowedRoles={['ADMIN', 'MANAGER']}>
-            <ReportsAndAnalyticsPage />
+          <ProtectedRoute allowedRoles={['MANAGER']}>
+            <ManagerDashboard />
           </ProtectedRoute>
         ),
       },
       {
         path: 'manager/shows',
         element: (
-          <ProtectedRoute allowedRoles={['ADMIN', 'MANAGER']}>
+          <ProtectedRoute allowedRoles={['MANAGER']}>
             <ManageShowsPage />
-          </ProtectedRoute>
-        ),
-      },
-      {
-        path: 'manager/venues',
-        element: (
-          <ProtectedRoute allowedRoles={['ADMIN', 'MANAGER']}>
-            <ManageVenuesPage />
           </ProtectedRoute>
         ),
       },
       {
         path: 'manager/schedules',
         element: (
-          <ProtectedRoute allowedRoles={['ADMIN', 'MANAGER']}>
+          <ProtectedRoute allowedRoles={['MANAGER']}>
             <ManageSchedulesPage />
           </ProtectedRoute>
         ),
@@ -190,7 +183,7 @@ export const router = createBrowserRouter([
       {
         path: 'manager/bookings',
         element: (
-          <ProtectedRoute allowedRoles={['ADMIN', 'MANAGER']}>
+          <ProtectedRoute allowedRoles={['MANAGER']}>
             <ManageBookingsPage />
           </ProtectedRoute>
         ),
@@ -198,8 +191,8 @@ export const router = createBrowserRouter([
       {
         path: 'manager/reports',
         element: (
-          <ProtectedRoute allowedRoles={['ADMIN', 'MANAGER']}>
-            <ReportsAndAnalyticsPage />
+          <ProtectedRoute allowedRoles={['MANAGER']}>
+            <ReportsPage />
           </ProtectedRoute>
         ),
       },
@@ -207,7 +200,7 @@ export const router = createBrowserRouter([
         path: 'admin/dashboard',
         element: (
           <ProtectedRoute allowedRoles={['ADMIN']}>
-            <ManageUsersPage />
+            <AdminDashboard />
           </ProtectedRoute>
         ),
       },
@@ -215,7 +208,7 @@ export const router = createBrowserRouter([
         path: 'admin/users',
         element: (
           <ProtectedRoute allowedRoles={['ADMIN']}>
-            <ManageUsersPage />
+            <AdminManageUsersPage />
           </ProtectedRoute>
         ),
       },
@@ -223,7 +216,7 @@ export const router = createBrowserRouter([
         path: 'admin/roles',
         element: (
           <ProtectedRoute allowedRoles={['ADMIN']}>
-            <ManageRolesPage />
+            <AdminManageRolesPage />
           </ProtectedRoute>
         ),
       },

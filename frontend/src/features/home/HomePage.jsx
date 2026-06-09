@@ -4,6 +4,9 @@ import { Link, useLocation } from 'react-router-dom';
 import { getShows } from '../../services/showService.js';
 import MainLayout from '../../shared/layouts/MainLayout.jsx';
 
+const fallbackShowImage =
+  'https://lh3.googleusercontent.com/aida-public/AB6AXuANv7I9nTUaKmdiA6IfaIaY0YwJUIWoqM0X6m_tgMmcJ71PacmGbCJL7U7jN8rhBXSUuV7fovx9LDsAc6N5PhTyiCp6LssLe6FgDdZmMcwFIlWNhrmPMXPWNaNGaENraIJuHz9U8O5qXFdHXwD12d0tWFF6pkX61XHVJWiPscKVSeVXPJHPLntIinpKKiq48E_jrrE2A6BF6g5CVGhbzwWhTMCs07mHdwovKDWCZJwE9QP5SidUIrVjslByRhoxaZve3By201M-MkjJ';
+
 const featuredShows = [
   {
     title: 'Symphony of Lights',
@@ -122,6 +125,25 @@ function scheduleStatus(show) {
       };
 }
 
+function normalizeSectionId(sectionId) {
+  if (sectionId === 'schedules') {
+    return 'schedule';
+  }
+
+  return sectionId;
+}
+
+function scrollToSection(sectionId) {
+  const normalizedSectionId = normalizeSectionId(sectionId);
+
+  if (normalizedSectionId === 'home') {
+    window.scrollTo({ top: 0, behavior: 'smooth' });
+    return;
+  }
+
+  document.getElementById(normalizedSectionId)?.scrollIntoView({ behavior: 'smooth', block: 'start' });
+}
+
 export default function HomePage() {
   const location = useLocation();
   const [shows, setShows] = useState([]);
@@ -141,16 +163,103 @@ export default function HomePage() {
   const [reloadKey, setReloadKey] = useState(0);
 
   useEffect(() => {
-    const sectionId = location.hash?.replace('#', '') || (location.pathname === '/shows' || location.pathname === '/public/shows' ? 'shows' : '');
+    const sectionId = normalizeSectionId(
+      location.state?.scrollTo ||
+      location.hash?.replace('#', '') ||
+      (location.pathname === '/shows' || location.pathname === '/public/shows' ? 'shows' : ''),
+    );
 
     if (!sectionId) {
       return;
     }
 
-    window.requestAnimationFrame(() => {
-      document.getElementById(sectionId)?.scrollIntoView({ behavior: 'smooth', block: 'start' });
+    const animationFrameId = window.requestAnimationFrame(() => {
+      scrollToSection(sectionId);
     });
-  }, [location.hash, location.pathname]);
+    const settleScrollId = window.setTimeout(() => {
+      scrollToSection(sectionId);
+    }, 350);
+
+    return () => {
+      window.cancelAnimationFrame(animationFrameId);
+      window.clearTimeout(settleScrollId);
+    };
+  }, [location.hash, location.pathname, location.state]);
+
+  useEffect(() => {
+    let isActive = true;
+
+    async function loadShows() {
+      setIsLoadingShows(true);
+      setShowsError('');
+
+      try {
+        const response = await getShows({ keyword: submittedKeyword, page: currentPage, size: pagination.size });
+        if (!isActive) {
+          return;
+        }
+
+        const items = Array.isArray(response?.items) ? response.items : [];
+        setShows(items);
+        setPagination({
+          page: response?.page ?? currentPage,
+          size: response?.size ?? pagination.size,
+          totalItems: response?.totalItems ?? items.length,
+          totalPages: response?.totalPages ?? (items.length ? 1 : 0),
+          hasNext: Boolean(response?.hasNext),
+          hasPrevious: Boolean(response?.hasPrevious),
+        });
+      } catch (error) {
+        if (!isActive) {
+          return;
+        }
+
+        setShows([]);
+        setPagination((current) => ({
+          ...current,
+          page: currentPage,
+          totalItems: 0,
+          totalPages: 0,
+          hasNext: false,
+          hasPrevious: false,
+        }));
+        setShowsError(getShowsErrorMessage(error));
+      } finally {
+        if (isActive) {
+          setIsLoadingShows(false);
+        }
+      }
+    }
+
+    loadShows();
+
+    return () => {
+      isActive = false;
+    };
+  }, [currentPage, pagination.size, reloadKey, submittedKeyword]);
+
+  const upcomingSchedules = useMemo(
+    () =>
+      shows
+        .filter((show) => show.nextStartTime)
+        .map((show) => ({ ...show, formattedSchedule: formatScheduleDate(show.nextStartTime) }))
+        .filter((show) => show.formattedSchedule)
+        .sort((first, second) => new Date(first.nextStartTime).getTime() - new Date(second.nextStartTime).getTime())
+        .slice(0, 3),
+    [shows],
+  );
+
+  const handleShowSearch = (event) => {
+    event.preventDefault();
+    setCurrentPage(0);
+    setSubmittedKeyword(keyword.trim());
+  };
+
+  const clearShowSearch = () => {
+    setKeyword('');
+    setSubmittedKeyword('');
+    setCurrentPage(0);
+  };
 
   useEffect(() => {
     let isActive = true;
@@ -229,7 +338,7 @@ export default function HomePage() {
 
   return (
     <MainLayout>
-      <section className="relative flex min-h-[600px] items-center overflow-hidden lg:min-h-[720px]">
+      <section className="relative flex min-h-[600px] scroll-mt-24 items-center overflow-hidden lg:min-h-[720px]" id="home">
         <div className="absolute inset-0 z-0">
           <img
             alt="Spectacular water fountain show"
@@ -255,9 +364,9 @@ export default function HomePage() {
               <Link className="rounded-full bg-gradient-to-r from-cyan-500 to-teal-700 px-10 py-4 font-bold text-white shadow-2xl shadow-cyan-950/30 transition hover:-translate-y-0.5 hover:shadow-cyan-950/40 active:translate-y-0" to="/bookings/create">
                 Book Tickets
               </Link>
-              <a className="rounded-full border-2 border-white/30 bg-white/10 px-10 py-4 font-bold text-white backdrop-blur-md transition hover:bg-white/20" href="#shows">
+              <button className="rounded-full border-2 border-white/30 bg-white/10 px-10 py-4 font-bold text-white backdrop-blur-md transition hover:bg-white/20" type="button" onClick={() => scrollToSection('shows')}>
                 Explore Shows
-              </a>
+              </button>
             </div>
           </div>
         </div>
@@ -317,7 +426,7 @@ export default function HomePage() {
         </div>
       </div>
 
-      <section className="mx-auto max-w-7xl px-4 py-20 sm:px-6 lg:px-8" id="shows">
+      <section className="mx-auto max-w-7xl scroll-mt-24 px-4 py-20 sm:px-6 lg:px-8" id="shows">
         <div className="mb-12 flex flex-col gap-4 sm:flex-row sm:items-end sm:justify-between">
           <div>
             <span className="mb-2 block text-sm font-bold uppercase tracking-[0.24em] text-cyan-700">Performances</span>
@@ -456,7 +565,7 @@ export default function HomePage() {
         )}
       </section>
 
-      <section className="bg-white/60 py-20" id="schedules">
+      <section className="scroll-mt-24 bg-white/60 py-20" id="schedule">
         <div className="mx-auto max-w-7xl px-4 sm:px-6 lg:px-8">
           <div className="mb-16 text-center">
             <h2 className="mb-4 text-3xl font-black tracking-tight text-slate-950 sm:text-4xl">Upcoming Show Schedules</h2>
