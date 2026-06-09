@@ -159,6 +159,7 @@ export default function HomePage() {
   const [showsError, setShowsError] = useState('');
   const [reloadKey, setReloadKey] = useState(0);
   const [selectedShowId, setSelectedShowId] = useState('');
+  const [selectedDate, setSelectedDate] = useState('');
   const [ticketQuantity, setTicketQuantity] = useState(1);
   const [ticketType, setTicketType] = useState('Standard Entry');
 
@@ -238,8 +239,24 @@ export default function HomePage() {
   );
   const firstBookableShow = upcomingSchedules.find((show) => show.nextScheduleId);
   const selectedShow = shows.find((show) => show.id === selectedShowId);
-  const selectedBookingUrl = bookingUrlForShow(selectedShow, ticketQuantity, ticketType);
+  const selectedBookingUrl = selectedShow && selectedDate
+    ? buildBookingUrl({
+        showId: selectedShow.id,
+        scheduleId: selectedShow.nextScheduleId,
+        showName: selectedShow.title,
+        showDate: selectedDate,
+        quantity: ticketQuantity,
+        ticketType,
+      })
+    : null;
   const heroBookingUrl = bookingUrlForShow(firstBookableShow);
+
+  const handleBookingShowChange = (event) => {
+    const nextShowId = event.target.value;
+    const nextShow = shows.find((show) => show.id === nextShowId);
+    setSelectedShowId(nextShowId);
+    setSelectedDate(nextShow?.nextStartTime ? String(nextShow.nextStartTime).slice(0, 10) : '');
+  };
 
   const handleShowSearch = (event) => {
     event.preventDefault();
@@ -300,7 +317,7 @@ export default function HomePage() {
               <select
                 className="w-full rounded-full border border-cyan-100 bg-cyan-50/70 px-5 py-3 text-slate-700 focus:border-cyan-400 focus:outline-none focus:ring-2 focus:ring-cyan-200"
                 value={selectedShowId}
-                onChange={(event) => setSelectedShowId(event.target.value)}
+                onChange={handleBookingShowChange}
               >
                 <option value="">{isLoadingShows ? 'Loading active shows...' : 'Choose an active show'}</option>
                 {shows.filter((show) => show.nextScheduleId).map((show) => (
@@ -319,7 +336,7 @@ export default function HomePage() {
               <input
                 className="w-full rounded-full border border-cyan-100 bg-cyan-50/70 px-5 py-3 text-slate-700 focus:border-cyan-400 focus:outline-none focus:ring-2 focus:ring-cyan-200"
                 type="date"
-                value={selectedShow?.nextStartTime ? String(selectedShow.nextStartTime).slice(0, 10) : ''}
+                value={selectedDate}
                 readOnly
               />
             </label>

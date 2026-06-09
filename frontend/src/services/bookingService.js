@@ -12,18 +12,21 @@ export function buildBookingUrl({
   quantity = 1,
   ticketType = 'Standard Entry',
 }) {
-  const params = [
-    ['showId', showId],
-    ['scheduleId', scheduleId],
-    ['show', showName],
-    ['date', showDate],
-    ['quantity', String(quantity)],
-    ['ticketType', ticketType],
-  ];
+  const requiredValues = [showId, scheduleId, showName, showDate, quantity, ticketType];
+  if (requiredValues.some((value) => value === null || value === undefined || String(value).trim() === '')) {
+    return null;
+  }
 
-  return `/bookings/create?${params
-    .map(([key, value]) => `${key}=${encodeURIComponent(value ?? '')}`)
-    .join('&')}`;
+  const params = new URLSearchParams({
+    showId: String(showId),
+    scheduleId: String(scheduleId),
+    show: String(showName),
+    date: String(showDate),
+    quantity: String(quantity),
+    ticketType: String(ticketType),
+  });
+
+  return `/bookings/create?${params.toString()}`;
 }
 
 export async function createBooking(payload) {

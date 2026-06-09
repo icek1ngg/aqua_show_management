@@ -104,7 +104,7 @@ function getBookingErrorMessage(error) {
 }
 
 function isUuid(value) {
-  return /^[0-9a-f]{8}-[0-9a-f]{4}-[1-5][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i.test(value || '');
+  return /^[0-9a-f]{8}(?:-[0-9a-f]{4}){3}-[0-9a-f]{12}$/i.test(value || '');
 }
 
 function validateBookingPayload(payload) {
@@ -123,6 +123,24 @@ function validateBookingPayload(payload) {
   return '';
 }
 
+function getMissingBookingParams({
+  showId,
+  scheduleId,
+  showName,
+  showDate,
+  quantity,
+  ticketType,
+}) {
+  return [
+    !showId && 'showId',
+    !scheduleId && 'scheduleId',
+    !showName && 'show',
+    !showDate && 'date',
+    (!Number.isInteger(quantity) || quantity < 1) && 'quantity',
+    !ticketType && 'ticketType',
+  ].filter(Boolean);
+}
+
 export default function CreateBookingPage() {
   const [searchParams, setSearchParams] = useSearchParams();
   const navigate = useNavigate();
@@ -134,7 +152,8 @@ export default function CreateBookingPage() {
   const showNameParam = searchParams.get('show');
   const dateParam = searchParams.get('date');
   const quantityParam = Number(searchParams.get('quantity'));
-  const ticketTypeParam = searchParams.get('ticketType') || 'Standard Entry';
+  const ticketTypeQueryParam = searchParams.get('ticketType');
+  const ticketTypeParam = ticketTypeQueryParam || 'Standard Entry';
 
   // State management
   const [quantity, setQuantity] = useState(1);
@@ -152,7 +171,18 @@ export default function CreateBookingPage() {
 
   // Check if required params are missing
   const isScheduleMissing = !scheduleIdParam;
-  const isParamsMissing = !showIdParam || isScheduleMissing || !showNameParam || !dateParam || isNaN(quantityParam) || quantityParam < 1;
+  const missingParams = getMissingBookingParams({
+    showId: showIdParam,
+    scheduleId: scheduleIdParam,
+    showName: showNameParam,
+    showDate: dateParam,
+    quantity: quantityParam,
+    ticketType: ticketTypeQueryParam,
+  });
+  const isParamsMissing = missingParams.length > 0;
+  const missingParamsDetail = import.meta.env.DEV && missingParams.length > 0
+    ? ` Missing parameters: ${missingParams.join(', ')}.`
+    : '';
 
   if (isParamsMissing) {
     return (
@@ -164,8 +194,8 @@ export default function CreateBookingPage() {
           <h1 className="text-4xl font-black tracking-tight text-slate-950">Select Tickets to Continue</h1>
           <p className="mt-4 text-base text-slate-600 max-w-md">
             {isScheduleMissing
-              ? 'Please select a show schedule again.'
-              : 'Please search for a show, date, and ticket quantity using the Ticket Search Drawer to start your booking.'}
+              ? `Please select a show schedule again.${missingParamsDetail}`
+              : `Please search for a show, date, and ticket quantity using the Ticket Search Drawer to start your booking.${missingParamsDetail}`}
           </p>
           <div className="mt-8 flex flex-col justify-center gap-4 sm:flex-row w-full sm:w-auto px-4">
             <button
