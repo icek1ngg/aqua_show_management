@@ -7,8 +7,7 @@ import {
   sanitizeDigits,
   validateRequired,
 } from '../../utils/validation.js';
-
-const ticketTypes = ['Standard Entry', 'VIP Entry', 'Family Package'];
+import { ticketTypeOptions } from '../../utils/ticketPricing.js';
 
 function formatScheduleOption(schedule) {
   const date = new Date(schedule.startTime);
@@ -333,9 +332,9 @@ export default function TicketSearchDrawer({ open, onClose }) {
                   onChange={handleChange}
                 >
                   <option value="">Select type</option>
-                  {ticketTypes.map((ticketType) => (
-                      <option key={ticketType} value={ticketType}>
-                        {ticketType}
+                  {ticketTypeOptions.map((ticketType) => (
+                      <option key={ticketType.value} value={ticketType.value}>
+                        {ticketType.label}
                       </option>
                     ))}
                   </select>

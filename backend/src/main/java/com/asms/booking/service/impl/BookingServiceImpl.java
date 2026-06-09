@@ -116,7 +116,7 @@ public class BookingServiceImpl implements BookingService {
         validateTicketType(ticketType);
         ShowSchedule schedule = resolveBookableSchedule(request);
         Instant now = Instant.now();
-        BigDecimal unitPrice = schedule.getPrice().setScale(2, RoundingMode.HALF_UP);
+        BigDecimal unitPrice = priceFor(ticketType).setScale(2, RoundingMode.HALF_UP);
         BigDecimal totalAmount = unitPrice.multiply(BigDecimal.valueOf(quantity)).setScale(2, RoundingMode.HALF_UP);
         int availableTickets = calculateAvailableTickets(schedule, now);
         if (availableTickets < quantity) {
@@ -327,7 +327,13 @@ public class BookingServiceImpl implements BookingService {
         if (normalized.equals("VIP ENTRY")) {
             return "VIP";
         }
+        if (normalized.equals("VIP EXPERIENCE")) {
+            return "VIP";
+        }
         if (normalized.equals("FAMILY PACKAGE")) {
+            return "FAMILY";
+        }
+        if (normalized.equals("FAMILY PASS")) {
             return "FAMILY";
         }
         return normalized;

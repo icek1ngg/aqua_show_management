@@ -116,13 +116,13 @@ class BookingServiceControllerTest {
         verify(bookingRepository).save(bookingCaptor.capture());
         assertThat(bookingCaptor.getValue().getShowName()).isEqualTo(schedule.getShow().getTitle());
         assertThat(bookingCaptor.getValue().getShowDate()).isEqualTo(schedule.getStartTime().toLocalDate());
-        assertThat(bookingCaptor.getValue().getUnitPrice()).isEqualByComparingTo("7500");
-        assertThat(bookingCaptor.getValue().getTotalAmount()).isEqualByComparingTo("15000");
+        assertThat(bookingCaptor.getValue().getUnitPrice()).isEqualByComparingTo("2000");
+        assertThat(bookingCaptor.getValue().getTotalAmount()).isEqualByComparingTo("4000");
         verify(bookingPublisher, never()).publishCreateBooking(any());
     }
 
     @Test
-    void createBookingIgnoresTamperedFrontendShowFieldsAndUsesSchedulePrice() {
+    void createBookingIgnoresTamperedFrontendShowFieldsAndUsesTicketTypePrice() {
         User user = user("user@example.com");
         ShowSchedule schedule = schedule();
         when(userRepository.findByEmailIgnoreCase("user@example.com")).thenReturn(Optional.of(user));
@@ -138,7 +138,7 @@ class BookingServiceControllerTest {
                 schedule.getId().toString(),
                 "Cheap Fake Show",
                 LocalDate.now().plusYears(5),
-                "VIP",
+                "VIP Experience",
                 2
         );
 
@@ -149,8 +149,29 @@ class BookingServiceControllerTest {
         verify(bookingRepository).save(bookingCaptor.capture());
         assertThat(bookingCaptor.getValue().getShowName()).isEqualTo("Aqua Show");
         assertThat(bookingCaptor.getValue().getShowDate()).isEqualTo(schedule.getStartTime().toLocalDate());
-        assertThat(bookingCaptor.getValue().getUnitPrice()).isEqualByComparingTo("7500");
-        assertThat(bookingCaptor.getValue().getTotalAmount()).isEqualByComparingTo("15000");
+        assertThat(bookingCaptor.getValue().getUnitPrice()).isEqualByComparingTo("5000");
+        assertThat(bookingCaptor.getValue().getTotalAmount()).isEqualByComparingTo("10000");
+    }
+
+    @Test
+    void createBookingFamilyQuantityTwoUsesSixThousandTotal() {
+        User user = user("user@example.com");
+        ShowSchedule schedule = schedule();
+        when(userRepository.findByEmailIgnoreCase("user@example.com")).thenReturn(Optional.of(user));
+        when(scheduleRepository.findById(schedule.getId())).thenReturn(Optional.of(schedule));
+        when(bookingRepository.countPaidTicketsByScheduleId(schedule.getId().toString())).thenReturn(0L);
+        when(bookingRepository.countNonExpiredPendingTicketsByScheduleId(eq(schedule.getId().toString()), any(Instant.class))).thenReturn(0L);
+        when(redisTicketHoldService.holdTickets(schedule.getId().toString(), "FAMILY", 2, user.getId()))
+                .thenReturn(new HoldResult(true, "hold-family", "held", Instant.now().plusSeconds(900)));
+        when(bookingRepository.save(any(Booking.class))).thenAnswer(invocation -> invocation.getArgument(0));
+
+        bookingService.createBooking(validRequest(schedule, "Family Pass", 2), "user@example.com");
+
+        ArgumentCaptor<Booking> bookingCaptor = ArgumentCaptor.forClass(Booking.class);
+        verify(bookingRepository).save(bookingCaptor.capture());
+        assertThat(bookingCaptor.getValue().getTicketType()).isEqualTo("FAMILY");
+        assertThat(bookingCaptor.getValue().getUnitPrice()).isEqualByComparingTo("3000");
+        assertThat(bookingCaptor.getValue().getTotalAmount()).isEqualByComparingTo("6000");
     }
 
     @Test

@@ -4,6 +4,7 @@ import { Link, useLocation, useNavigate, useParams } from 'react-router-dom';
 import { getBookingDetail } from '../../services/bookingService.js';
 import MainLayout from '../../shared/layouts/MainLayout.jsx';
 import { normalizeBookingPaymentStatus } from '../../shared/utils/paymentStatus.js';
+import { formatCurrency, getTicketTypeLabel } from '../../shared/utils/ticketPricing.js';
 
 const fallbackImageUrl =
   'https://lh3.googleusercontent.com/aida/ADBb0ujt3y3oHep8ZyS33fWXSwjI8mG8aZHbNUcl0CdGivcGyeT3du82S-KhXF_z4dlPRBUlc4EswabU5EeIcZJqXipWtpjbttrQ0GOkGXD__Ue8EUNvilyj-UDsJCa1cZbn_l6pfjV_lg7TOdizUqPdcum_qmMFI-csEQojqIgtLoSEhUsOXh1HErJxLtr4lvL3loCl2YH0XpPXQu6PYmM-OELKDDyxmjnmTGP8Zxcj3pb5flEfrV4506pYqA';
@@ -56,19 +57,6 @@ const statusMeta = {
   },
 };
 
-function formatCurrency(value) {
-  const amount = Number(value);
-  if (Number.isNaN(amount)) {
-    return '0 ₫';
-  }
-
-  return new Intl.NumberFormat('vi-VN', {
-    style: 'currency',
-    currency: 'VND',
-    maximumFractionDigits: 0,
-  }).format(amount);
-}
-
 function formatDate(value) {
   if (!value) {
     return 'Not available';
@@ -116,7 +104,7 @@ function normalizeBooking(booking) {
     bookingCode: booking.bookingCode || booking.id,
     showName: booking.showName || 'AquaPulse Show',
     showDate: booking.showDate,
-    ticketType: booking.ticketType || 'Standard Entry',
+    ticketType: getTicketTypeLabel(booking.ticketType),
     quantity: booking.quantity ?? 0,
     unitPrice: booking.unitPrice,
     totalAmount: booking.totalAmount,

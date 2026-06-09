@@ -5,11 +5,13 @@ import com.asms.booking.enums.BookingStatus;
 import com.asms.booking.repository.BookingRepository;
 import com.asms.booking.service.RedisTicketHoldService;
 import com.asms.identity.entity.User;
+import com.asms.payment.dto.CreatePaymentRequest;
 import com.asms.payment.dto.PayOsCallbackRequest;
 import com.asms.payment.dto.PaymentReconcileRequest;
 import com.asms.payment.entity.Payment;
 import com.asms.payment.enums.PaymentStatus;
 import com.asms.payment.integration.PayOsClient;
+import com.asms.payment.integration.PayOsPaymentLink;
 import com.asms.payment.integration.PayOsPaymentStatus;
 import com.asms.payment.messaging.PaymentCompletedPublisher;
 import com.asms.payment.repository.PaymentRepository;
@@ -18,6 +20,7 @@ import com.asms.ticketing.entity.Ticket;
 import com.asms.ticketing.service.TicketGenerationService;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
+import org.mockito.ArgumentCaptor;
 
 import java.lang.reflect.Field;
 import java.math.BigDecimal;
@@ -29,6 +32,7 @@ import java.util.UUID;
 
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.mockito.ArgumentMatchers.any;
+import static org.mockito.ArgumentMatchers.anyString;
 import static org.mockito.Mockito.mock;
 import static org.mockito.Mockito.never;
 import static org.mockito.Mockito.times;
@@ -171,6 +175,35 @@ class PaymentServiceImplTest {
         assertThat(payment.getStatus()).isEqualTo(PaymentStatus.SUCCESS);
         assertThat(payment.getBooking().getStatus()).isEqualTo(BookingStatus.PAID);
         verify(ticketGenerationService).generateTicketsIfMissing(payment.getBooking());
+    }
+
+    @Test
+    void createPaymentUsesBookingTotalAmount() {
+        Payment existingShape = pendingPayment();
+        Booking booking = existingShape.getBooking();
+        booking.setUnitPrice(new BigDecimal("3000"));
+        booking.setTotalAmount(new BigDecimal("6000"));
+        User user = booking.getUser();
+        when(bookingRepository.findByIdAndUser(booking.getId(), user)).thenReturn(Optional.of(booking));
+        when(paymentRepository.findByBooking_Id(booking.getId())).thenReturn(Optional.empty());
+        when(payOsClient.createPaymentLink(any(Booking.class), anyString())).thenReturn(new PayOsPaymentLink(
+                "https://pay.payos.vn/new",
+                "qr",
+                "payment-link-id",
+                "970422",
+                "123456789",
+                "ASMS",
+                new BigDecimal("999999"),
+                "ASMS payment"
+        ));
+        when(paymentRepository.save(any(Payment.class))).thenAnswer(invocation -> invocation.getArgument(0));
+
+        var response = paymentService.createPayment(new CreatePaymentRequest(booking.getId()), user);
+
+        ArgumentCaptor<Payment> paymentCaptor = ArgumentCaptor.forClass(Payment.class);
+        verify(paymentRepository).save(paymentCaptor.capture());
+        assertThat(paymentCaptor.getValue().getAmount()).isEqualByComparingTo("6000");
+        assertThat(response.amount()).isEqualByComparingTo("6000");
     }
 
     private Payment pendingPayment() {

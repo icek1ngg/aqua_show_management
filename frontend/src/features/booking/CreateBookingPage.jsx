@@ -3,6 +3,12 @@ import { useLocation, useNavigate, useSearchParams } from 'react-router-dom';
 
 import { createBooking, getBookingByHoldId } from '../../services/bookingService.js';
 import MainLayout from '../../shared/layouts/MainLayout.jsx';
+import {
+  formatCurrency,
+  getTicketTypeLabel,
+  getTicketTypePrice,
+  normalizeTicketType,
+} from '../../shared/utils/ticketPricing.js';
 
 // TEMPORARY / FRONTEND-ONLY mock database of show options
 const showDatabase = {
@@ -10,7 +16,6 @@ const showDatabase = {
     name: 'Symphony of Lights',
     category: 'Water Show',
     badge: 'Popular',
-    pricePerTicket: 2000,
     maxQuantity: 10,
     time: '08:00 PM - 09:30 PM',
     venue: 'Aqua Plaza',
@@ -21,7 +26,6 @@ const showDatabase = {
     name: 'Ocean Dreams',
     category: 'Marine Show',
     badge: 'Trending',
-    pricePerTicket: 2000,
     maxQuantity: 10,
     time: '02:00 PM - 03:30 PM',
     venue: 'Marine Amphitheater',
@@ -32,7 +36,6 @@ const showDatabase = {
     name: 'Aqua Parade',
     category: 'Float Parade',
     badge: 'Festive',
-    pricePerTicket: 2000,
     maxQuantity: 10,
     time: '04:30 PM - 05:30 PM',
     venue: 'Canal Street',
@@ -43,7 +46,6 @@ const showDatabase = {
     name: 'Mermaid Splash',
     category: 'Underwater Theater',
     badge: 'Magical',
-    pricePerTicket: 2000,
     maxQuantity: 10,
     time: '11:00 AM - 12:30 PM',
     venue: 'Deep Ocean Tank',
@@ -51,14 +53,6 @@ const showDatabase = {
     imageUrl: 'https://lh3.googleusercontent.com/aida-public/AB6AXuCAs3NVAK7aoUYuYTZX3AmIWjo37TVxp8y6qJgQ9aCIxerTaTrUNtCZg6IkvjGYTrm8NkWAmMk9EYSAS0zHX-Ybuchms5PmzM8GSFwWEwlI4Yo9RrGTNwDjP0uBNcrI0GEVscCdtCQdMPXEMe6JZqLjxpYxC0m-dniRVU5w8F3YNuK1ONb9aqNtSQ8JjTFMnaKVdluoElQViAQ2wGLue9tKyOx3JFBWEQNJawzk2cibhFjqAkAmwOrkKMOymHdXyYfPgbQ1y6XgQQ',
   }
 };
-
-function formatCurrency(amount) {
-  return new Intl.NumberFormat('vi-VN', {
-    style: 'currency',
-    currency: 'VND',
-    maximumFractionDigits: 0,
-  }).format(Number(amount || 0));
-}
 
 function formatDateString(dateStr) {
   if (!dateStr) return 'Not selected';
@@ -153,7 +147,8 @@ export default function CreateBookingPage() {
   const dateParam = searchParams.get('date');
   const quantityParam = Number(searchParams.get('quantity'));
   const ticketTypeQueryParam = searchParams.get('ticketType');
-  const ticketTypeParam = ticketTypeQueryParam || 'Standard Entry';
+  const ticketTypeParam = normalizeTicketType(ticketTypeQueryParam || 'STANDARD');
+  const ticketTypeLabel = getTicketTypeLabel(ticketTypeParam);
 
   // State management
   const [quantity, setQuantity] = useState(1);
@@ -223,16 +218,8 @@ export default function CreateBookingPage() {
     name: showNameParam,
   };
 
-  // Calculate ticket pricing based on ticketType
-  // TEMPORARY: Front-end price estimation only. Not trusted for backend transactions.
-  let calculatedPricePerTicket = showData.pricePerTicket;
-  if (ticketTypeParam === 'VIP Entry') {
-    calculatedPricePerTicket = 5000;
-  } else if (ticketTypeParam === 'Family Package') {
-    calculatedPricePerTicket = 3000;
-  }
-
-  const totalAmount = quantity * calculatedPricePerTicket;
+  const previewPricePerTicket = getTicketTypePrice(ticketTypeParam);
+  const previewTotalAmount = quantity * previewPricePerTicket;
 
   const updateQuantityParams = (nextQuantity) => {
     setSearchParams((prevParams) => {
@@ -422,10 +409,10 @@ export default function CreateBookingPage() {
             <section className="rounded-[2rem] border border-cyan-100 bg-white p-6 shadow-[0_12px_32px_rgba(0,105,107,0.1)] md:p-8">
               <div className="flex flex-col items-center justify-between gap-6 md:flex-row">
                 <div>
-                  <h2 className="mb-1 text-2xl font-black text-slate-950">{ticketTypeParam}</h2>
-                  <p className="text-slate-600">Includes admission and digital show guide (Estimates only).</p>
+                  <h2 className="mb-1 text-2xl font-black text-slate-950">{ticketTypeLabel}</h2>
+                  <p className="text-slate-600">Preview only. The final amount is confirmed by AquaPulse after booking creation.</p>
                   <p className="mt-2 text-2xl font-black text-cyan-700">
-                    {formatCurrency(calculatedPricePerTicket)} <span className="text-base font-normal text-slate-500">/ ticket</span>
+                    {formatCurrency(previewPricePerTicket)} <span className="text-base font-normal text-slate-500">/ ticket</span>
                   </p>
                 </div>
 
@@ -471,7 +458,7 @@ export default function CreateBookingPage() {
                       <p className="font-bold text-slate-950">{showData.name}</p>
                       <p className="text-sm text-slate-500">{formatDateString(dateParam)}, {showData.time.split(' ')[0]} {showData.time.split(' ')[1]}</p>
                     </div>
-                    <p className="font-bold text-slate-950">{formatCurrency(calculatedPricePerTicket)}</p>
+                    <p className="font-bold text-slate-950">{formatCurrency(previewPricePerTicket)}</p>
                   </div>
                   <div className="flex items-center justify-between border-y border-cyan-100 py-4">
                     <p className="text-slate-500">Quantity</p>
@@ -479,7 +466,7 @@ export default function CreateBookingPage() {
                   </div>
                   <div className="flex items-center justify-between">
                     <p className="text-2xl font-black text-cyan-700">Total Amount</p>
-                    <p className="text-2xl font-black text-cyan-700">{formatCurrency(totalAmount)}</p>
+                    <p className="text-2xl font-black text-cyan-700">{formatCurrency(previewTotalAmount)}</p>
                   </div>
                 </div>
 

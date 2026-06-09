@@ -4,62 +4,10 @@ import { Link, useLocation } from 'react-router-dom';
 import { buildBookingUrl } from '../../services/bookingService.js';
 import { getShows } from '../../services/showService.js';
 import MainLayout from '../../shared/layouts/MainLayout.jsx';
+import { ticketTypeOptions } from '../../shared/utils/ticketPricing.js';
 
 const fallbackShowImage =
   'https://lh3.googleusercontent.com/aida-public/AB6AXuANv7I9nTUaKmdiA6IfaIaY0YwJUIWoqM0X6m_tgMmcJ71PacmGbCJL7U7jN8rhBXSUuV7fovx9LDsAc6N5PhTyiCp6LssLe6FgDdZmMcwFIlWNhrmPMXPWNaNGaENraIJuHz9U8O5qXFdHXwD12d0tWFF6pkX61XHVJWiPscKVSeVXPJHPLntIinpKKiq48E_jrrE2A6BF6g5CVGhbzwWhTMCs07mHdwovKDWCZJwE9QP5SidUIrVjslByRhoxaZve3By201M-MkjJ';
-
-const featuredShows = [
-  {
-    title: 'Symphony of Lights',
-    description: 'A synchronized masterpiece of light, water, and sound that will leave you breathless.',
-    image:
-      'https://lh3.googleusercontent.com/aida-public/AB6AXuDgtKbX141GIXV28czApt3tHguCUvPKSbRAnFdFAQzlJutKE1EC4vS7jnqAU4kbJta6FkkFLWOG1xo4RFS8AM1MXBGOQlPFZh-FlQEpmZlt5nYB6wUrwlpXP5TSpL1DI7WuOKTisPjwwu6BaEFAPWXD2NGxEfXQvUJmomtpfH0x7egW2U7kxW6h2RZFC6PIb1cpt9NbIPLdOpwlkZgjkBVzNlC3R9onv6_Esbk17K0of4PgvHxDHfAWZoVi41bvelTws71QLVrPMQ',
-    badge: 'Popular',
-    badgeClass: 'bg-[#ff6900] text-white',
-    price: 'from $29',
-  },
-  {
-    title: 'Deep Sea Mystery',
-    description: 'Journey into the abyss and discover the secrets of the ocean in this immersive play.',
-    image:
-      'https://lh3.googleusercontent.com/aida-public/AB6AXuCaDCEPuRXIz-tXX1TXYxFJLqc_NIsXu8w_yLI5ZUwrlr8wnEL8-kgSlFbHHypXmoS8BFV3Nt-uIqfoUBNP3vsNwRpxWltuGVcjFaEYr5i0Jxbq-UGbC8e5wY7oIaDMk2npEmreyGf9rBbp29WokyWvugQKmrBX2PoVJWFeSGUirssyqs6CAB1JREDZCBlv_mFFOq4aPXSDN7RXezaVkV4yhWwjPBXZkL6PwbhHkm0AYogBR_08bBqL0orR0zzGAHByqIypSnGUag',
-    badge: 'New',
-    badgeClass: 'bg-cyan-300 text-slate-950',
-    price: 'from $35',
-  },
-  {
-    title: 'Tropical Splash',
-    description: 'A high-energy daytime parade with water cannons, music, and tropical rhythms.',
-    image:
-      'https://lh3.googleusercontent.com/aida-public/AB6AXuDOdYlgXL4Nwf4AWcGFjApQwu1wTev59cOd_-GZKhZAWO4Iz_zf7Tn8_yeXyi9P-cEDz6PldhiUpJ7j_1kqfhSt3YHIgmEJCtryWfqAghSSeXxzgAUM-pXEtaZhoz6g-0FlaiKz-SMUTjlXf7-QNguIhszVSRUHyFOy4zzsc6qh5RCz4gEwyyuSD5_OrUqMRuq-If6WwHs7nBE7Nwij3GBrdW3JEC77ydu5Az0EctrAsKLg-FkB0ZzurXJq_eCzA4NIrDfQsrmB1A',
-    price: 'from $25',
-  },
-];
-
-const schedules = [
-  {
-    day: '24',
-    month: 'Aug',
-    time: '19:30 PM',
-    note: 'Gate opens 30m early',
-    title: 'Symphony of Lights',
-    venue: 'Main Aquatic Theater',
-    status: 'Available',
-    statusClass: 'bg-emerald-50 text-emerald-600',
-    dotClass: 'bg-emerald-600 animate-pulse',
-  },
-  {
-    day: '24',
-    month: 'Aug',
-    time: '21:00 PM',
-    note: 'Late night performance',
-    title: 'Deep Sea Mystery',
-    venue: 'Grand Arena Pool',
-    status: 'Almost Full',
-    statusClass: 'bg-orange-50 text-[#ff6900]',
-    dotClass: 'bg-[#ff6900]',
-  },
-];
 
 const benefits = [
   {
@@ -126,7 +74,7 @@ function scheduleStatus(show) {
       };
 }
 
-function bookingUrlForShow(show, quantity = 1, ticketType = 'Standard Entry') {
+function bookingUrlForShow(show, quantity = 1, ticketType = 'STANDARD') {
   if (!show?.id || !show?.nextScheduleId || !show?.nextStartTime) {
     return null;
   }
@@ -161,7 +109,7 @@ export default function HomePage() {
   const [selectedShowId, setSelectedShowId] = useState('');
   const [selectedDate, setSelectedDate] = useState('');
   const [ticketQuantity, setTicketQuantity] = useState(1);
-  const [ticketType, setTicketType] = useState('Standard Entry');
+  const [ticketType, setTicketType] = useState('STANDARD');
 
   useEffect(() => {
     const sectionId = location.hash?.replace('#', '') || (location.pathname === '/shows' || location.pathname === '/public/shows' ? 'shows' : '');
@@ -366,9 +314,11 @@ export default function HomePage() {
                 value={ticketType}
                 onChange={(event) => setTicketType(event.target.value)}
               >
-                <option>Standard Entry</option>
-                <option>VIP Entry</option>
-                <option>Family Package</option>
+                {ticketTypeOptions.map((option) => (
+                  <option key={option.value} value={option.value}>
+                    {option.label}
+                  </option>
+                ))}
               </select>
             </label>
           </div>

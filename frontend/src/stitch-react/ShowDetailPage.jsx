@@ -4,6 +4,7 @@ import { Link, useParams } from 'react-router-dom';
 import { buildBookingUrl } from '../services/bookingService.js';
 import { getShowDetail, getShowSchedules } from '../services/showService.js';
 import MainLayout from '../shared/layouts/MainLayout.jsx';
+import { formatCurrency, getTicketTypePrice } from '../shared/utils/ticketPricing.js';
 
 const fallbackShowImage =
   'https://lh3.googleusercontent.com/aida-public/AB6AXuANv7I9nTUaKmdiA6IfaIaY0YwJUIWoqM0X6m_tgMmcJ71PacmGbCJL7U7jN8rhBXSUuV7fovx9LDsAc6N5PhTyiCp6LssLe6FgDdZmMcwFIlWNhrmPMXPWNaNGaENraIJuHz9U8O5qXFdHXwD12d0tWFF6pkX61XHVJWiPscKVSeVXPJHPLntIinpKKiq48E_jrrE2A6BF6g5CVGhbzwWhTMCs07mHdwovKDWCZJwE9QP5SidUIrVjslByRhoxaZve3By201M-MkjJ';
@@ -56,20 +57,6 @@ function formatTimeRange(startTime, endTime) {
   return `${start.toLocaleTimeString('en-US', { hour: '2-digit', minute: '2-digit' })} - ${end.toLocaleTimeString('en-US', { hour: '2-digit', minute: '2-digit' })}`;
 }
 
-function formatPrice(value) {
-  const amount = Number(value);
-
-  if (!Number.isFinite(amount)) {
-    return 'Price TBA';
-  }
-
-  return new Intl.NumberFormat('en-US', {
-    style: 'currency',
-    currency: 'USD',
-    maximumFractionDigits: amount % 1 === 0 ? 0 : 2,
-  }).format(amount);
-}
-
 function dateParam(value) {
   if (!value) {
     return '';
@@ -90,7 +77,7 @@ function bookingUrl(show, schedule) {
     showName: show.title,
     showDate: dateParam(schedule.startTime),
     quantity: '1',
-    ticketType: 'Standard Entry',
+    ticketType: 'STANDARD',
   });
 }
 
@@ -376,8 +363,8 @@ export default function ShowDetailPage() {
                               </span>
                             </div>
                             <div className="text-right">
-                              <span className="font-headline-md text-on-surface">{formatPrice(schedule.price)}</span>
-                              <span className="block text-label-md font-label-md text-outline">per ticket</span>
+                              <span className="font-headline-md text-on-surface">{formatCurrency(getTicketTypePrice('STANDARD'))}</span>
+                              <span className="block text-label-md font-label-md text-outline">standard ticket</span>
                             </div>
                           </div>
 

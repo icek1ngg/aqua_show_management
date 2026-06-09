@@ -5,6 +5,7 @@ import { getBookingDetail } from '../../services/bookingService.js';
 import { createPayment, reconcilePayment } from '../../services/paymentService.js';
 import MainLayout from '../../shared/layouts/MainLayout.jsx';
 import { isTerminalBookingStatus, normalizeBookingPaymentStatus } from '../../shared/utils/paymentStatus.js';
+import { formatCurrency, getTicketTypeLabel } from '../../shared/utils/ticketPricing.js';
 
 const fallbackImageUrl =
   'https://images.unsplash.com/photo-1507525428034-b723cf961d3e?auto=format&fit=crop&w=1400&q=80';
@@ -52,7 +53,7 @@ function normalizeBooking(booking) {
     bookingCode: booking.bookingCode || booking.id,
     showName: booking.showName || 'AquaPulse Show',
     showDate: booking.showDate,
-    ticketType: booking.ticketType || 'Standard Entry',
+    ticketType: getTicketTypeLabel(booking.ticketType),
     quantity: booking.quantity ?? 0,
     unitPrice: booking.unitPrice,
     totalAmount: booking.totalAmount,
@@ -63,14 +64,6 @@ function normalizeBooking(booking) {
     tickets: booking.tickets || null,
     emailNotification: booking.emailNotification || null,
   };
-}
-
-function formatCurrency(amount) {
-  return new Intl.NumberFormat('vi-VN', {
-    style: 'currency',
-    currency: 'VND',
-    maximumFractionDigits: 0,
-  }).format(Number(amount || 0));
 }
 
 function formatDate(value) {
@@ -377,7 +370,7 @@ export default function PaymentPage() {
           ...current.payment,
           id: reconciliation.paymentId,
           payosOrderCode: reconciliation.orderCode,
-          amount: current.payment?.amount || current.totalAmount,
+          amount: current.payment?.amount ?? current.totalAmount,
           status: reconciliation.paymentStatus,
           paidAt: reconciliation.paidAt,
         },
@@ -554,7 +547,7 @@ export default function PaymentPage() {
 
                       <div className="mt-4 space-y-2 text-sm font-semibold text-slate-600">
                         <PaymentInfoRow label="Order" value={paymentDetails.payosOrderCode} />
-                        <PaymentInfoRow label="Amount" value={formatCurrency(paymentDetails.amount || booking?.totalAmount)} />
+                        <PaymentInfoRow label="Amount" value={formatCurrency(paymentDetails.amount ?? booking?.totalAmount)} />
                         <PaymentInfoRow label="Payment status" value={paymentStatus} />
                         <PaymentInfoRow label="Booking status" value={effectiveStatus} />
                         <PaymentInfoRow label="Paid at" value={isPaid ? formatDateTime(paymentDetails.paidAt) : ''} />
