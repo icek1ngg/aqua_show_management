@@ -5,6 +5,7 @@ import { getBookingDetail } from '../../services/bookingService.js';
 import { createPayment, reconcilePayment } from '../../services/paymentService.js';
 import MainLayout from '../../shared/layouts/MainLayout.jsx';
 import { isTerminalBookingStatus, normalizeBookingPaymentStatus } from '../../shared/utils/paymentStatus.js';
+import { formatCurrency, getTicketTypeLabel } from '../../shared/utils/ticketPricing.js';
 
 const fallbackImageUrl =
   'https://images.unsplash.com/photo-1507525428034-b723cf961d3e?auto=format&fit=crop&w=1400&q=80';
@@ -52,7 +53,7 @@ function normalizeBooking(booking) {
     bookingCode: booking.bookingCode || booking.id,
     showName: booking.showName || 'AquaPulse Show',
     showDate: booking.showDate,
-    ticketType: booking.ticketType || 'Standard Entry',
+    ticketType: getTicketTypeLabel(booking.ticketType),
     quantity: booking.quantity ?? 0,
     unitPrice: booking.unitPrice,
     totalAmount: booking.totalAmount,
@@ -63,14 +64,6 @@ function normalizeBooking(booking) {
     tickets: booking.tickets || null,
     emailNotification: booking.emailNotification || null,
   };
-}
-
-function formatCurrency(amount) {
-  return new Intl.NumberFormat('vi-VN', {
-    style: 'currency',
-    currency: 'VND',
-    maximumFractionDigits: 0,
-  }).format(Number(amount || 0));
 }
 
 function formatDate(value) {
@@ -210,7 +203,7 @@ export default function PaymentPage() {
   const [reconciling, setReconciling] = useState(false);
   const [reconcileMessage, setReconcileMessage] = useState('');
   const [error, setError] = useState('');
-  const hasRedirectedToTicketsRef = useRef(false);
+  const hasRedirectedToResultRef = useRef(false);
 
   async function refreshBooking({ showLoading = false } = {}) {
     if (showLoading) {
@@ -302,15 +295,15 @@ export default function PaymentPage() {
 
   useEffect(() => {
     const statusState = normalizeBookingPaymentStatus(booking, booking?.payment);
-    if (statusState.status !== 'PAID' || hasRedirectedToTicketsRef.current) {
+    if (statusState.status !== 'PAID' || hasRedirectedToResultRef.current) {
       return undefined;
     }
 
-    hasRedirectedToTicketsRef.current = true;
-    setReconcileMessage('Payment completed successfully. Redirecting to your tickets...');
+    hasRedirectedToResultRef.current = true;
+    setReconcileMessage('Payment confirmed. Opening the result page...');
     const timeoutId = window.setTimeout(() => {
-      navigate(`/payments/result?bookingId=${bookingId}&status=success`, { replace: true });
-    }, 1800);
+      navigate(`/payments/result?bookingId=${bookingId}`, { replace: true });
+    }, 800);
 
     return () => window.clearTimeout(timeoutId);
   }, [booking, bookingId, navigate]);
@@ -377,7 +370,7 @@ export default function PaymentPage() {
           ...current.payment,
           id: reconciliation.paymentId,
           payosOrderCode: reconciliation.orderCode,
-          amount: current.payment?.amount || current.totalAmount,
+          amount: current.payment?.amount ?? current.totalAmount,
           status: reconciliation.paymentStatus,
           paidAt: reconciliation.paidAt,
         },
@@ -407,13 +400,6 @@ export default function PaymentPage() {
               <h1 className="mt-4 text-4xl font-black text-slate-950 md:text-5xl">Complete payment</h1>
               <p className="mt-3 max-w-2xl text-slate-600">PayOS checkout for your reserved AquaPulse booking.</p>
             </div>
-            <Link
-              className="inline-flex items-center gap-2 rounded-full border border-cyan-200 bg-white px-5 py-3 text-sm font-bold text-cyan-700 hover:bg-cyan-50"
-              to={`/bookings/${bookingId}`}
-            >
-              <span className="material-symbols-outlined text-lg">receipt_long</span>
-              Booking detail
-            </Link>
           </div>
 
           {loading ? (
@@ -436,14 +422,22 @@ export default function PaymentPage() {
               </div>
             </section>
           ) : (
-            <div className="grid grid-cols-1 gap-8 lg:grid-cols-12">
-              <section className="space-y-6 lg:col-span-8">
+            <>
+              {isPaid ? (
+                <div className="mb-8 rounded-2xl border border-emerald-200 bg-emerald-50 p-4 text-center font-black text-emerald-700">
+                  <span className="material-symbols-outlined">receipt_long</span>
+                  <p className="mt-2">Payment confirmed. Opening the result page...</p>
+                </div>
+              ) : null}
+
+              <div className="grid grid-cols-1 gap-8 lg:grid-cols-12">
+                <section className="space-y-6 lg:col-span-8">
                 {error ? (
                   <div className="rounded-2xl border border-red-200 bg-red-50 px-5 py-4 text-sm font-semibold text-red-700" role="alert">
                     {error}
                   </div>
                 ) : null}
-                {reconcileMessage ? (
+                {reconcileMessage && !isPaid ? (
                   <div className={`rounded-2xl border px-5 py-4 text-sm font-semibold ${isPaid ? 'border-emerald-200 bg-emerald-50 text-emerald-700' : 'border-cyan-200 bg-cyan-50 text-cyan-700'}`}>
                     {reconcileMessage}
                   </div>
@@ -501,10 +495,10 @@ export default function PaymentPage() {
                     </article>
                   </>
                 ) : null}
-              </section>
+                </section>
 
-              <aside className="lg:sticky lg:top-28 lg:col-span-4">
-                <div className="rounded-[1.5rem] border border-cyan-100 bg-white p-6 shadow-[0_16px_40px_rgba(8,145,178,0.10)]">
+                <aside className="lg:sticky lg:top-28 lg:col-span-4">
+                  <div className="rounded-[1.5rem] border border-cyan-100 bg-white p-6 shadow-[0_16px_40px_rgba(8,145,178,0.10)]">
                   <p className="text-xs font-black uppercase tracking-[0.18em] text-slate-400">Checkout</p>
                   <div className="mt-5 space-y-3 text-sm font-semibold text-slate-600">
                     <PaymentInfoRow label="Booking code" value={booking?.bookingCode} />
@@ -554,7 +548,7 @@ export default function PaymentPage() {
 
                       <div className="mt-4 space-y-2 text-sm font-semibold text-slate-600">
                         <PaymentInfoRow label="Order" value={paymentDetails.payosOrderCode} />
-                        <PaymentInfoRow label="Amount" value={formatCurrency(paymentDetails.amount || booking?.totalAmount)} />
+                        <PaymentInfoRow label="Amount" value={formatCurrency(paymentDetails.amount ?? booking?.totalAmount)} />
                         <PaymentInfoRow label="Payment status" value={paymentStatus} />
                         <PaymentInfoRow label="Booking status" value={effectiveStatus} />
                         <PaymentInfoRow label="Paid at" value={isPaid ? formatDateTime(paymentDetails.paidAt) : ''} />
@@ -594,15 +588,18 @@ export default function PaymentPage() {
                     </div>
                   ) : null}
 
-                  {isPaid ? (
-                    <div className="mt-5 rounded-2xl border border-emerald-200 bg-emerald-50 p-4 text-center font-black text-emerald-700">
-                      <span className="material-symbols-outlined">receipt_long</span>
-                      <p className="mt-2">Payment completed successfully. Redirecting to your tickets...</p>
-                    </div>
-                  ) : null}
-                </div>
-              </aside>
-            </div>
+                  <Link
+                    className="mt-5 flex w-full items-center justify-center gap-2 rounded-full border border-cyan-200 bg-white px-5 py-4 font-black text-cyan-700 transition hover:bg-cyan-50"
+                    to={`/bookings/${bookingId}`}
+                  >
+                    <span className="material-symbols-outlined text-xl">receipt_long</span>
+                    Booking detail
+                  </Link>
+
+                  </div>
+                </aside>
+              </div>
+            </>
           )}
         </div>
       </main>

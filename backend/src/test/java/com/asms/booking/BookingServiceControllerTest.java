@@ -1,7 +1,6 @@
 package com.asms.booking;
 
 import com.asms.booking.dto.BookingDtos.BookingResponse;
-import com.asms.booking.dto.BookingDtos.BookingMessage;
 import com.asms.booking.dto.BookingDtos.CreateBookingRequest;
 import com.asms.booking.dto.BookingDtos.CreateBookingResponse;
 import com.asms.booking.dto.BookingDtos.PageBookingResponse;
@@ -12,6 +11,11 @@ import com.asms.booking.messaging.RabbitMQBookingPublisher;
 import com.asms.booking.repository.BookingRepository;
 import com.asms.booking.service.BookingService;
 import com.asms.booking.service.RedisTicketHoldService;
+import com.asms.catalog.entity.Show;
+import com.asms.catalog.entity.ShowSchedule;
+import com.asms.catalog.entity.Venue;
+import com.asms.catalog.enums.ScheduleStatus;
+import com.asms.catalog.repository.ShowScheduleRepository;
 import com.asms.core.exception.BadRequestException;
 import com.asms.core.exception.ConflictException;
 import com.asms.core.exception.NotFoundException;
@@ -32,6 +36,7 @@ import java.lang.reflect.Field;
 import java.math.BigDecimal;
 import java.time.Instant;
 import java.time.LocalDate;
+import java.time.LocalDateTime;
 import java.util.List;
 import java.util.Optional;
 import java.util.UUID;
@@ -43,7 +48,6 @@ import static org.mockito.ArgumentMatchers.eq;
 import static org.mockito.Mockito.doThrow;
 import static org.mockito.Mockito.mock;
 import static org.mockito.Mockito.never;
-import static org.mockito.Mockito.times;
 import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
 
@@ -51,6 +55,7 @@ class BookingServiceControllerTest {
 
     private BookingRepository bookingRepository;
     private UserRepository userRepository;
+    private ShowScheduleRepository scheduleRepository;
     private RedisTicketHoldService redisTicketHoldService;
     private RabbitMQBookingPublisher bookingPublisher;
     private PaymentRepository paymentRepository;
@@ -62,6 +67,7 @@ class BookingServiceControllerTest {
     void setUp() {
         bookingRepository = mock(BookingRepository.class);
         userRepository = mock(UserRepository.class);
+        scheduleRepository = mock(ShowScheduleRepository.class);
         redisTicketHoldService = mock(RedisTicketHoldService.class);
         bookingPublisher = mock(RabbitMQBookingPublisher.class);
         paymentRepository = mock(PaymentRepository.class);
@@ -73,6 +79,7 @@ class BookingServiceControllerTest {
         bookingService = new com.asms.booking.service.impl.BookingServiceImpl(
                 bookingRepository,
                 userRepository,
+                scheduleRepository,
                 redisTicketHoldService,
                 bookingPublisher,
                 paymentRepository,
@@ -83,44 +90,88 @@ class BookingServiceControllerTest {
     }
 
     @Test
-    void createBookingHoldsTicketsAndPublishesMessage() {
+    void createBookingValidatesScheduleAndCreatesPendingBooking() {
         User user = user("user@example.com");
+        ShowSchedule schedule = schedule();
         when(userRepository.findByEmailIgnoreCase("user@example.com")).thenReturn(Optional.of(user));
-        when(redisTicketHoldService.holdTickets("schedule-1", "STANDARD", 2, user.getId()))
+        when(scheduleRepository.findById(schedule.getId())).thenReturn(Optional.of(schedule));
+        when(bookingRepository.countPaidTicketsByScheduleId(schedule.getId().toString())).thenReturn(0L);
+        when(bookingRepository.countNonExpiredPendingTicketsByScheduleId(eq(schedule.getId().toString()), any(Instant.class))).thenReturn(0L);
+        when(redisTicketHoldService.holdTickets(schedule.getId().toString(), "STANDARD", 2, user.getId()))
                 .thenReturn(new HoldResult(true, "hold-123", "held", Instant.parse("2026-05-31T15:15:00Z")));
+        when(bookingRepository.save(any(Booking.class))).thenAnswer(invocation -> {
+            Booking booking = invocation.getArgument(0);
+            setId(booking, UUID.randomUUID());
+            return booking;
+        });
 
-        CreateBookingResponse response = bookingService.createBooking(validRequest("STANDARD", 2), "user@example.com");
+        CreateBookingResponse response = bookingService.createBooking(validRequest(schedule, "STANDARD", 2), "user@example.com");
 
-        assertThat(response.status()).isEqualTo(BookingStatus.PROCESSING);
+        assertThat(response.status()).isEqualTo(BookingStatus.PENDING_PAYMENT);
+        assertThat(response.bookingId()).isNotNull();
         assertThat(response.holdId()).isEqualTo("hold-123");
-        assertThat(response.message()).isEqualTo("Booking request is being processed.");
-        org.mockito.ArgumentCaptor<BookingMessage> messageCaptor = org.mockito.ArgumentCaptor.forClass(BookingMessage.class);
-        verify(bookingPublisher).publishCreateBooking(messageCaptor.capture());
-        assertThat(messageCaptor.getValue().unitPrice()).isEqualByComparingTo("2000");
-        assertThat(messageCaptor.getValue().totalAmount()).isEqualByComparingTo("4000");
-        verify(bookingRepository, never()).save(any());
+        assertThat(response.message()).isEqualTo("Booking created and awaiting payment.");
+        ArgumentCaptor<Booking> bookingCaptor = ArgumentCaptor.forClass(Booking.class);
+        verify(redisTicketHoldService).initializeInventory(schedule.getId().toString(), "STANDARD", 10);
+        verify(bookingRepository).save(bookingCaptor.capture());
+        assertThat(bookingCaptor.getValue().getShowName()).isEqualTo(schedule.getShow().getTitle());
+        assertThat(bookingCaptor.getValue().getShowDate()).isEqualTo(schedule.getStartTime().toLocalDate());
+        assertThat(bookingCaptor.getValue().getUnitPrice()).isEqualByComparingTo("2000");
+        assertThat(bookingCaptor.getValue().getTotalAmount()).isEqualByComparingTo("4000");
+        verify(bookingPublisher, never()).publishCreateBooking(any());
     }
 
     @Test
-    void createBookingUsesVndPricesAtLeastTwoThousandForSupportedTicketTypes() {
+    void createBookingIgnoresTamperedFrontendShowFieldsAndUsesTicketTypePrice() {
         User user = user("user@example.com");
+        ShowSchedule schedule = schedule();
         when(userRepository.findByEmailIgnoreCase("user@example.com")).thenReturn(Optional.of(user));
-        when(redisTicketHoldService.holdTickets(eq("schedule-1"), any(), any(Integer.class), eq(user.getId())))
+        when(scheduleRepository.findById(schedule.getId())).thenReturn(Optional.of(schedule));
+        when(bookingRepository.countPaidTicketsByScheduleId(schedule.getId().toString())).thenReturn(1L);
+        when(bookingRepository.countNonExpiredPendingTicketsByScheduleId(eq(schedule.getId().toString()), any(Instant.class))).thenReturn(2L);
+        when(redisTicketHoldService.holdTickets(eq(schedule.getId().toString()), any(), any(Integer.class), eq(user.getId())))
                 .thenReturn(new HoldResult(true, "hold-123", "held", Instant.parse("2026-05-31T15:15:00Z")));
+        when(bookingRepository.save(any(Booking.class))).thenAnswer(invocation -> invocation.getArgument(0));
 
-        bookingService.createBooking(validRequest("STANDARD", 2), "user@example.com");
-        bookingService.createBooking(validRequest("VIP", 2), "user@example.com");
-        bookingService.createBooking(validRequest("FAMILY", 2), "user@example.com");
+        CreateBookingRequest tampered = new CreateBookingRequest(
+                schedule.getShow().getId().toString(),
+                schedule.getId().toString(),
+                "Cheap Fake Show",
+                LocalDate.now().plusYears(5),
+                "VIP Experience",
+                2
+        );
 
-        ArgumentCaptor<BookingMessage> messageCaptor = ArgumentCaptor.forClass(BookingMessage.class);
-        verify(bookingPublisher, times(3)).publishCreateBooking(messageCaptor.capture());
+        bookingService.createBooking(tampered, "user@example.com");
 
-        assertThat(messageCaptor.getAllValues())
-                .extracting(BookingMessage::unitPrice)
-                .allSatisfy((unitPrice) -> assertThat(unitPrice).isGreaterThanOrEqualTo(new BigDecimal("2000")));
-        assertThat(messageCaptor.getAllValues())
-                .extracting((message) -> message.totalAmount())
-                .containsExactly(new BigDecimal("4000"), new BigDecimal("10000"), new BigDecimal("6000"));
+        ArgumentCaptor<Booking> bookingCaptor = ArgumentCaptor.forClass(Booking.class);
+        verify(redisTicketHoldService).initializeInventory(schedule.getId().toString(), "VIP", 7);
+        verify(bookingRepository).save(bookingCaptor.capture());
+        assertThat(bookingCaptor.getValue().getShowName()).isEqualTo("Aqua Show");
+        assertThat(bookingCaptor.getValue().getShowDate()).isEqualTo(schedule.getStartTime().toLocalDate());
+        assertThat(bookingCaptor.getValue().getUnitPrice()).isEqualByComparingTo("5000");
+        assertThat(bookingCaptor.getValue().getTotalAmount()).isEqualByComparingTo("10000");
+    }
+
+    @Test
+    void createBookingFamilyQuantityTwoUsesSixThousandTotal() {
+        User user = user("user@example.com");
+        ShowSchedule schedule = schedule();
+        when(userRepository.findByEmailIgnoreCase("user@example.com")).thenReturn(Optional.of(user));
+        when(scheduleRepository.findById(schedule.getId())).thenReturn(Optional.of(schedule));
+        when(bookingRepository.countPaidTicketsByScheduleId(schedule.getId().toString())).thenReturn(0L);
+        when(bookingRepository.countNonExpiredPendingTicketsByScheduleId(eq(schedule.getId().toString()), any(Instant.class))).thenReturn(0L);
+        when(redisTicketHoldService.holdTickets(schedule.getId().toString(), "FAMILY", 2, user.getId()))
+                .thenReturn(new HoldResult(true, "hold-family", "held", Instant.now().plusSeconds(900)));
+        when(bookingRepository.save(any(Booking.class))).thenAnswer(invocation -> invocation.getArgument(0));
+
+        bookingService.createBooking(validRequest(schedule, "Family Pass", 2), "user@example.com");
+
+        ArgumentCaptor<Booking> bookingCaptor = ArgumentCaptor.forClass(Booking.class);
+        verify(bookingRepository).save(bookingCaptor.capture());
+        assertThat(bookingCaptor.getValue().getTicketType()).isEqualTo("FAMILY");
+        assertThat(bookingCaptor.getValue().getUnitPrice()).isEqualByComparingTo("3000");
+        assertThat(bookingCaptor.getValue().getTotalAmount()).isEqualByComparingTo("6000");
     }
 
     @Test
@@ -128,7 +179,7 @@ class BookingServiceControllerTest {
         User user = user("user@example.com");
         when(userRepository.findByEmailIgnoreCase("user@example.com")).thenReturn(Optional.of(user));
 
-        assertThatThrownBy(() -> bookingService.createBooking(validRequest("GOLD", 2), "user@example.com"))
+        assertThatThrownBy(() -> bookingService.createBooking(validRequest(schedule(), "GOLD", 2), "user@example.com"))
                 .isInstanceOf(BadRequestException.class)
                 .hasMessageContaining("Unknown ticket type");
 
@@ -137,13 +188,39 @@ class BookingServiceControllerTest {
     }
 
     @Test
+    void createBookingRejectsNonUuidScheduleIdBeforeRepositoryLookup() {
+        User user = user("user@example.com");
+        ShowSchedule schedule = schedule();
+        when(userRepository.findByEmailIgnoreCase("user@example.com")).thenReturn(Optional.of(user));
+        CreateBookingRequest request = new CreateBookingRequest(
+                schedule.getShow().getId().toString(),
+                "SCHEDULE-DEMO-AQUA",
+                schedule.getShow().getTitle(),
+                schedule.getStartTime().toLocalDate(),
+                "STANDARD",
+                1
+        );
+
+        assertThatThrownBy(() -> bookingService.createBooking(request, "user@example.com"))
+                .isInstanceOf(BadRequestException.class)
+                .hasMessage("Schedule ID is invalid");
+
+        verify(scheduleRepository, never()).findById(any(UUID.class));
+        verify(redisTicketHoldService, never()).holdTickets(any(), any(), any(Integer.class), any());
+    }
+
+    @Test
     void createBookingThrowsConflictWhenRedisHoldFails() {
         User user = user("user@example.com");
+        ShowSchedule schedule = schedule();
         when(userRepository.findByEmailIgnoreCase("user@example.com")).thenReturn(Optional.of(user));
-        when(redisTicketHoldService.holdTickets("schedule-1", "VIP", 10, user.getId()))
+        when(scheduleRepository.findById(schedule.getId())).thenReturn(Optional.of(schedule));
+        when(bookingRepository.countPaidTicketsByScheduleId(schedule.getId().toString())).thenReturn(0L);
+        when(bookingRepository.countNonExpiredPendingTicketsByScheduleId(eq(schedule.getId().toString()), any(Instant.class))).thenReturn(0L);
+        when(redisTicketHoldService.holdTickets(schedule.getId().toString(), "VIP", 10, user.getId()))
                 .thenReturn(new HoldResult(false, null, "insufficient", null));
 
-        assertThatThrownBy(() -> bookingService.createBooking(validRequest("VIP", 10), "user@example.com"))
+        assertThatThrownBy(() -> bookingService.createBooking(validRequest(schedule, "VIP", 10), "user@example.com"))
                 .isInstanceOf(ConflictException.class)
                 .hasMessageContaining("Not enough tickets available");
 
@@ -151,18 +228,21 @@ class BookingServiceControllerTest {
     }
 
     @Test
-    void createBookingReleasesHoldWhenRabbitPublishFails() {
+    void createBookingReleasesHoldWhenDatabaseSaveFails() {
         User user = user("user@example.com");
+        ShowSchedule schedule = schedule();
         when(userRepository.findByEmailIgnoreCase("user@example.com")).thenReturn(Optional.of(user));
-        when(redisTicketHoldService.holdTickets("schedule-1", "FAMILY", 2, user.getId()))
+        when(scheduleRepository.findById(schedule.getId())).thenReturn(Optional.of(schedule));
+        when(bookingRepository.countPaidTicketsByScheduleId(schedule.getId().toString())).thenReturn(0L);
+        when(bookingRepository.countNonExpiredPendingTicketsByScheduleId(eq(schedule.getId().toString()), any(Instant.class))).thenReturn(0L);
+        when(redisTicketHoldService.holdTickets(schedule.getId().toString(), "FAMILY", 2, user.getId()))
                 .thenReturn(new HoldResult(true, "hold-123", "held", Instant.parse("2026-05-31T15:15:00Z")));
-        doThrow(new IllegalStateException("rabbit down")).when(bookingPublisher).publishCreateBooking(any());
+        doThrow(new IllegalStateException("db down")).when(bookingRepository).save(any());
 
-        assertThatThrownBy(() -> bookingService.createBooking(validRequest("FAMILY", 2), "user@example.com"))
-                .hasMessageContaining("Booking service is temporarily unavailable");
+        assertThatThrownBy(() -> bookingService.createBooking(validRequest(schedule, "FAMILY", 2), "user@example.com"))
+                .hasMessageContaining("db down");
 
         verify(redisTicketHoldService).releaseHold("hold-123");
-        verify(bookingRepository, never()).save(any());
     }
 
     @Test
@@ -359,28 +439,33 @@ class BookingServiceControllerTest {
     void controllerRejectsUnauthenticatedCreateBooking() {
         com.asms.booking.controller.BookingController controller = new com.asms.booking.controller.BookingController(bookingService);
 
-        assertThatThrownBy(() -> controller.createBooking(null, validRequest("STANDARD", 1)))
+        assertThatThrownBy(() -> controller.createBooking(null, validRequest(schedule(), "STANDARD", 1)))
                 .isInstanceOf(UnauthorizedException.class);
     }
 
     @Test
     void controllerReturnsApiResponseForCreateBooking() {
         User user = user("user@example.com");
+        ShowSchedule schedule = schedule();
         when(userRepository.findByEmailIgnoreCase("user@example.com")).thenReturn(Optional.of(user));
-        when(redisTicketHoldService.holdTickets("schedule-1", "STANDARD", 1, user.getId()))
+        when(scheduleRepository.findById(schedule.getId())).thenReturn(Optional.of(schedule));
+        when(bookingRepository.countPaidTicketsByScheduleId(schedule.getId().toString())).thenReturn(0L);
+        when(bookingRepository.countNonExpiredPendingTicketsByScheduleId(eq(schedule.getId().toString()), any(Instant.class))).thenReturn(0L);
+        when(redisTicketHoldService.holdTickets(schedule.getId().toString(), "STANDARD", 1, user.getId()))
                 .thenReturn(new HoldResult(true, "hold-123", "held", Instant.parse("2026-05-31T15:15:00Z")));
+        when(bookingRepository.save(any(Booking.class))).thenAnswer(invocation -> invocation.getArgument(0));
         com.asms.booking.controller.BookingController controller = new com.asms.booking.controller.BookingController(bookingService);
 
-        ApiResponse<CreateBookingResponse> response = controller.createBooking(user, validRequest("STANDARD", 1));
+        ApiResponse<CreateBookingResponse> response = controller.createBooking(user, validRequest(schedule, "STANDARD", 1));
 
         assertThat(response.success()).isTrue();
-        assertThat(response.data().status()).isEqualTo(BookingStatus.PROCESSING);
+        assertThat(response.data().status()).isEqualTo(BookingStatus.PENDING_PAYMENT);
     }
 
-    private CreateBookingRequest validRequest(String ticketType, int quantity) {
+    private CreateBookingRequest validRequest(ShowSchedule schedule, String ticketType, int quantity) {
         return new CreateBookingRequest(
-                "show-1",
-                "schedule-1",
+                schedule.getShow().getId().toString(),
+                schedule.getId().toString(),
                 "Symphony of Lights",
                 LocalDate.now().plusDays(1),
                 ticketType,
@@ -390,6 +475,21 @@ class BookingServiceControllerTest {
 
     private User user(String email) {
         return new User("Nguyen", "Van A", email, "0909123456", "hashed");
+    }
+
+    private ShowSchedule schedule() {
+        Show show = new Show("Aqua Show", "A show", null, 45);
+        Venue venue = new Venue("Main Pool", "Zone A", 100);
+        ShowSchedule schedule = new ShowSchedule(
+                show,
+                venue,
+                LocalDateTime.now().plusDays(1),
+                LocalDateTime.now().plusDays(1).plusMinutes(45),
+                10,
+                new BigDecimal("7500")
+        );
+        schedule.setStatus(ScheduleStatus.ACTIVE);
+        return schedule;
     }
 
     private Booking booking(User user, String holdId) {

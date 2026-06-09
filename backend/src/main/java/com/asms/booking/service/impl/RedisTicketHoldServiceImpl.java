@@ -27,7 +27,6 @@ public class RedisTicketHoldServiceImpl implements RedisTicketHoldService {
     private static final String INVENTORY_PREFIX = "booking:inventory:";
     private static final String HOLD_PREFIX = "booking:hold:";
     private static final String HELD_PREFIX = "booking:held:";
-    private static final String DEFAULT_TEMPORARY_INVENTORY = "100";
 
     private static final RedisScript<List> HOLD_SCRIPT = new DefaultRedisScript<>(
             """
@@ -91,6 +90,25 @@ public class RedisTicketHoldServiceImpl implements RedisTicketHoldService {
     }
 
     @Override
+    public void initializeInventory(String scheduleId, String ticketType, int availableTickets) {
+        if (availableTickets < 0) {
+            throw new IllegalArgumentException("Available tickets cannot be negative");
+        }
+        String normalizedTicketType = normalizeTicketType(ticketType);
+        try {
+            redisTemplate.opsForValue().set(inventoryKey(scheduleId, normalizedTicketType), String.valueOf(availableTickets));
+        } catch (DataAccessException exception) {
+            log.error(
+                    "Redis ticket inventory initialization failed: scheduleId={}, ticketType={}",
+                    scheduleId,
+                    normalizedTicketType,
+                    exception
+            );
+            throw new TicketHoldServiceUnavailableException("Ticket hold service is temporarily unavailable");
+        }
+    }
+
+    @Override
     public HoldResult holdTickets(String scheduleId, String ticketType, int quantity, UUID userId) {
         String normalizedTicketType = normalizeTicketType(ticketType);
         String holdId = UUID.randomUUID().toString();
@@ -110,7 +128,6 @@ public class RedisTicketHoldServiceImpl implements RedisTicketHoldService {
         );
 
         try {
-            initializeTemporaryInventory(scheduleId, normalizedTicketType);
             List<?> result = redisTemplate.execute(
                     HOLD_SCRIPT,
                     List.of(inventoryKey, holdKey(holdId), heldKey),
@@ -231,11 +248,6 @@ public class RedisTicketHoldServiceImpl implements RedisTicketHoldService {
                 .orElse(false);
     }
 
-    private void initializeTemporaryInventory(String scheduleId, String ticketType) {
-        // TODO: Replace this temporary inventory initialization with TicketInventory module when implemented.
-        redisTemplate.opsForValue().setIfAbsent(inventoryKey(scheduleId, ticketType), DEFAULT_TEMPORARY_INVENTORY);
-    }
-
     private String value(Map<Object, Object> entries, String key) {
         Object value = entries.get(key);
         if (value == null) {
@@ -245,7 +257,7 @@ public class RedisTicketHoldServiceImpl implements RedisTicketHoldService {
     }
 
     private String inventoryKey(String scheduleId, String ticketType) {
-        return INVENTORY_PREFIX + scheduleId + ":" + ticketType;
+        return INVENTORY_PREFIX + scheduleId;
     }
 
     private String holdKey(String holdId) {
@@ -253,7 +265,7 @@ public class RedisTicketHoldServiceImpl implements RedisTicketHoldService {
     }
 
     private String heldKey(String scheduleId, String ticketType) {
-        return HELD_PREFIX + scheduleId + ":" + ticketType;
+        return HELD_PREFIX + scheduleId;
     }
 
     private String normalizeTicketType(String ticketType) {

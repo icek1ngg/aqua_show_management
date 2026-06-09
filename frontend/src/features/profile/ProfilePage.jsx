@@ -15,7 +15,7 @@ const quickActions = [
     icon: 'confirmation_number',
     className: 'text-cyan-700 hover:bg-cyan-50',
     iconClassName: 'bg-cyan-100 text-cyan-700',
-    to: '/bookings/create',
+    to: '/shows',
   },
   {
     label: 'View Available Shows',

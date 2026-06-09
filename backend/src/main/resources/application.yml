@@ -73,13 +73,14 @@ asms:
     base-url: "${BACKEND_BASE_URL:http://localhost:8080}"
   jwt:
     secret: "${JWT_SECRET:YOUR_LOCAL_JWT_SECRET}"
-    expiration-ms: "${JWT_EXPIRATION:3600000}"
+    expiration-ms: "${JWT_EXPIRATION:86400000}"
     refresh-token:
-      short-lived-seconds: "${JWT_REFRESH_SHORT_SECONDS:604800}"
-      remember-me-seconds: "${JWT_REFRESH_REMEMBER_ME_SECONDS:604800}"
+      short-lived-seconds: "${JWT_REFRESH_SHORT_LIVED_SECONDS:86400}"
+      remember-me-seconds: "${JWT_REFRESH_REMEMBER_ME_SECONDS:2592000}"
       cookie-secure: "${JWT_REFRESH_COOKIE_SECURE:false}"
       cookie-same-site: "${JWT_REFRESH_COOKIE_SAME_SITE:Lax}"
   payos:
     client-id: "${PAYOS_CLIENT_ID:}"
     api-key: "${PAYOS_API_KEY:}"
     checksum-key: "${PAYOS_CHECKSUM_KEY:}"
+    allow-unsigned-callbacks: "${PAYOS_ALLOW_UNSIGNED_CALLBACKS:false}"

@@ -37,6 +37,14 @@ public interface BookingRepository extends JpaRepository<Booking, UUID> {
     long countPaidTicketsByScheduleId(@Param("scheduleId") String scheduleId);
 
     @Query("""
+            select coalesce(sum(b.quantity), 0) from Booking b
+            where b.scheduleId = :scheduleId
+              and b.status = com.asms.booking.enums.BookingStatus.PENDING_PAYMENT
+              and b.expiresAt > :now
+            """)
+    long countNonExpiredPendingTicketsByScheduleId(@Param("scheduleId") String scheduleId, @Param("now") Instant now);
+
+    @Query("""
             select b from Booking b
             where (:showId is null or b.showId = :showId)
               and (:scheduleId is null or b.scheduleId = :scheduleId)

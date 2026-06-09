@@ -25,6 +25,7 @@ public final class CatalogDtos {
             String imageUrl,
             String shortDescription,
             Integer durationMinutes,
+            UUID nextScheduleId,
             LocalDateTime nextStartTime,
             String venueName
     ) {

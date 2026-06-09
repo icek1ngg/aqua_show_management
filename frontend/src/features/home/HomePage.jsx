@@ -1,64 +1,13 @@
 import { useEffect, useMemo, useState } from 'react';
 import { Link, useLocation } from 'react-router-dom';
 
+import { buildBookingUrl } from '../../services/bookingService.js';
 import { getShows } from '../../services/showService.js';
 import MainLayout from '../../shared/layouts/MainLayout.jsx';
+import { ticketTypeOptions } from '../../shared/utils/ticketPricing.js';
 
 const fallbackShowImage =
   'https://lh3.googleusercontent.com/aida-public/AB6AXuANv7I9nTUaKmdiA6IfaIaY0YwJUIWoqM0X6m_tgMmcJ71PacmGbCJL7U7jN8rhBXSUuV7fovx9LDsAc6N5PhTyiCp6LssLe6FgDdZmMcwFIlWNhrmPMXPWNaNGaENraIJuHz9U8O5qXFdHXwD12d0tWFF6pkX61XHVJWiPscKVSeVXPJHPLntIinpKKiq48E_jrrE2A6BF6g5CVGhbzwWhTMCs07mHdwovKDWCZJwE9QP5SidUIrVjslByRhoxaZve3By201M-MkjJ';
-
-const featuredShows = [
-  {
-    title: 'Symphony of Lights',
-    description: 'A synchronized masterpiece of light, water, and sound that will leave you breathless.',
-    image:
-      'https://lh3.googleusercontent.com/aida-public/AB6AXuDgtKbX141GIXV28czApt3tHguCUvPKSbRAnFdFAQzlJutKE1EC4vS7jnqAU4kbJta6FkkFLWOG1xo4RFS8AM1MXBGOQlPFZh-FlQEpmZlt5nYB6wUrwlpXP5TSpL1DI7WuOKTisPjwwu6BaEFAPWXD2NGxEfXQvUJmomtpfH0x7egW2U7kxW6h2RZFC6PIb1cpt9NbIPLdOpwlkZgjkBVzNlC3R9onv6_Esbk17K0of4PgvHxDHfAWZoVi41bvelTws71QLVrPMQ',
-    badge: 'Popular',
-    badgeClass: 'bg-[#ff6900] text-white',
-    price: 'from $29',
-  },
-  {
-    title: 'Deep Sea Mystery',
-    description: 'Journey into the abyss and discover the secrets of the ocean in this immersive play.',
-    image:
-      'https://lh3.googleusercontent.com/aida-public/AB6AXuCaDCEPuRXIz-tXX1TXYxFJLqc_NIsXu8w_yLI5ZUwrlr8wnEL8-kgSlFbHHypXmoS8BFV3Nt-uIqfoUBNP3vsNwRpxWltuGVcjFaEYr5i0Jxbq-UGbC8e5wY7oIaDMk2npEmreyGf9rBbp29WokyWvugQKmrBX2PoVJWFeSGUirssyqs6CAB1JREDZCBlv_mFFOq4aPXSDN7RXezaVkV4yhWwjPBXZkL6PwbhHkm0AYogBR_08bBqL0orR0zzGAHByqIypSnGUag',
-    badge: 'New',
-    badgeClass: 'bg-cyan-300 text-slate-950',
-    price: 'from $35',
-  },
-  {
-    title: 'Tropical Splash',
-    description: 'A high-energy daytime parade with water cannons, music, and tropical rhythms.',
-    image:
-      'https://lh3.googleusercontent.com/aida-public/AB6AXuDOdYlgXL4Nwf4AWcGFjApQwu1wTev59cOd_-GZKhZAWO4Iz_zf7Tn8_yeXyi9P-cEDz6PldhiUpJ7j_1kqfhSt3YHIgmEJCtryWfqAghSSeXxzgAUM-pXEtaZhoz6g-0FlaiKz-SMUTjlXf7-QNguIhszVSRUHyFOy4zzsc6qh5RCz4gEwyyuSD5_OrUqMRuq-If6WwHs7nBE7Nwij3GBrdW3JEC77ydu5Az0EctrAsKLg-FkB0ZzurXJq_eCzA4NIrDfQsrmB1A',
-    price: 'from $25',
-  },
-];
-
-const schedules = [
-  {
-    day: '24',
-    month: 'Aug',
-    time: '19:30 PM',
-    note: 'Gate opens 30m early',
-    title: 'Symphony of Lights',
-    venue: 'Main Aquatic Theater',
-    status: 'Available',
-    statusClass: 'bg-emerald-50 text-emerald-600',
-    dotClass: 'bg-emerald-600 animate-pulse',
-  },
-  {
-    day: '24',
-    month: 'Aug',
-    time: '21:00 PM',
-    note: 'Late night performance',
-    title: 'Deep Sea Mystery',
-    venue: 'Grand Arena Pool',
-    status: 'Almost Full',
-    statusClass: 'bg-orange-50 text-[#ff6900]',
-    dotClass: 'bg-[#ff6900]',
-  },
-];
 
 const benefits = [
   {
@@ -125,6 +74,21 @@ function scheduleStatus(show) {
       };
 }
 
+function bookingUrlForShow(show, quantity = 1, ticketType = 'STANDARD') {
+  if (!show?.id || !show?.nextScheduleId || !show?.nextStartTime) {
+    return null;
+  }
+
+  return buildBookingUrl({
+    showId: show.id,
+    scheduleId: show.nextScheduleId,
+    showName: show.title,
+    showDate: String(show.nextStartTime).slice(0, 10),
+    quantity,
+    ticketType,
+  });
+}
+
 function normalizeSectionId(sectionId) {
   if (sectionId === 'schedules') {
     return 'schedule';
@@ -161,6 +125,10 @@ export default function HomePage() {
   const [isLoadingShows, setIsLoadingShows] = useState(true);
   const [showsError, setShowsError] = useState('');
   const [reloadKey, setReloadKey] = useState(0);
+  const [selectedShowId, setSelectedShowId] = useState('');
+  const [selectedDate, setSelectedDate] = useState('');
+  const [ticketQuantity, setTicketQuantity] = useState(1);
+  const [ticketType, setTicketType] = useState('STANDARD');
 
   useEffect(() => {
     const sectionId = normalizeSectionId(
@@ -241,18 +209,32 @@ export default function HomePage() {
   const upcomingSchedules = useMemo(
     () =>
       shows
-        .filter((show) => show.nextStartTime)
+        .filter((show) => show.nextScheduleId && show.nextStartTime)
         .map((show) => ({ ...show, formattedSchedule: formatScheduleDate(show.nextStartTime) }))
         .filter((show) => show.formattedSchedule)
         .sort((first, second) => new Date(first.nextStartTime).getTime() - new Date(second.nextStartTime).getTime())
         .slice(0, 3),
     [shows],
   );
+  const firstBookableShow = upcomingSchedules.find((show) => show.nextScheduleId);
+  const selectedShow = shows.find((show) => show.id === selectedShowId);
+  const selectedBookingUrl = selectedShow && selectedDate
+    ? buildBookingUrl({
+        showId: selectedShow.id,
+        scheduleId: selectedShow.nextScheduleId,
+        showName: selectedShow.title,
+        showDate: selectedDate,
+        quantity: ticketQuantity,
+        ticketType,
+      })
+    : null;
+  const heroBookingUrl = bookingUrlForShow(firstBookableShow);
 
-  const handleShowSearch = (event) => {
-    event.preventDefault();
-    setCurrentPage(0);
-    setSubmittedKeyword(keyword.trim());
+  const handleBookingShowChange = (event) => {
+    const nextShowId = event.target.value;
+    const nextShow = shows.find((show) => show.id === nextShowId);
+    setSelectedShowId(nextShowId);
+    setSelectedDate(nextShow?.nextStartTime ? String(nextShow.nextStartTime).slice(0, 10) : '');
   };
 
   const clearShowSearch = () => {
@@ -286,7 +268,7 @@ export default function HomePage() {
               Experience the harmony of light, water, and music.
             </p>
             <div className="mt-10 flex flex-wrap gap-4">
-              <Link className="rounded-full bg-gradient-to-r from-cyan-500 to-teal-700 px-10 py-4 font-bold text-white shadow-2xl shadow-cyan-950/30 transition hover:-translate-y-0.5 hover:shadow-cyan-950/40 active:translate-y-0" to="/bookings/create">
+              <Link className="rounded-full bg-gradient-to-r from-cyan-500 to-teal-700 px-10 py-4 font-bold text-white shadow-2xl shadow-cyan-950/30 transition hover:-translate-y-0.5 hover:shadow-cyan-950/40 active:translate-y-0" to={heroBookingUrl || '/shows'}>
                 Book Tickets
               </Link>
               <button className="rounded-full border-2 border-white/30 bg-white/10 px-10 py-4 font-bold text-white backdrop-blur-md transition hover:bg-white/20" type="button" onClick={() => scrollToSection('shows')}>
@@ -305,9 +287,13 @@ export default function HomePage() {
                 <span className="material-symbols-outlined text-cyan-700">water_drop</span>
                 Select Show
               </span>
-              <select className="w-full rounded-full border border-cyan-100 bg-cyan-50/70 px-5 py-3 text-slate-700 focus:border-cyan-400 focus:outline-none focus:ring-2 focus:ring-cyan-200">
-                <option>{isLoadingShows ? 'Loading active shows...' : 'Choose an active show'}</option>
-                {shows.map((show) => (
+              <select
+                className="w-full rounded-full border border-cyan-100 bg-cyan-50/70 px-5 py-3 text-slate-700 focus:border-cyan-400 focus:outline-none focus:ring-2 focus:ring-cyan-200"
+                value={selectedShowId}
+                onChange={handleBookingShowChange}
+              >
+                <option value="">{isLoadingShows ? 'Loading active shows...' : 'Choose an active show'}</option>
+                {shows.filter((show) => show.nextScheduleId).map((show) => (
                   <option key={show.id} value={show.id}>
                     {show.title}
                   </option>
@@ -320,7 +306,12 @@ export default function HomePage() {
                 <span className="material-symbols-outlined text-cyan-700">calendar_month</span>
                 Select Date
               </span>
-              <input className="w-full rounded-full border border-cyan-100 bg-cyan-50/70 px-5 py-3 text-slate-700 focus:border-cyan-400 focus:outline-none focus:ring-2 focus:ring-cyan-200" type="date" />
+              <input
+                className="w-full rounded-full border border-cyan-100 bg-cyan-50/70 px-5 py-3 text-slate-700 focus:border-cyan-400 focus:outline-none focus:ring-2 focus:ring-cyan-200"
+                type="date"
+                value={selectedDate}
+                readOnly
+              />
             </label>
 
             <label className="space-y-2">
@@ -328,7 +319,14 @@ export default function HomePage() {
                 <span className="material-symbols-outlined text-cyan-700">numbers</span>
                 Quantity
               </span>
-              <input className="w-full rounded-full border border-cyan-100 bg-cyan-50/70 px-5 py-3 text-slate-700 focus:border-cyan-400 focus:outline-none focus:ring-2 focus:ring-cyan-200" min="1" placeholder="Ticket quantity" type="number" />
+              <input
+                className="w-full rounded-full border border-cyan-100 bg-cyan-50/70 px-5 py-3 text-slate-700 focus:border-cyan-400 focus:outline-none focus:ring-2 focus:ring-cyan-200"
+                min="1"
+                max="10"
+                type="number"
+                value={ticketQuantity}
+                onChange={(event) => setTicketQuantity(Math.min(10, Math.max(1, Number(event.target.value) || 1)))}
+              />
             </label>
 
             <label className="space-y-2">
@@ -336,18 +334,31 @@ export default function HomePage() {
                 <span className="material-symbols-outlined text-cyan-700">confirmation_number</span>
                 Ticket Type
               </span>
-              <select className="w-full rounded-full border border-cyan-100 bg-cyan-50/70 px-5 py-3 text-slate-700 focus:border-cyan-400 focus:outline-none focus:ring-2 focus:ring-cyan-200">
-                <option>Standard Entry</option>
-                <option>VIP Experience</option>
-                <option>Family Pass</option>
+              <select
+                className="w-full rounded-full border border-cyan-100 bg-cyan-50/70 px-5 py-3 text-slate-700 focus:border-cyan-400 focus:outline-none focus:ring-2 focus:ring-cyan-200"
+                value={ticketType}
+                onChange={(event) => setTicketType(event.target.value)}
+              >
+                {ticketTypeOptions.map((option) => (
+                  <option key={option.value} value={option.value}>
+                    {option.label}
+                  </option>
+                ))}
               </select>
             </label>
           </div>
 
-          <Link className="flex w-full items-center justify-center gap-2 whitespace-nowrap rounded-full bg-cyan-700 px-10 py-4 font-bold text-white shadow-lg shadow-cyan-900/20 transition hover:bg-cyan-800 md:w-auto" to="/bookings/create">
-            <span className="material-symbols-outlined">search</span>
-            Search Tickets
-          </Link>
+          {selectedBookingUrl ? (
+            <Link className="flex w-full items-center justify-center gap-2 whitespace-nowrap rounded-full bg-cyan-700 px-10 py-4 font-bold text-white shadow-lg shadow-cyan-900/20 transition hover:bg-cyan-800 md:w-auto" to={selectedBookingUrl}>
+              <span className="material-symbols-outlined">search</span>
+              Search Tickets
+            </Link>
+          ) : (
+            <button className="flex w-full cursor-not-allowed items-center justify-center gap-2 whitespace-nowrap rounded-full bg-slate-300 px-10 py-4 font-bold text-slate-600 md:w-auto" disabled type="button">
+              <span className="material-symbols-outlined">search</span>
+              Search Tickets
+            </button>
+          )}
         </div>
       </div>
 
@@ -542,7 +553,7 @@ export default function HomePage() {
                     <span className={`h-2 w-2 rounded-full ${status.dotClass}`} />
                     {status.label}
                   </span>
-                  <Link className="rounded-full bg-cyan-700 px-8 py-3.5 font-bold text-white shadow-md transition hover:bg-cyan-800" to={`/shows/${schedule.id}`}>
+                  <Link className="rounded-full bg-cyan-700 px-8 py-3.5 font-bold text-white shadow-md transition hover:bg-cyan-800" to={bookingUrlForShow(schedule)}>
                     Book Now
                   </Link>
                 </div>
@@ -572,7 +583,7 @@ export default function HomePage() {
                 Family Bundle
               </h3>
               <p className="max-w-sm text-lg text-white/80">Get 4 tickets for the price of 3 plus free snacks and drinks for the kids.</p>
-              <Link className="mt-4 block w-fit rounded-full bg-yellow-300 px-10 py-4 font-black text-slate-950 transition hover:shadow-xl active:scale-95" to="/bookings/create">
+              <Link className="mt-4 block w-fit rounded-full bg-yellow-300 px-10 py-4 font-black text-slate-950 transition hover:shadow-xl active:scale-95" to="/shows">
                 Grab Offer
               </Link>
             </div>
@@ -592,7 +603,7 @@ export default function HomePage() {
                 Early Access
               </h3>
               <p className="max-w-sm text-lg text-white/80">Enjoy unlimited entries and priority seating for all premium shows this season.</p>
-              <Link className="mt-4 block w-fit rounded-full bg-white px-10 py-4 font-black text-cyan-800 transition hover:shadow-xl active:scale-95" to="/bookings/create">
+              <Link className="mt-4 block w-fit rounded-full bg-white px-10 py-4 font-black text-cyan-800 transition hover:shadow-xl active:scale-95" to="/shows">
                 Explore Perks
               </Link>
             </div>

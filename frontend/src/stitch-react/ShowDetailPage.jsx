@@ -1,8 +1,10 @@
 import { useEffect, useMemo, useState } from 'react';
 import { Link, useParams } from 'react-router-dom';
 
+import { buildBookingUrl } from '../services/bookingService.js';
 import { getShowDetail, getShowSchedules } from '../services/showService.js';
 import MainLayout from '../shared/layouts/MainLayout.jsx';
+import { formatCurrency, getTicketTypePrice } from '../shared/utils/ticketPricing.js';
 
 const fallbackShowImage =
   'https://lh3.googleusercontent.com/aida-public/AB6AXuANv7I9nTUaKmdiA6IfaIaY0YwJUIWoqM0X6m_tgMmcJ71PacmGbCJL7U7jN8rhBXSUuV7fovx9LDsAc6N5PhTyiCp6LssLe6FgDdZmMcwFIlWNhrmPMXPWNaNGaENraIJuHz9U8O5qXFdHXwD12d0tWFF6pkX61XHVJWiPscKVSeVXPJHPLntIinpKKiq48E_jrrE2A6BF6g5CVGhbzwWhTMCs07mHdwovKDWCZJwE9QP5SidUIrVjslByRhoxaZve3By201M-MkjJ';
@@ -55,53 +57,48 @@ function formatTimeRange(startTime, endTime) {
   return `${start.toLocaleTimeString('en-US', { hour: '2-digit', minute: '2-digit' })} - ${end.toLocaleTimeString('en-US', { hour: '2-digit', minute: '2-digit' })}`;
 }
 
-function formatPrice(value) {
-  const amount = Number(value);
-
-  if (!Number.isFinite(amount)) {
-    return 'Price TBA';
-  }
-
-  return new Intl.NumberFormat('en-US', {
-    style: 'currency',
-    currency: 'USD',
-    maximumFractionDigits: amount % 1 === 0 ? 0 : 2,
-  }).format(amount);
-}
-
 function dateParam(value) {
   if (!value) {
     return '';
   }
 
-  const date = new Date(value);
-  if (Number.isNaN(date.getTime())) {
+  const datePart = String(value).slice(0, 10);
+  if (!/^\d{4}-\d{2}-\d{2}$/.test(datePart)) {
     return '';
   }
 
-  return date.toISOString().slice(0, 10);
+  return datePart;
 }
 
 function bookingUrl(show, schedule) {
-  const params = new URLSearchParams({
+  return buildBookingUrl({
     showId: show.id,
     scheduleId: schedule.id,
-    show: show.title,
-    date: dateParam(schedule.startTime),
+    showName: show.title,
+    showDate: dateParam(schedule.startTime),
     quantity: '1',
-    ticketType: 'Standard Entry',
+    ticketType: 'STANDARD',
   });
-
-  return `/bookings/create?${params.toString()}`;
 }
 
 function scheduleAvailability(schedule) {
   const availableTickets = Number(schedule.availableTickets);
+  const startTime = schedule.startTime ? new Date(schedule.startTime) : null;
+
+  if (!startTime || Number.isNaN(startTime.getTime()) || startTime.getTime() <= Date.now() + 30 * 60 * 1000) {
+    return {
+      label: 'Booking closed',
+      isUnavailable: true,
+      buttonLabel: 'Booking Closed',
+      className: 'text-on-surface-variant font-semibold',
+    };
+  }
 
   if (!Number.isFinite(availableTickets)) {
     return {
       label: 'Availability TBA',
-      isSoldOut: false,
+      isUnavailable: false,
+      buttonLabel: 'Book Now',
       className: 'text-on-surface-variant',
     };
   }
@@ -109,14 +106,16 @@ function scheduleAvailability(schedule) {
   if (availableTickets <= 0) {
     return {
       label: 'Sold out',
-      isSoldOut: true,
+      isUnavailable: true,
+      buttonLabel: 'Sold Out',
       className: 'text-error font-bold italic',
     };
   }
 
   return {
     label: `${availableTickets} tickets left`,
-    isSoldOut: false,
+    isUnavailable: false,
+    buttonLabel: 'Book Now',
     className: 'text-secondary font-semibold',
   };
 }
@@ -350,10 +349,10 @@ export default function ShowDetailPage() {
                       const availability = scheduleAvailability(schedule);
 
                       return (
-                        <div className={`group rounded-xl border border-outline-variant/30 bg-surface-container-lowest p-unit-md shadow-sm transition-all hover:shadow-md ${availability.isSoldOut ? 'opacity-70' : ''}`} key={schedule.id}>
+                        <div className={`group rounded-xl border border-outline-variant/30 bg-surface-container-lowest p-unit-md shadow-sm transition-all hover:shadow-md ${availability.isUnavailable ? 'opacity-70' : ''}`} key={schedule.id}>
                           <div className="mb-unit-md flex items-start justify-between gap-unit-md">
                             <div className="flex flex-col">
-                              <span className={`font-headline-md ${availability.isSoldOut ? 'text-outline' : 'text-primary'}`}>{formatTimeRange(schedule.startTime, schedule.endTime)}</span>
+                              <span className={`font-headline-md ${availability.isUnavailable ? 'text-outline' : 'text-primary'}`}>{formatTimeRange(schedule.startTime, schedule.endTime)}</span>
                               <span className="mt-1 flex items-center gap-1 text-label-md font-label-md text-on-surface-variant">
                                 <span className="material-symbols-outlined text-[14px]">event</span>
                                 {formatDateTime(schedule.startTime)}
@@ -364,8 +363,8 @@ export default function ShowDetailPage() {
                               </span>
                             </div>
                             <div className="text-right">
-                              <span className="font-headline-md text-on-surface">{formatPrice(schedule.price)}</span>
-                              <span className="block text-label-md font-label-md text-outline">per ticket</span>
+                              <span className="font-headline-md text-on-surface">{formatCurrency(getTicketTypePrice('STANDARD'))}</span>
+                              <span className="block text-label-md font-label-md text-outline">standard ticket</span>
                             </div>
                           </div>
 
@@ -374,13 +373,13 @@ export default function ShowDetailPage() {
                               <span className="text-label-md font-label-md text-outline">Available</span>
                               <span className={`text-body-md ${availability.className}`}>{availability.label}</span>
                             </div>
-                            {availability.isSoldOut ? (
+                            {availability.isUnavailable ? (
                               <button className="cursor-not-allowed rounded-full bg-surface-variant px-6 py-2 font-button text-button text-on-surface-variant" disabled type="button">
-                                Sold Out
+                                {availability.buttonLabel}
                               </button>
                             ) : (
                               <Link className="rounded-full bg-primary px-6 py-2 font-button text-button text-on-primary transition hover:opacity-90" to={bookingUrl(show, schedule)}>
-                                Book Ticket
+                                Book Now
                               </Link>
                             )}
                           </div>
