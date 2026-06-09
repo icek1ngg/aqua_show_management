@@ -282,44 +282,84 @@ function ResultModal({ result, onScanNext }) {
   }
 
   const style = resultStyles[result.result] || resultStyles.INVALID_QR;
+  const isSuccess = result.result === 'SUCCESS';
+  const isWarning = result.result === 'ALREADY_USED';
+  const tone = isSuccess
+    ? {
+        accent: 'text-emerald-700',
+        icon: 'bg-emerald-100 text-emerald-700 ring-emerald-50',
+        badge: 'bg-emerald-100 text-emerald-700',
+        border: 'border-emerald-200/70',
+        glow: 'shadow-[0_24px_70px_rgba(5,150,105,0.24)]',
+      }
+    : isWarning
+      ? {
+          accent: 'text-[#a43c12]',
+          icon: 'bg-yellow-100 text-[#a43c12] ring-yellow-50',
+          badge: 'bg-yellow-100 text-[#a43c12]',
+          border: 'border-yellow-200/70',
+          glow: 'shadow-[0_24px_70px_rgba(234,179,8,0.2)]',
+        }
+      : {
+          accent: 'text-red-700',
+          icon: 'bg-red-100 text-red-700 ring-red-50',
+          badge: 'bg-red-100 text-red-700',
+          border: 'border-red-200/70',
+          glow: 'shadow-[0_24px_70px_rgba(220,38,38,0.2)]',
+        };
+  const resultBadge = isSuccess ? 'VALIDATED' : isWarning ? 'USED' : 'REJECTED';
+  const resultTime = result.checkedInAt || result.attemptedAt;
+
   return (
-    <div className="fixed inset-0 z-50 flex items-center justify-center bg-slate-950/70 p-4 backdrop-blur-sm" role="dialog" aria-modal="true" aria-labelledby="scan-result-title">
-      <section className={`max-h-[92vh] w-full max-w-xl overflow-y-auto rounded-[2rem] border p-6 shadow-2xl sm:p-8 ${style.className}`}>
-        <div className="text-center">
-          <span className="mx-auto flex h-20 w-20 items-center justify-center rounded-full bg-white/90 shadow-sm">
-            <span className="material-symbols-outlined !text-5xl" aria-hidden="true">{style.icon}</span>
+    <div className="fixed inset-0 z-50 flex items-center justify-center overflow-y-auto bg-black/15 p-4 backdrop-blur-[2px] sm:p-6" role="dialog" aria-modal="true" aria-labelledby="scan-result-title" aria-describedby="scan-result-message">
+      <section className={`relative max-h-[92vh] w-full max-w-xl overflow-y-auto rounded-[2rem] border bg-white/95 p-6 backdrop-blur-xl sm:p-9 ${tone.border} ${tone.glow}`}>
+        <span className="pointer-events-none absolute -right-6 -top-7 h-28 w-28 rounded-full bg-primary-container/15" aria-hidden="true" />
+        <span className="pointer-events-none absolute -left-4 top-28 h-12 w-12 rounded-full bg-primary-fixed/25" aria-hidden="true" />
+        <span className="pointer-events-none absolute bottom-24 right-8 h-7 w-7 rounded-full bg-soft-turquoise/45" aria-hidden="true" />
+
+        <div className="relative text-center">
+          <span className={`mx-auto flex h-24 w-24 items-center justify-center rounded-full shadow-sm ring-8 ${tone.icon}`}>
+            <span className="material-symbols-outlined !text-6xl" aria-hidden="true">{style.icon}</span>
           </span>
-          <h2 id="scan-result-title" className="mt-5 text-3xl font-black sm:text-4xl">{style.title}</h2>
-          <p className="mt-3 text-lg font-black">{style.message}</p>
+          <span className={`mt-7 inline-flex rounded-full px-4 py-1.5 text-xs font-black uppercase tracking-[0.18em] ${tone.badge}`}>
+            {resultBadge}
+          </span>
+          <h2 id="scan-result-title" className={`mt-4 text-3xl font-black tracking-tight sm:text-4xl ${tone.accent}`}>{style.title}</h2>
+          <p id="scan-result-message" className="mx-auto mt-3 max-w-md text-base font-semibold leading-7 text-on-surface-variant">{style.message}</p>
+
+          <dl className="mt-7 grid grid-cols-1 gap-3 rounded-3xl border border-outline-variant/30 bg-surface-container-low/90 p-5 text-left text-on-surface sm:grid-cols-2">
+            <div className="rounded-2xl bg-white/80 p-4">
+              <dt className="text-xs font-black uppercase tracking-wider text-on-surface-variant">Show</dt>
+              <dd className="mt-1 font-black">{result.show?.title || 'N/A'}</dd>
+            </div>
+            <div className="rounded-2xl bg-white/80 p-4">
+              <dt className="text-xs font-black uppercase tracking-wider text-on-surface-variant">Venue</dt>
+              <dd className="mt-1 font-black">{result.show?.venueName || 'N/A'}</dd>
+            </div>
+            <div className="rounded-2xl bg-white/80 p-4">
+              <dt className="text-xs font-black uppercase tracking-wider text-on-surface-variant">Booking status</dt>
+              <dd className="mt-1 font-black">{result.booking?.status || 'N/A'}</dd>
+            </div>
+            <div className="rounded-2xl bg-white/80 p-4">
+              <dt className="text-xs font-black uppercase tracking-wider text-on-surface-variant">Ticket status</dt>
+              <dd className="mt-1 font-black">{result.ticket?.status || 'N/A'}</dd>
+            </div>
+            <div className="rounded-2xl bg-white/80 p-4 sm:col-span-2">
+              <dt className="text-xs font-black uppercase tracking-wider text-on-surface-variant">{isSuccess ? 'Check-in time' : 'Attempt time'}</dt>
+              <dd className="mt-1 font-black">{formatDateTime(resultTime)}</dd>
+            </div>
+          </dl>
+
+          <button
+            autoFocus
+            className="mt-7 flex min-h-14 w-full items-center justify-center gap-2 rounded-full bg-gradient-to-r from-primary to-primary-container px-6 py-4 text-lg font-black text-white shadow-[0_12px_28px_rgba(0,105,107,0.24)] transition hover:-translate-y-0.5 hover:shadow-[0_16px_34px_rgba(0,105,107,0.3)] focus:outline-none focus:ring-4 focus:ring-primary-fixed/60"
+            onClick={onScanNext}
+            type="button"
+          >
+            <span className="material-symbols-outlined" aria-hidden="true">qr_code_scanner</span>
+            Scan Next
+          </button>
         </div>
-
-        <dl className="mt-7 grid grid-cols-1 gap-3 rounded-2xl bg-white/85 p-5 text-slate-700 sm:grid-cols-2">
-          <div>
-            <dt className="text-xs font-black uppercase tracking-wider text-slate-400">Show</dt>
-            <dd className="mt-1 font-black">{result.show?.title || 'N/A'}</dd>
-          </div>
-          <div>
-            <dt className="text-xs font-black uppercase tracking-wider text-slate-400">Venue</dt>
-            <dd className="mt-1 font-black">{result.show?.venueName || 'N/A'}</dd>
-          </div>
-          <div>
-            <dt className="text-xs font-black uppercase tracking-wider text-slate-400">Booking status</dt>
-            <dd className="mt-1 font-black">{result.booking?.status || 'N/A'}</dd>
-          </div>
-          <div>
-            <dt className="text-xs font-black uppercase tracking-wider text-slate-400">Ticket status</dt>
-            <dd className="mt-1 font-black">{result.ticket?.status || 'N/A'}</dd>
-          </div>
-          <div className="sm:col-span-2">
-            <dt className="text-xs font-black uppercase tracking-wider text-slate-400">Check-in time</dt>
-            <dd className="mt-1 font-black">{formatDateTime(result.checkedInAt)}</dd>
-          </div>
-        </dl>
-
-        <button className="mt-7 flex min-h-14 w-full items-center justify-center gap-2 rounded-full bg-slate-950 px-6 py-4 text-lg font-black text-white transition hover:bg-slate-800" onClick={onScanNext} type="button">
-          <span className="material-symbols-outlined" aria-hidden="true">qr_code_scanner</span>
-          Scan Next
-        </button>
       </section>
     </div>
   );

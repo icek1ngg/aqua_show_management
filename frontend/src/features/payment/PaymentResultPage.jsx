@@ -71,6 +71,7 @@ export default function PaymentResultPage() {
   const [booking, setBooking] = useState(null);
   const [error, setError] = useState('');
   const [ticketsTimedOut, setTicketsTimedOut] = useState(false);
+  const [successPopupDismissed, setSuccessPopupDismissed] = useState(false);
   const pollingStartedAtRef = useRef(Date.now());
   const pollTimerRef = useRef(null);
   const mountedRef = useRef(true);
@@ -177,6 +178,7 @@ export default function PaymentResultPage() {
   useEffect(() => {
     mountedRef.current = true;
     pollingStartedAtRef.current = Date.now();
+    setSuccessPopupDismissed(false);
     setResultState(resultStates.VERIFYING_PAYMENT);
     checkBooking();
 
@@ -211,46 +213,65 @@ export default function PaymentResultPage() {
             </StateCard>
           ) : null}
 
-          {successState ? (
-            <div className="fixed inset-0 z-50 flex items-center justify-center bg-slate-950/60 p-4 backdrop-blur-sm" role="dialog" aria-modal="true" aria-labelledby="payment-success-title">
-              <section className="w-full max-w-lg rounded-[2rem] border border-emerald-200 bg-white p-7 text-center shadow-2xl sm:p-9">
-                <span className="mx-auto flex h-20 w-20 items-center justify-center rounded-full bg-emerald-100 text-emerald-700">
-                  <span className="material-symbols-outlined !text-5xl" aria-hidden="true">verified</span>
-                </span>
-                <h1 id="payment-success-title" className="mt-5 text-3xl font-black text-slate-950">Payment successful!</h1>
+          {successState && !successPopupDismissed ? (
+            <div className="fixed inset-0 z-50 flex items-center justify-center overflow-y-auto bg-black/15 p-4 backdrop-blur-[2px] sm:p-6" role="dialog" aria-modal="true" aria-labelledby="payment-success-title" aria-describedby="payment-success-message">
+              <section className="relative max-h-[92vh] w-full max-w-[30rem] overflow-y-auto rounded-[2rem] border border-white/70 bg-white/95 p-6 text-center shadow-[0_24px_70px_rgba(0,206,209,0.28)] backdrop-blur-xl sm:p-10">
+                <span className="pointer-events-none absolute -right-5 -top-6 h-24 w-24 rounded-full bg-primary-container/15" aria-hidden="true" />
+                <span className="pointer-events-none absolute -left-3 top-24 h-10 w-10 rounded-full bg-primary-fixed/30" aria-hidden="true" />
+                <span className="pointer-events-none absolute bottom-28 right-7 h-6 w-6 rounded-full bg-soft-turquoise/45" aria-hidden="true" />
 
-                {resultState === resultStates.PAYMENT_SUCCESS_TICKETS_PROCESSING && !ticketsTimedOut ? (
-                  <p className="mt-5 rounded-2xl bg-cyan-50 px-5 py-4 font-semibold leading-7 text-cyan-800">
-                    Payment was successful. Your ticket is being prepared.
-                  </p>
-                ) : null}
+                <div className="relative">
+                  <span className="mx-auto flex h-24 w-24 items-center justify-center rounded-full bg-emerald-100 text-emerald-700 shadow-[0_14px_35px_rgba(5,150,105,0.22)] ring-8 ring-emerald-50">
+                    <span className="material-symbols-outlined !text-6xl" aria-hidden="true">verified</span>
+                  </span>
+                  <span className="mt-7 inline-flex rounded-full bg-emerald-100 px-4 py-1.5 text-xs font-black uppercase tracking-[0.18em] text-emerald-700">
+                    Payment confirmed
+                  </span>
+                  <h1 id="payment-success-title" className="mt-4 text-3xl font-black tracking-tight text-on-surface sm:text-4xl">Payment successful!</h1>
 
-                {resultState === resultStates.PAYMENT_SUCCESS_TICKETS_READY ? (
-                  <p className="mt-5 rounded-2xl bg-emerald-50 px-5 py-4 font-semibold leading-7 text-emerald-800">
-                    Your ticket is ready.
-                  </p>
-                ) : null}
+                  <div id="payment-success-message" className="mt-6 rounded-3xl border border-primary-container/20 bg-surface-container-low px-5 py-4">
+                    {resultState === resultStates.PAYMENT_SUCCESS_TICKETS_PROCESSING && !ticketsTimedOut ? (
+                      <p className="font-semibold leading-7 text-on-surface-variant">
+                        Payment was successful. Your ticket is being prepared.
+                      </p>
+                    ) : null}
 
-                {ticketsTimedOut ? (
-                  <p className="mt-5 rounded-2xl bg-yellow-50 px-5 py-4 font-semibold leading-7 text-[#a43c12]">
-                    Payment was successful, but your QR ticket is taking longer than expected to prepare.
-                  </p>
-                ) : null}
+                    {resultState === resultStates.PAYMENT_SUCCESS_TICKETS_READY ? (
+                      <p className="font-semibold leading-7 text-emerald-800">
+                        Your ticket is ready.
+                      </p>
+                    ) : null}
 
-                <div className="mt-7 flex flex-col gap-3">
-                  <button
-                    className="inline-flex min-h-12 items-center justify-center gap-2 rounded-full bg-emerald-600 px-6 py-3 text-base font-black text-white transition hover:bg-emerald-700"
-                    onClick={() => navigate(`/my-tickets?bookingId=${encodeURIComponent(booking?.id || bookingId)}`, { replace: true })}
-                    type="button"
-                  >
-                    <span className="material-symbols-outlined" aria-hidden="true">qr_code_2</span>
-                    View My Ticket
-                  </button>
-                  {ticketsTimedOut ? (
-                    <button className="min-h-12 rounded-full border border-cyan-200 bg-white px-6 py-3 font-black text-cyan-700 hover:bg-cyan-50" onClick={checkAgain} type="button">
-                      Check Again
+                    {ticketsTimedOut ? (
+                      <p className="font-semibold leading-7 text-[#a43c12]">
+                        Payment was successful, but your QR ticket is taking longer than expected to prepare.
+                      </p>
+                    ) : null}
+                  </div>
+
+                  <div className="mt-7 flex flex-col gap-3">
+                    <button
+                      className="inline-flex min-h-14 items-center justify-center gap-2 rounded-full bg-gradient-to-r from-primary to-primary-container px-6 py-4 text-base font-black text-white shadow-[0_12px_28px_rgba(0,105,107,0.24)] transition hover:-translate-y-0.5 hover:shadow-[0_16px_34px_rgba(0,105,107,0.3)] focus:outline-none focus:ring-4 focus:ring-primary-fixed/60"
+                      onClick={() => navigate(`/my-tickets?bookingId=${encodeURIComponent(booking?.id || bookingId)}`, { replace: true })}
+                      type="button"
+                    >
+                      <span className="material-symbols-outlined" aria-hidden="true">qr_code_2</span>
+                      View My Ticket
                     </button>
-                  ) : null}
+                    <button
+                      autoFocus
+                      className="min-h-14 rounded-full border-2 border-primary/25 bg-white/70 px-6 py-4 font-black text-primary transition hover:border-primary/50 hover:bg-primary/5 focus:outline-none focus:ring-4 focus:ring-primary-fixed/60"
+                      onClick={() => setSuccessPopupDismissed(true)}
+                      type="button"
+                    >
+                      Close
+                    </button>
+                    {ticketsTimedOut ? (
+                      <button className="min-h-12 font-black text-primary underline decoration-primary/30 underline-offset-4 hover:decoration-primary" onClick={checkAgain} type="button">
+                        Check Again
+                      </button>
+                    ) : null}
+                  </div>
                 </div>
               </section>
             </div>
