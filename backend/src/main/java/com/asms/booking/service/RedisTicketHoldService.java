@@ -8,6 +8,8 @@ import java.util.UUID;
 
 public interface RedisTicketHoldService {
 
+    void initializeInventory(String scheduleId, String ticketType, int availableTickets);
+
     HoldResult holdTickets(String scheduleId, String ticketType, int quantity, UUID userId);
 
     void releaseHold(String holdId);
