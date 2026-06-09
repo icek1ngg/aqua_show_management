@@ -34,6 +34,7 @@ import static org.assertj.core.api.Assertions.assertThat;
 import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.ArgumentMatchers.anyString;
 import static org.mockito.Mockito.mock;
+import static org.mockito.Mockito.verifyNoInteractions;
 import static org.mockito.Mockito.never;
 import static org.mockito.Mockito.times;
 import static org.mockito.Mockito.verify;
@@ -94,6 +95,90 @@ class PaymentServiceImplTest {
         paymentService.processCallback(successCallback(payment.getPayosOrderCode()));
 
         verify(paymentCompletedPublisher, times(1)).publish(any());
+        verify(ticketGenerationService, times(1)).generateTicketsIfMissing(payment.getBooking());
+    }
+
+    @Test
+    void invalidSignatureDoesNotLoadOrUpdatePayment() {
+        when(payOsClient.isValidCallback(any())).thenReturn(false);
+
+        org.assertj.core.api.Assertions.assertThatThrownBy(
+                () -> paymentService.processCallback(successCallback("123456789"))
+        ).hasMessageContaining("Invalid PayOS callback signature");
+
+        verifyNoInteractions(paymentRepository, bookingRepository);
+        verify(ticketGenerationService, never()).generateTicketsIfMissing(any());
+    }
+
+    @Test
+    void amountMismatchDoesNotMarkPaymentPaid() {
+        Payment payment = pendingPayment();
+        when(payOsClient.isValidCallback(any())).thenReturn(true);
+        when(paymentRepository.findByPayosOrderCodeForUpdate(payment.getPayosOrderCode())).thenReturn(Optional.of(payment));
+
+        PayOsCallbackRequest callback = successCallback(payment.getPayosOrderCode(), new BigDecimal("99999"));
+        org.assertj.core.api.Assertions.assertThatThrownBy(() -> paymentService.processCallback(callback))
+                .hasMessageContaining("does not match");
+
+        assertThat(payment.getStatus()).isEqualTo(PaymentStatus.PENDING);
+        assertThat(payment.getBooking().getStatus()).isEqualTo(BookingStatus.PENDING_PAYMENT);
+        verify(ticketGenerationService, never()).generateTicketsIfMissing(any());
+    }
+
+    @Test
+    void missingAmountDoesNotMarkPaymentPaid() {
+        Payment payment = pendingPayment();
+        when(payOsClient.isValidCallback(any())).thenReturn(true);
+        when(paymentRepository.findByPayosOrderCodeForUpdate(payment.getPayosOrderCode())).thenReturn(Optional.of(payment));
+
+        org.assertj.core.api.Assertions.assertThatThrownBy(
+                () -> paymentService.processCallback(successCallback(payment.getPayosOrderCode(), null))
+        ).hasMessageContaining("amount is required");
+
+        assertThat(payment.getStatus()).isEqualTo(PaymentStatus.PENDING);
+        assertThat(payment.getBooking().getStatus()).isEqualTo(BookingStatus.PENDING_PAYMENT);
+        verify(ticketGenerationService, never()).generateTicketsIfMissing(any());
+    }
+
+    @Test
+    void unknownOrderCodeIsRejectedWithoutCreatingPayment() {
+        when(payOsClient.isValidCallback(any())).thenReturn(true);
+        when(paymentRepository.findByPayosOrderCodeForUpdate("unknown")).thenReturn(Optional.empty());
+
+        org.assertj.core.api.Assertions.assertThatThrownBy(
+                () -> paymentService.processCallback(successCallback("unknown"))
+        ).hasMessageContaining("Payment not found");
+
+        verify(paymentRepository, never()).save(any());
+        verify(ticketGenerationService, never()).generateTicketsIfMissing(any());
+    }
+
+    @Test
+    void webhookVerificationSampleDoesNotLoadOrUpdatePayment() {
+        when(payOsClient.isValidCallback(any())).thenReturn(true);
+        PayOsCallbackRequest sample = new PayOsCallbackRequest(
+                "00",
+                "success",
+                true,
+                java.util.Map.of(
+                        "orderCode", 123,
+                        "amount", 3000,
+                        "description", "VQRIO123",
+                        "code", "00"
+                ),
+                "signature",
+                null,
+                null,
+                null,
+                null
+        );
+
+        var response = paymentService.processCallback(sample);
+
+        assertThat(response.bookingId()).isNull();
+        assertThat(response.generatedTickets()).isZero();
+        verifyNoInteractions(paymentRepository, bookingRepository);
+        verify(ticketGenerationService, never()).generateTicketsIfMissing(any());
     }
 
     @Test
@@ -227,6 +312,10 @@ class PaymentServiceImplTest {
     }
 
     private PayOsCallbackRequest successCallback(String orderCode) {
+        return successCallback(orderCode, new BigDecimal("100000"));
+    }
+
+    private PayOsCallbackRequest successCallback(String orderCode, BigDecimal amount) {
         return new PayOsCallbackRequest(
                 "00",
                 "success",
@@ -235,7 +324,7 @@ class PaymentServiceImplTest {
                 "signature",
                 orderCode,
                 "transaction-1",
-                new BigDecimal("100000"),
+                amount,
                 "SUCCESS"
         );
     }
