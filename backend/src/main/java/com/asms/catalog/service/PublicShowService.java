@@ -33,7 +33,11 @@ public class PublicShowService {
 
     @Transactional(readOnly = true)
     public PageResponse<ShowListItemResponse> getActiveShows(String keyword, int page, int size) {
-        Page<Show> shows = showRepository.search(normalizeKeyword(keyword), ShowStatus.ACTIVE, PageRequest.of(Math.max(page, 0), sanitizeSize(size)));
+        String normalizedKeyword = normalizeKeyword(keyword);
+        PageRequest pageRequest = PageRequest.of(Math.max(page, 0), sanitizeSize(size));
+        Page<Show> shows = normalizedKeyword == null
+                ? showRepository.findByStatusOrderByCreatedAtDesc(ShowStatus.ACTIVE, pageRequest)
+                : showRepository.searchByKeyword(normalizedKeyword, ShowStatus.ACTIVE, pageRequest);
         return PageResponse.from(shows, shows.getContent().stream().map(this::toListItem).toList());
     }
 
@@ -73,7 +77,7 @@ public class PublicShowService {
                 shortDescription(show.getDescription()),
                 show.getDurationMinutes(),
                 nextSchedule == null ? null : nextSchedule.getStartTime(),
-                nextSchedule == null ? null : nextSchedule.getVenue().getName()
+                nextSchedule == null ? null : CatalogMapper.venueName(nextSchedule)
         );
     }
 

@@ -15,7 +15,14 @@ apiClient.interceptors.request.use((config) => {
   const token = getAccessToken();
 
   if (token) {
-    config.headers.Authorization = `Bearer ${token}`;
+    if (typeof config.headers?.set === 'function') {
+      config.headers.set('Authorization', `Bearer ${token}`);
+    } else {
+      config.headers = {
+        ...config.headers,
+        Authorization: `Bearer ${token}`,
+      };
+    }
   }
 
   return config;
@@ -24,7 +31,14 @@ apiClient.interceptors.request.use((config) => {
 apiClient.interceptors.response.use(
   (response) => response,
   (error) => {
-    if (error.response?.status === 401 && !error.config?.skipAuthClear) {
+    const requestHeaders = error.config?.headers;
+    const hadAuthHeader = Boolean(
+      requestHeaders?.Authorization ||
+      requestHeaders?.authorization ||
+      (typeof requestHeaders?.get === 'function' && requestHeaders.get('Authorization')),
+    );
+
+    if (error.response?.status === 401 && hadAuthHeader && !error.config?.skipAuthClear) {
       clearStoredToken();
     }
 

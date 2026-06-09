@@ -1,172 +1,411 @@
-import { useEffect } from 'react';
+import { useEffect, useMemo, useState } from 'react';
+import { Link, useParams } from 'react-router-dom';
 
+import { getShowDetail, getShowSchedules } from '../services/showService.js';
 import MainLayout from '../shared/layouts/MainLayout.jsx';
 
+const fallbackShowImage =
+  'https://lh3.googleusercontent.com/aida-public/AB6AXuANv7I9nTUaKmdiA6IfaIaY0YwJUIWoqM0X6m_tgMmcJ71PacmGbCJL7U7jN8rhBXSUuV7fovx9LDsAc6N5PhTyiCp6LssLe6FgDdZmMcwFIlWNhrmPMXPWNaNGaENraIJuHz9U8O5qXFdHXwD12d0tWFF6pkX61XHVJWiPscKVSeVXPJHPLntIinpKKiq48E_jrrE2A6BF6g5CVGhbzwWhTMCs07mHdwovKDWCZJwE9QP5SidUIrVjslByRhoxaZve3By201M-MkjJ';
+
+function getErrorState(error) {
+  const status = error?.response?.status;
+
+  if (status === 404 || status === 400) {
+    return {
+      title: 'Show not found',
+      message: 'This show is unavailable or the link is not a valid show ID.',
+      type: 'not-found',
+    };
+  }
+
+  return {
+    title: 'Could not load show',
+    message: error?.response?.data?.message || error?.message || 'Please try again in a moment.',
+    type: 'error',
+  };
+}
+
+function formatDateTime(value) {
+  if (!value) {
+    return 'TBA';
+  }
+
+  const date = new Date(value);
+  if (Number.isNaN(date.getTime())) {
+    return 'TBA';
+  }
+
+  return date.toLocaleString('en-US', {
+    month: 'short',
+    day: 'numeric',
+    year: 'numeric',
+    hour: '2-digit',
+    minute: '2-digit',
+  });
+}
+
+function formatTimeRange(startTime, endTime) {
+  const start = startTime ? new Date(startTime) : null;
+  const end = endTime ? new Date(endTime) : null;
+
+  if (!start || !end || Number.isNaN(start.getTime()) || Number.isNaN(end.getTime())) {
+    return 'Time TBA';
+  }
+
+  return `${start.toLocaleTimeString('en-US', { hour: '2-digit', minute: '2-digit' })} - ${end.toLocaleTimeString('en-US', { hour: '2-digit', minute: '2-digit' })}`;
+}
+
+function formatPrice(value) {
+  const amount = Number(value);
+
+  if (!Number.isFinite(amount)) {
+    return 'Price TBA';
+  }
+
+  return new Intl.NumberFormat('en-US', {
+    style: 'currency',
+    currency: 'USD',
+    maximumFractionDigits: amount % 1 === 0 ? 0 : 2,
+  }).format(amount);
+}
+
+function dateParam(value) {
+  if (!value) {
+    return '';
+  }
+
+  const date = new Date(value);
+  if (Number.isNaN(date.getTime())) {
+    return '';
+  }
+
+  return date.toISOString().slice(0, 10);
+}
+
+function bookingUrl(show, schedule) {
+  const params = new URLSearchParams({
+    showId: show.id,
+    scheduleId: schedule.id,
+    show: show.title,
+    date: dateParam(schedule.startTime),
+    quantity: '1',
+    ticketType: 'Standard Entry',
+  });
+
+  return `/bookings/create?${params.toString()}`;
+}
+
+function scheduleAvailability(schedule) {
+  const availableTickets = Number(schedule.availableTickets);
+
+  if (!Number.isFinite(availableTickets)) {
+    return {
+      label: 'Availability TBA',
+      isSoldOut: false,
+      className: 'text-on-surface-variant',
+    };
+  }
+
+  if (availableTickets <= 0) {
+    return {
+      label: 'Sold out',
+      isSoldOut: true,
+      className: 'text-error font-bold italic',
+    };
+  }
+
+  return {
+    label: `${availableTickets} tickets left`,
+    isSoldOut: false,
+    className: 'text-secondary font-semibold',
+  };
+}
+
+function LoadingDetail() {
+  return (
+    <MainLayout>
+      <div className="bg-background px-4 py-24 text-on-background sm:px-6 lg:px-8">
+        <div className="mx-auto max-w-container-max">
+          <div className="h-[420px] animate-pulse rounded-xl bg-cyan-100/60" />
+          <div className="mt-10 grid grid-cols-1 gap-gutter lg:grid-cols-12">
+            <div className="lg:col-span-7">
+              <div className="glass-panel rounded-xl p-unit-lg shadow-sm">
+                <div className="h-8 w-1/3 animate-pulse rounded-full bg-cyan-100" />
+                <div className="mt-6 space-y-3">
+                  <div className="h-4 animate-pulse rounded-full bg-slate-100" />
+                  <div className="h-4 animate-pulse rounded-full bg-slate-100" />
+                  <div className="h-4 w-2/3 animate-pulse rounded-full bg-slate-100" />
+                </div>
+              </div>
+            </div>
+            <div className="space-y-4 lg:col-span-5">
+              <div className="h-28 animate-pulse rounded-xl bg-white" />
+              <div className="h-28 animate-pulse rounded-xl bg-white" />
+            </div>
+          </div>
+        </div>
+      </div>
+    </MainLayout>
+  );
+}
+
+function StateMessage({ title, message, icon = 'error', action }) {
+  return (
+    <MainLayout>
+      <div className="flex min-h-[70vh] items-center justify-center bg-background px-4 py-20 text-on-background">
+        <div className="max-w-xl rounded-xl border border-outline-variant/30 bg-white p-10 text-center shadow-sm">
+          <span className="material-symbols-outlined text-6xl text-primary">{icon}</span>
+          <h1 className="mt-4 font-headline-md text-headline-md text-on-surface">{title}</h1>
+          <p className="mt-3 text-body-md text-on-surface-variant">{message}</p>
+          <div className="mt-8 flex flex-wrap justify-center gap-3">
+            {action}
+            <Link className="rounded-full border border-outline-variant px-6 py-3 font-button text-button text-primary transition hover:bg-primary/5" to="/shows">
+              Back to shows
+            </Link>
+          </div>
+        </div>
+      </div>
+    </MainLayout>
+  );
+}
+
 export default function ShowDetailPage() {
+  const { showId } = useParams();
+  const [show, setShow] = useState(null);
+  const [schedules, setSchedules] = useState([]);
+  const [isLoading, setIsLoading] = useState(true);
+  const [loadError, setLoadError] = useState(null);
+  const [reloadKey, setReloadKey] = useState(0);
+
   useEffect(() => {
-    const script = document.createElement('script');
-    script.textContent = "// Micro-interactions for glass panels\r\n        document.querySelectorAll('.glass-panel, .bg-surface-container-lowest').forEach(card => {\r\n            card.addEventListener('mouseenter', () => {\r\n                card.style.transform = 'translateY(-4px)';\r\n                card.style.transition = 'transform 0.3s cubic-bezier(0.34, 1.56, 0.64, 1)';\r\n            });\r\n            card.addEventListener('mouseleave', () => {\r\n                card.style.transform = 'translateY(0px)';\r\n            });\r\n        });\r\n\r\n        // Sticky Navbar background shift on scroll\r\n        window.addEventListener('scroll', () => {\r\n            const header = document.querySelector('header');\r\n            if (window.scrollY > 50) {\r\n                header.classList.add('shadow-md');\r\n                header.style.backgroundColor = 'rgba(241, 251, 251, 0.95)';\r\n            } else {\r\n                header.classList.remove('shadow-md');\r\n                header.style.backgroundColor = 'rgba(241, 251, 251, 0.8)';\r\n            }\r\n        });";
-    document.body.appendChild(script);
+    let isActive = true;
+
+    async function loadShow() {
+      setIsLoading(true);
+      setLoadError(null);
+
+      try {
+        const [detail, scheduleList] = await Promise.all([
+          getShowDetail(showId),
+          getShowSchedules(showId),
+        ]);
+
+        if (!isActive) {
+          return;
+        }
+
+        setShow(detail);
+        setSchedules(Array.isArray(scheduleList) ? scheduleList : detail?.schedules || []);
+      } catch (error) {
+        if (!isActive) {
+          return;
+        }
+
+        setShow(null);
+        setSchedules([]);
+        setLoadError(getErrorState(error));
+      } finally {
+        if (isActive) {
+          setIsLoading(false);
+        }
+      }
+    }
+
+    loadShow();
 
     return () => {
-      script.remove();
+      isActive = false;
     };
-  }, []);
+  }, [reloadKey, showId]);
+
+  const sortedSchedules = useMemo(
+    () =>
+      [...schedules].sort((first, second) => {
+        const firstTime = new Date(first.startTime || 0).getTime();
+        const secondTime = new Date(second.startTime || 0).getTime();
+        return firstTime - secondTime;
+      }),
+    [schedules],
+  );
+
+  if (isLoading) {
+    return <LoadingDetail />;
+  }
+
+  if (loadError) {
+    return (
+      <StateMessage
+        title={loadError.title}
+        message={loadError.message}
+        icon={loadError.type === 'not-found' ? 'search_off' : 'error'}
+        action={
+          loadError.type === 'error' ? (
+            <button className="rounded-full bg-primary px-6 py-3 font-button text-button text-on-primary transition hover:opacity-90" type="button" onClick={() => setReloadKey((key) => key + 1)}>
+              Try again
+            </button>
+          ) : null
+        }
+      />
+    );
+  }
+
+  if (!show) {
+    return <StateMessage title="Show not found" message="This show is unavailable." icon="search_off" />;
+  }
 
   return (
     <MainLayout>
-    <div className="bg-background text-on-background font-body-md selection:bg-primary-container selection:text-on-primary-container">
-      <style>{".glass-panel {\r\n            background: rgba(255, 255, 255, 0.7);\r\n            backdrop-filter: blur(20px);\r\n            -webkit-backdrop-filter: blur(20px);\r\n            border: 1px solid rgba(255, 255, 255, 0.2);\r\n        }\r\n        .material-symbols-outlined {\r\n            font-variation-settings: 'FILL' 0, 'wght' 400, 'GRAD' 0, 'opsz' 24;\r\n            vertical-align: middle;\r\n        }\r\n        .text-button { font-size: 14px; font-weight: 600; text-transform: none; }\r\n        .font-button { font-family: 'Plus Jakarta Sans', sans-serif; }\r\n        .text-label-bold { font-size: 12px; font-weight: 700; }\r\n        .font-label-bold { font-family: 'Plus Jakarta Sans', sans-serif; }\r\n        \r\n        .hero-gradient {\r\n            background: linear-gradient(180deg, rgba(0,0,0,0) 0%, rgba(0,0,0,0.7) 100%);\r\n        }"}</style>
-<main>
+      <div className="bg-background text-on-background font-body-md selection:bg-primary-container selection:text-on-primary-container">
+        <style>{".glass-panel {\r\n            background: rgba(255, 255, 255, 0.7);\r\n            backdrop-filter: blur(20px);\r\n            -webkit-backdrop-filter: blur(20px);\r\n            border: 1px solid rgba(255, 255, 255, 0.2);\r\n        }\r\n        .material-symbols-outlined {\r\n            font-variation-settings: 'FILL' 0, 'wght' 400, 'GRAD' 0, 'opsz' 24;\r\n            vertical-align: middle;\r\n        }\r\n        .text-button { font-size: 14px; font-weight: 600; text-transform: none; }\r\n        .font-button { font-family: 'Plus Jakarta Sans', sans-serif; }\r\n        .text-label-bold { font-size: 12px; font-weight: 700; }\r\n        .font-label-bold { font-family: 'Plus Jakarta Sans', sans-serif; }\r\n        \r\n        .hero-gradient {\r\n            background: linear-gradient(180deg, rgba(0,0,0,0) 0%, rgba(0,0,0,0.7) 100%);\r\n        }"}</style>
+        <main>
+          <section className="relative h-[614px] min-h-[500px] w-full overflow-hidden">
+            <div
+              className="absolute inset-0 bg-cover bg-center transition-transform duration-700 hover:scale-105"
+              style={{ backgroundImage: `url('${show.imageUrl || fallbackShowImage}')` }}
+            />
+            <div className="hero-gradient absolute inset-0" />
+            <div className="absolute bottom-0 left-0 right-0 mx-auto max-w-container-max p-margin-desktop">
+              <div className="mb-unit-lg flex flex-col gap-unit-sm">
+                <nav className="mb-2 flex items-center gap-unit-sm text-label-md font-label-md text-white/80">
+                  <Link className="transition-colors hover:text-electric-cyan" to="/shows">
+                    Shows
+                  </Link>
+                  <span className="material-symbols-outlined text-[14px]">chevron_right</span>
+                  <span className="text-white">{show.title}</span>
+                </nav>
+                <div className="flex flex-wrap items-center gap-unit-md">
+                  {show.status && (
+                    <span className="rounded-full bg-primary-container px-3 py-1 text-label-md font-label-bold uppercase tracking-wider text-on-primary-container">
+                      {show.status}
+                    </span>
+                  )}
+                  <div className="flex items-center gap-1 text-label-md font-label-md text-white/90">
+                    <span className="material-symbols-outlined text-[18px]">schedule</span>
+                    {show.durationMinutes ? `${show.durationMinutes} mins` : 'Duration TBA'}
+                  </div>
+                </div>
+                <h1 className="max-w-4xl text-headline-2xl font-headline-2xl leading-tight text-white md:text-[64px]">{show.title}</h1>
+              </div>
+            </div>
+          </section>
 
-<section className="relative w-full h-[614px] min-h-[500px] overflow-hidden">
-<div className="absolute inset-0 bg-cover bg-center transition-transform duration-700 hover:scale-105" data-alt="A grand water fountain show at night featuring towering jets of turquoise water illuminated by brilliant cyan and teal lights. Laser beams in emerald green and sapphire blue pierce the night sky, creating a complex web of light. A crowd of silhouettes watches in awe from the edge of the lagoon, with the soft glow of distant park architecture in the background. The atmosphere is magical and high-energy." style={{ backgroundImage: "url('https://lh3.googleusercontent.com/aida-public/AB6AXuANv7I9nTUaKmdiA6IfaIaY0YwJUIWoqM0X6m_tgMmcJ71PacmGbCJL7U7jN8rhBXSUuV7fovx9LDsAc6N5PhTyiCp6LssLe6FgDdZmMcwFIlWNhrmPMXPWNaNGaENraIJuHz9U8O5qXFdHXwD12d0tWFF6pkX61XHVJWiPscKVSeVXPJHPLntIinpKKiq48E_jrrE2A6BF6g5CVGhbzwWhTMCs07mHdwovKDWCZJwE9QP5SidUIrVjslByRhoxaZve3By201M-MkjJ')" }}>
-</div>
-<div className="absolute inset-0 hero-gradient"></div>
-<div className="absolute bottom-0 left-0 right-0 p-margin-desktop max-w-container-max mx-auto">
-<div className="flex flex-col gap-unit-sm mb-unit-lg">
-<nav className="flex items-center gap-unit-sm text-white/80 text-label-md font-label-md mb-2">
-<a className="hover:text-electric-cyan transition-colors" href="/shows">Shows</a>
-<span className="material-symbols-outlined text-[14px]">chevron_right</span>
-<span className="text-white">Oceanic Dreams 4D</span>
-</nav>
-<div className="flex items-center gap-unit-md">
-<span className="bg-primary-container text-on-primary-container px-3 py-1 rounded-full text-label-md font-label-bold uppercase tracking-wider">Active</span>
-<div className="flex items-center gap-1 text-white/90 text-label-md font-label-md">
-<span className="material-symbols-outlined text-[18px]">schedule</span>
-                            60 mins
+          <section className="mx-auto max-w-container-max px-margin-desktop py-unit-xl">
+            <div className="grid grid-cols-1 gap-gutter lg:grid-cols-12">
+              <div className="flex flex-col gap-unit-xl lg:col-span-7">
+                <div className="glass-panel rounded-xl p-unit-lg shadow-sm">
+                  <h2 className="mb-unit-md font-headline-md text-headline-md text-primary">About the Show</h2>
+                  <p className="text-body-lg font-body-lg leading-relaxed text-on-surface-variant">
+                    {show.description || 'More information about this show will be available soon.'}
+                  </p>
+                  <div className="mt-unit-xl grid grid-cols-2 gap-unit-md sm:grid-cols-3">
+                    <div className="flex flex-col gap-1">
+                      <span className="text-label-md font-label-md text-outline">Status</span>
+                      <span className="font-body-md font-semibold text-on-surface">{show.status || 'TBA'}</span>
+                    </div>
+                    <div className="flex flex-col gap-1">
+                      <span className="text-label-md font-label-md text-outline">Duration</span>
+                      <span className="font-body-md font-semibold text-on-surface">{show.durationMinutes ? `${show.durationMinutes} mins` : 'TBA'}</span>
+                    </div>
+                    <div className="flex flex-col gap-1">
+                      <span className="text-label-md font-label-md text-outline">Schedules</span>
+                      <span className="font-body-md font-semibold text-on-surface">{sortedSchedules.length}</span>
+                    </div>
+                  </div>
+                </div>
+
+                <div className="grid grid-cols-1 gap-unit-md sm:grid-cols-2">
+                  <div
+                    className="h-48 overflow-hidden rounded-xl bg-cover bg-center shadow-sm transition-shadow hover:shadow-md"
+                    style={{ backgroundImage: `url('${show.imageUrl || fallbackShowImage}')` }}
+                  />
+                  <div className="glass-panel flex h-48 flex-col justify-center rounded-xl p-unit-lg shadow-sm">
+                    <span className="material-symbols-outlined text-4xl text-primary">confirmation_number</span>
+                    <h3 className="mt-unit-sm font-headline-md text-headline-md text-on-surface">Ticket Availability</h3>
+                    <p className="mt-2 text-body-sm text-on-surface-variant">
+                      Choose one of the active schedules to continue with a real schedule ID.
+                    </p>
+                  </div>
+                </div>
+              </div>
+
+              <div className="flex flex-col gap-unit-lg lg:col-span-5">
+                <div className="flex items-center justify-between">
+                  <h2 className="font-headline-md text-headline-md text-on-surface">Upcoming Times</h2>
+                  <span className="flex items-center gap-1 text-label-md font-label-bold text-primary">
+                    Active schedules <span className="material-symbols-outlined text-[16px]">calendar_month</span>
+                  </span>
+                </div>
+
+                <div className="flex flex-col gap-unit-md">
+                  {sortedSchedules.length === 0 ? (
+                    <div className="rounded-xl border border-outline-variant/30 bg-surface-container-lowest p-unit-lg text-center shadow-sm">
+                      <span className="material-symbols-outlined text-5xl text-primary">event_busy</span>
+                      <h3 className="mt-unit-sm font-headline-md text-headline-md text-on-surface">No schedules available</h3>
+                      <p className="mt-2 text-body-sm text-on-surface-variant">
+                        This show is active, but there are no active schedules published yet.
+                      </p>
+                    </div>
+                  ) : (
+                    sortedSchedules.map((schedule) => {
+                      const availability = scheduleAvailability(schedule);
+
+                      return (
+                        <div className={`group rounded-xl border border-outline-variant/30 bg-surface-container-lowest p-unit-md shadow-sm transition-all hover:shadow-md ${availability.isSoldOut ? 'opacity-70' : ''}`} key={schedule.id}>
+                          <div className="mb-unit-md flex items-start justify-between gap-unit-md">
+                            <div className="flex flex-col">
+                              <span className={`font-headline-md ${availability.isSoldOut ? 'text-outline' : 'text-primary'}`}>{formatTimeRange(schedule.startTime, schedule.endTime)}</span>
+                              <span className="mt-1 flex items-center gap-1 text-label-md font-label-md text-on-surface-variant">
+                                <span className="material-symbols-outlined text-[14px]">event</span>
+                                {formatDateTime(schedule.startTime)}
+                              </span>
+                              <span className="mt-1 flex items-center gap-1 text-label-md font-label-md text-on-surface-variant">
+                                <span className="material-symbols-outlined text-[14px]">location_on</span>
+                                {schedule.venueName || 'Venue TBA'}
+                              </span>
+                            </div>
+                            <div className="text-right">
+                              <span className="font-headline-md text-on-surface">{formatPrice(schedule.price)}</span>
+                              <span className="block text-label-md font-label-md text-outline">per ticket</span>
+                            </div>
+                          </div>
+
+                          <div className="flex items-center justify-between gap-unit-md border-t border-outline-variant/20 pt-unit-md">
+                            <div className="flex flex-col">
+                              <span className="text-label-md font-label-md text-outline">Available</span>
+                              <span className={`text-body-md ${availability.className}`}>{availability.label}</span>
+                            </div>
+                            {availability.isSoldOut ? (
+                              <button className="cursor-not-allowed rounded-full bg-surface-variant px-6 py-2 font-button text-button text-on-surface-variant" disabled type="button">
+                                Sold Out
+                              </button>
+                            ) : (
+                              <Link className="rounded-full bg-primary px-6 py-2 font-button text-button text-on-primary transition hover:opacity-90" to={bookingUrl(show, schedule)}>
+                                Book Ticket
+                              </Link>
+                            )}
+                          </div>
                         </div>
-</div>
-<h1 className="text-white font-headline-2xl text-headline-2xl md:text-[64px] leading-tight max-w-4xl">Oceanic Dreams 4D</h1>
-</div>
-</div>
-</section>
+                      );
+                    })
+                  )}
+                </div>
 
-<section className="max-w-container-max mx-auto px-margin-desktop py-unit-xl">
-<div className="grid grid-cols-1 lg:grid-cols-12 gap-gutter">
-
-<div className="lg:col-span-7 flex flex-col gap-unit-xl">
-<div className="glass-panel p-unit-lg rounded-xl shadow-sm">
-<h2 className="font-headline-md text-headline-md text-primary mb-unit-md">About the Show</h2>
-<p className="font-body-lg text-body-lg text-on-surface-variant leading-relaxed">
-                            Dive into a multi-sensory journey through the hidden wonders of the deep sea. "Oceanic Dreams 4D" combines state-of-the-art water projection technology with synchronized laser choreography and immersive surround sound. Witness the legendary tales of ancient sea guardians brought to life in a breathtaking display of fluid art and luminous aquatic modernism.
-                        </p>
-<div className="grid grid-cols-2 sm:grid-cols-3 gap-unit-md mt-unit-xl">
-<div className="flex flex-col gap-1">
-<span className="text-label-md font-label-md text-outline">Category</span>
-<span className="font-body-md text-on-surface font-semibold">Interactive Arts</span>
-</div>
-<div className="flex flex-col gap-1">
-<span className="text-label-md font-label-md text-outline">Show Type</span>
-<span className="font-body-md text-on-surface font-semibold">4D Experience</span>
-</div>
-<div className="flex flex-col gap-1">
-<span className="text-label-md font-label-md text-outline">Audience</span>
-<span className="font-body-md text-on-surface font-semibold">All Ages</span>
-</div>
-</div>
-</div>
-
-<div className="grid grid-cols-2 gap-unit-md">
-<div className="h-48 rounded-xl bg-cover bg-center overflow-hidden shadow-sm hover:shadow-md transition-shadow" data-alt="A close-up of vibrant water projections showing a stylized luminous jellyfish floating through a dark blue liquid environment. The water droplets act as tiny pixels, creating a shimmering, ethereal effect. The colors are dominated by electric cyan and deep violet, with soft glows illuminating the spray. Minimalist and professional marine entertainment aesthetic." style={{ backgroundImage: "url('https://lh3.googleusercontent.com/aida-public/AB6AXuAQbql89nZUPmszl9ZbgAUtDWVEnxn50iMXG6Q-fggqDinTout4wWGHrpJr5H4BGpxiK-yq4ncIcWcoO9ML9Q0R2sz__gfHNhG5N7eHQj2-RhygpowXExJatAyXDkj60P3b0C10kDdgwu8i0eVrMLcvOTDiqs5wjAye-czOskMnaAYB0iqRYtcuhNjSoZbZ6JxAkO2x5VTnYAItv8v0RcHi5_WfBWivTbO03O6IzCUxRizRmMVfa7P2SkCyfsGg_ecunpJhgjPST6P0')" }}></div>
-<div className="h-48 rounded-xl bg-cover bg-center overflow-hidden shadow-sm hover:shadow-md transition-shadow" data-alt="High-angle shot of a grand lagoon venue during a light show. Bright orange and teal spotlights cross over a massive pool of water, reflecting perfectly on the surface. The architecture around the pool is sleek and modern, with soft ambient lighting. The atmosphere is sophisticated, upscale, and festive, capturing the essence of premium marine entertainment." style={{ backgroundImage: "url('https://lh3.googleusercontent.com/aida-public/AB6AXuDy5lPXcFOXoG7Lj-m_Xk2nnox1JkGhYGVtUNpp-XPPJXt-LDCJzlJtV7G1tSBVTCy1zdTtn-otuj5cvtYDoSuTBdSLoF4rqHSVbuo5283rg8eeqqb-h7nNr-DZ4VwZ3uQ4ey82Fc0Y_yPf_vuh7V3d_o1ryz0Y0KLoE-_3Cm7eU8I_WZ1pOoCSTblC0EkwTCamIDo7k_cq5HaMpMOaACjX7yBe9_c5e67AUNn3Ts1KWD4CeKp8F13KYVDmUk_D20-2zIEzxf9Vjugc')" }}></div>
-</div>
-</div>
-
-<div className="lg:col-span-5 flex flex-col gap-unit-lg">
-<div className="flex justify-between items-center">
-<h2 className="font-headline-md text-headline-md text-on-surface">Upcoming Times</h2>
-<button className="text-primary font-label-bold text-label-md flex items-center gap-1 hover:underline">
-                            View Calendar <span className="material-symbols-outlined text-[16px]">calendar_month</span>
-</button>
-</div>
-
-<div className="flex flex-col gap-unit-md">
-
-<div className="bg-surface-container-lowest border border-outline-variant/30 rounded-xl p-unit-md shadow-sm hover:shadow-md transition-all group">
-<div className="flex justify-between items-start mb-unit-md">
-<div className="flex flex-col">
-<span className="font-headline-md text-primary">19:30 — 20:30</span>
-<span className="text-label-md font-label-md text-on-surface-variant flex items-center gap-1">
-<span className="material-symbols-outlined text-[14px]">location_on</span> Grand Lagoon
-                                    </span>
-</div>
-<div className="text-right">
-<span className="font-headline-md text-on-surface">$45.00</span>
-<span className="block text-label-md font-label-md text-outline">per ticket</span>
-</div>
-</div>
-<div className="flex items-center justify-between pt-unit-md border-t border-outline-variant/20">
-<div className="flex flex-col">
-<span className="text-label-md font-label-md text-outline">Available</span>
-<span className="text-body-md font-semibold text-secondary">124 Tickets left</span>
-</div>
-<button className="bg-primary/50 text-on-primary px-6 py-2 rounded-full font-button text-button cursor-not-allowed opacity-80" disabled="">
-                                    Book Now
-                                </button>
-</div>
-</div>
-
-<div className="bg-surface-container-lowest border border-outline-variant/30 rounded-xl p-unit-md shadow-sm hover:shadow-md transition-all group">
-<div className="flex justify-between items-start mb-unit-md">
-<div className="flex flex-col">
-<span className="font-headline-md text-primary">21:00 — 22:00</span>
-<span className="text-label-md font-label-md text-on-surface-variant flex items-center gap-1">
-<span className="material-symbols-outlined text-[14px]">location_on</span> Grand Lagoon
-                                    </span>
-</div>
-<div className="text-right">
-<span className="font-headline-md text-on-surface">$55.00</span>
-<span className="block text-label-md font-label-md text-outline">per ticket</span>
-</div>
-</div>
-<div className="flex items-center justify-between pt-unit-md border-t border-outline-variant/20">
-<div className="flex flex-col">
-<span className="text-label-md font-label-md text-outline">Available</span>
-<span className="text-body-md font-semibold text-secondary">42 Tickets left</span>
-</div>
-<button className="bg-primary/50 text-on-primary px-6 py-2 rounded-full font-button text-button cursor-not-allowed opacity-80" disabled="">
-                                    Book Now
-                                </button>
-</div>
-</div>
-
-<div className="bg-surface-container-lowest border border-outline-variant/30 rounded-xl p-unit-md shadow-sm hover:shadow-md transition-all group opacity-60">
-<div className="flex justify-between items-start mb-unit-md">
-<div className="flex flex-col">
-<span className="font-headline-md text-outline">22:30 — 23:30</span>
-<span className="text-label-md font-label-md text-on-surface-variant flex items-center gap-1">
-<span className="material-symbols-outlined text-[14px]">location_on</span> Grand Lagoon
-                                    </span>
-</div>
-<div className="text-right">
-<span className="font-headline-md text-on-surface">$45.00</span>
-<span className="block text-label-md font-label-md text-outline">per ticket</span>
-</div>
-</div>
-<div className="flex items-center justify-between pt-unit-md border-t border-outline-variant/20">
-<div className="flex flex-col">
-<span className="text-label-md font-label-md text-error font-bold italic">SOLD OUT</span>
-</div>
-<button className="bg-surface-variant text-on-surface-variant px-6 py-2 rounded-full font-button text-button cursor-not-allowed" disabled="">
-                                    Sold Out
-                                </button>
-</div>
-</div>
-</div>
-
-<div className="bg-secondary-container/30 rounded-xl p-unit-md flex gap-unit-md">
-<span className="material-symbols-outlined text-secondary" style={{ fontVariationSettings: "'FILL' 1" }}>info</span>
-<div className="flex flex-col gap-1">
-<span className="font-label-bold text-secondary">Visitor Information</span>
-<p className="text-body-sm text-on-secondary-container">Please arrive 20 minutes before showtime. This performance features strobe lights and loud audio effects. Rain-or-shine event.</p>
-</div>
-</div>
-</div>
-</div>
-</section>
-</main>
-    </div>
+                <div className="flex gap-unit-md rounded-xl bg-secondary-container/30 p-unit-md">
+                  <span className="material-symbols-outlined text-secondary" style={{ fontVariationSettings: "'FILL' 1" }}>
+                    info
+                  </span>
+                  <div className="flex flex-col gap-1">
+                    <span className="font-label-bold text-secondary">Visitor Information</span>
+                    <p className="text-body-sm text-on-secondary-container">
+                      Please arrive 20 minutes before showtime. Ticket booking uses the selected schedule ID and latest backend availability.
+                    </p>
+                  </div>
+                </div>
+              </div>
+            </div>
+          </section>
+        </main>
+      </div>
     </MainLayout>
   );
 }
