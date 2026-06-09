@@ -46,7 +46,7 @@ function hasRole(user, role) {
 
 function NavLinks({ onNavigate, user }) {
   const links = hasRole(user, 'STAFF')
-    ? [{ label: 'QR Check-in', to: '/staff/check-in' }]
+    ? [...navigationLinks, { label: 'Check-in', to: '/staff/check-in' }]
     : navigationLinks;
 
   return (

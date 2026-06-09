@@ -66,7 +66,14 @@ apiClient.interceptors.request.use((config) => {
   const token = getAccessToken();
 
   if (token) {
-    config.headers.Authorization = `Bearer ${token}`;
+    if (typeof config.headers?.set === 'function') {
+      config.headers.set('Authorization', `Bearer ${token}`);
+    } else {
+      config.headers = {
+        ...config.headers,
+        Authorization: `Bearer ${token}`,
+      };
+    }
   }
 
   return config;

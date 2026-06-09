@@ -8,6 +8,8 @@ import com.asms.catalog.dto.CatalogDtos.VenueResponse;
 import com.asms.catalog.entity.Show;
 import com.asms.catalog.entity.ShowSchedule;
 import com.asms.catalog.entity.Venue;
+import jakarta.persistence.EntityNotFoundException;
+import org.hibernate.ObjectNotFoundException;
 
 import java.util.List;
 
@@ -46,7 +48,7 @@ final class CatalogMapper {
                 schedule.getId(),
                 schedule.getStartTime(),
                 schedule.getEndTime(),
-                schedule.getVenue().getName(),
+                venueName(schedule),
                 schedule.getAvailableTickets(),
                 schedule.getPrice()
         );
@@ -65,12 +67,13 @@ final class CatalogMapper {
     }
 
     static ScheduleManagementResponse toScheduleManagement(ShowSchedule schedule) {
+        Venue venue = venue(schedule);
         return new ScheduleManagementResponse(
                 schedule.getId(),
                 schedule.getShow().getId(),
                 schedule.getShow().getTitle(),
-                schedule.getVenue().getId(),
-                schedule.getVenue().getName(),
+                venue == null ? null : venue.getId(),
+                venue == null ? null : venue.getName(),
                 schedule.getStartTime(),
                 schedule.getEndTime(),
                 schedule.getCapacity(),
@@ -80,5 +83,18 @@ final class CatalogMapper {
                 schedule.getCreatedAt(),
                 schedule.getUpdatedAt()
         );
+    }
+
+    static String venueName(ShowSchedule schedule) {
+        Venue venue = venue(schedule);
+        return venue == null ? null : venue.getName();
+    }
+
+    private static Venue venue(ShowSchedule schedule) {
+        try {
+            return schedule.getVenue();
+        } catch (EntityNotFoundException | ObjectNotFoundException exception) {
+            return null;
+        }
     }
 }

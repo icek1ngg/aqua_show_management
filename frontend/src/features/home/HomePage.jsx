@@ -1,6 +1,7 @@
-import { useEffect } from 'react';
+import { useEffect, useMemo, useState } from 'react';
 import { Link, useLocation } from 'react-router-dom';
 
+import { getShows } from '../../services/showService.js';
 import MainLayout from '../../shared/layouts/MainLayout.jsx';
 
 const featuredShows = [
@@ -11,7 +12,7 @@ const featuredShows = [
       'https://lh3.googleusercontent.com/aida-public/AB6AXuDgtKbX141GIXV28czApt3tHguCUvPKSbRAnFdFAQzlJutKE1EC4vS7jnqAU4kbJta6FkkFLWOG1xo4RFS8AM1MXBGOQlPFZh-FlQEpmZlt5nYB6wUrwlpXP5TSpL1DI7WuOKTisPjwwu6BaEFAPWXD2NGxEfXQvUJmomtpfH0x7egW2U7kxW6h2RZFC6PIb1cpt9NbIPLdOpwlkZgjkBVzNlC3R9onv6_Esbk17K0of4PgvHxDHfAWZoVi41bvelTws71QLVrPMQ',
     badge: 'Popular',
     badgeClass: 'bg-[#ff6900] text-white',
-    price: 'from 2.000 ₫',
+    price: 'from $29',
   },
   {
     title: 'Deep Sea Mystery',
@@ -20,14 +21,14 @@ const featuredShows = [
       'https://lh3.googleusercontent.com/aida-public/AB6AXuCaDCEPuRXIz-tXX1TXYxFJLqc_NIsXu8w_yLI5ZUwrlr8wnEL8-kgSlFbHHypXmoS8BFV3Nt-uIqfoUBNP3vsNwRpxWltuGVcjFaEYr5i0Jxbq-UGbC8e5wY7oIaDMk2npEmreyGf9rBbp29WokyWvugQKmrBX2PoVJWFeSGUirssyqs6CAB1JREDZCBlv_mFFOq4aPXSDN7RXezaVkV4yhWwjPBXZkL6PwbhHkm0AYogBR_08bBqL0orR0zzGAHByqIypSnGUag',
     badge: 'New',
     badgeClass: 'bg-cyan-300 text-slate-950',
-    price: 'from 2.000 ₫',
+    price: 'from $35',
   },
   {
     title: 'Tropical Splash',
     description: 'A high-energy daytime parade with water cannons, music, and tropical rhythms.',
     image:
       'https://lh3.googleusercontent.com/aida-public/AB6AXuDOdYlgXL4Nwf4AWcGFjApQwu1wTev59cOd_-GZKhZAWO4Iz_zf7Tn8_yeXyi9P-cEDz6PldhiUpJ7j_1kqfhSt3YHIgmEJCtryWfqAghSSeXxzgAUM-pXEtaZhoz6g-0FlaiKz-SMUTjlXf7-QNguIhszVSRUHyFOy4zzsc6qh5RCz4gEwyyuSD5_OrUqMRuq-If6WwHs7nBE7Nwij3GBrdW3JEC77ydu5Az0EctrAsKLg-FkB0ZzurXJq_eCzA4NIrDfQsrmB1A',
-    price: 'from 2.000 ₫',
+    price: 'from $25',
   },
 ];
 
@@ -79,8 +80,65 @@ const benefits = [
   },
 ];
 
+function getShowsErrorMessage(error) {
+  return error?.response?.data?.message || error?.message || 'Could not load active shows. Please try again.';
+}
+
+function formatScheduleDate(value) {
+  if (!value) {
+    return null;
+  }
+
+  const date = new Date(value);
+  if (Number.isNaN(date.getTime())) {
+    return null;
+  }
+
+  return {
+    day: date.toLocaleDateString('en-US', { day: '2-digit' }),
+    month: date.toLocaleDateString('en-US', { month: 'short' }),
+    time: date.toLocaleTimeString('en-US', { hour: '2-digit', minute: '2-digit' }),
+    full: date.toLocaleString('en-US', {
+      month: 'short',
+      day: 'numeric',
+      year: 'numeric',
+      hour: '2-digit',
+      minute: '2-digit',
+    }),
+  };
+}
+
+function scheduleStatus(show) {
+  return show.nextStartTime
+    ? {
+        label: 'Upcoming',
+        className: 'bg-emerald-50 text-emerald-600',
+        dotClass: 'bg-emerald-600 animate-pulse',
+      }
+    : {
+        label: 'Schedule pending',
+        className: 'bg-slate-100 text-slate-500',
+        dotClass: 'bg-slate-400',
+      };
+}
+
 export default function HomePage() {
   const location = useLocation();
+  const [shows, setShows] = useState([]);
+  const [pagination, setPagination] = useState({
+    page: 0,
+    size: 6,
+    totalItems: 0,
+    totalPages: 0,
+    hasNext: false,
+    hasPrevious: false,
+  });
+  const [currentPage, setCurrentPage] = useState(0);
+  const [keyword, setKeyword] = useState('');
+  const [submittedKeyword, setSubmittedKeyword] = useState('');
+  const [isLoadingShows, setIsLoadingShows] = useState(true);
+  const [showsError, setShowsError] = useState('');
+  const [reloadKey, setReloadKey] = useState(0);
 
   useEffect(() => {
     const sectionId = location.hash?.replace('#', '') || (location.pathname === '/shows' || location.pathname === '/public/shows' ? 'shows' : '');
@@ -93,6 +151,81 @@ export default function HomePage() {
       document.getElementById(sectionId)?.scrollIntoView({ behavior: 'smooth', block: 'start' });
     });
   }, [location.hash, location.pathname]);
+
+  useEffect(() => {
+    let isActive = true;
+
+    async function loadShows() {
+      setIsLoadingShows(true);
+      setShowsError('');
+
+      try {
+        const response = await getShows({ keyword: submittedKeyword, page: currentPage, size: pagination.size });
+        if (!isActive) {
+          return;
+        }
+
+        const items = Array.isArray(response?.items) ? response.items : [];
+        setShows(items);
+        setPagination({
+          page: response?.page ?? currentPage,
+          size: response?.size ?? pagination.size,
+          totalItems: response?.totalItems ?? items.length,
+          totalPages: response?.totalPages ?? (items.length ? 1 : 0),
+          hasNext: Boolean(response?.hasNext),
+          hasPrevious: Boolean(response?.hasPrevious),
+        });
+      } catch (error) {
+        if (!isActive) {
+          return;
+        }
+
+        setShows([]);
+        setPagination((current) => ({
+          ...current,
+          page: currentPage,
+          totalItems: 0,
+          totalPages: 0,
+          hasNext: false,
+          hasPrevious: false,
+        }));
+        setShowsError(getShowsErrorMessage(error));
+      } finally {
+        if (isActive) {
+          setIsLoadingShows(false);
+        }
+      }
+    }
+
+    loadShows();
+
+    return () => {
+      isActive = false;
+    };
+  }, [currentPage, pagination.size, reloadKey, submittedKeyword]);
+
+  const upcomingSchedules = useMemo(
+    () =>
+      shows
+        .filter((show) => show.nextStartTime)
+        .map((show) => ({ ...show, formattedSchedule: formatScheduleDate(show.nextStartTime) }))
+        .filter((show) => show.formattedSchedule)
+        .sort((first, second) => new Date(first.nextStartTime).getTime() - new Date(second.nextStartTime).getTime())
+        .slice(0, 3),
+    [shows],
+  );
+
+  const handleShowSearch = (event) => {
+    event.preventDefault();
+    setCurrentPage(0);
+    setSubmittedKeyword(keyword.trim());
+  };
+
+  const clearShowSearch = () => {
+    setKeyword('');
+    setSubmittedKeyword('');
+    setCurrentPage(0);
+  };
 
   return (
     <MainLayout>
@@ -139,10 +272,12 @@ export default function HomePage() {
                 Select Show
               </span>
               <select className="w-full rounded-full border border-cyan-100 bg-cyan-50/70 px-5 py-3 text-slate-700 focus:border-cyan-400 focus:outline-none focus:ring-2 focus:ring-cyan-200">
-                <option>Symphony of Lights</option>
-                <option>Aqua Ballet</option>
-                <option>Deep Sea Mystery</option>
-                <option>Tropical Splash Parade</option>
+                <option>{isLoadingShows ? 'Loading active shows...' : 'Choose an active show'}</option>
+                {shows.map((show) => (
+                  <option key={show.id} value={show.id}>
+                    {show.title}
+                  </option>
+                ))}
               </select>
             </label>
 
@@ -188,36 +323,137 @@ export default function HomePage() {
             <span className="mb-2 block text-sm font-bold uppercase tracking-[0.24em] text-cyan-700">Performances</span>
             <h2 className="text-3xl font-black tracking-tight text-slate-950 sm:text-4xl">Featured Water Shows</h2>
           </div>
-          <a className="group flex items-center gap-1 font-bold text-cyan-700 transition hover:text-cyan-900" href="#shows">
-            View All
-            <span className="material-symbols-outlined transition group-hover:translate-x-1">arrow_forward</span>
-          </a>
+          <form className="flex w-full flex-col gap-3 sm:w-auto sm:min-w-[320px]" onSubmit={handleShowSearch}>
+            <label className="sr-only" htmlFor="show-keyword">
+              Search active shows
+            </label>
+            <div className="flex rounded-full border border-cyan-100 bg-white p-1 shadow-sm">
+              <input
+                className="min-w-0 flex-1 rounded-full px-4 py-2 text-sm font-semibold text-slate-700 outline-none placeholder:text-slate-400"
+                id="show-keyword"
+                placeholder="Search shows..."
+                type="search"
+                value={keyword}
+                onChange={(event) => setKeyword(event.target.value)}
+              />
+              <button className="rounded-full bg-cyan-700 px-5 py-2 text-sm font-bold text-white transition hover:bg-cyan-800" type="submit">
+                Search
+              </button>
+            </div>
+            {submittedKeyword && (
+              <button className="self-end text-sm font-bold text-cyan-700 transition hover:text-cyan-900" type="button" onClick={clearShowSearch}>
+                Clear search
+              </button>
+            )}
+          </form>
         </div>
 
-        <div className="grid grid-cols-1 gap-8 md:grid-cols-3">
-          {featuredShows.map((show) => (
-            <article className="group overflow-hidden rounded-[2rem] border border-cyan-100 bg-white shadow-sm transition duration-300 hover:-translate-y-2 hover:shadow-2xl hover:shadow-cyan-950/10" key={show.title}>
-              <div className="relative h-72 overflow-hidden">
-                <img alt={show.title} className="h-full w-full object-cover transition duration-700 group-hover:scale-110" src={show.image} />
-                {show.badge && (
-                  <span className={`absolute left-5 top-5 rounded-full px-4 py-1.5 text-sm font-bold shadow-lg ${show.badgeClass}`}>
-                    {show.badge}
-                  </span>
-                )}
-                <div className="absolute bottom-5 right-5 rounded-full bg-white/95 px-4 py-1.5 shadow-lg backdrop-blur">
-                  <span className="font-bold text-cyan-700">{show.price}</span>
+        {isLoadingShows ? (
+          <div className="grid grid-cols-1 gap-8 md:grid-cols-3">
+            {Array.from({ length: 3 }).map((_, index) => (
+              <article className="overflow-hidden rounded-[2rem] border border-cyan-100 bg-white shadow-sm" key={index}>
+                <div className="h-72 animate-pulse bg-cyan-50" />
+                <div className="space-y-4 p-8">
+                  <div className="h-7 w-3/4 animate-pulse rounded-full bg-cyan-50" />
+                  <div className="h-4 w-full animate-pulse rounded-full bg-slate-100" />
+                  <div className="h-4 w-2/3 animate-pulse rounded-full bg-slate-100" />
+                  <div className="h-12 w-full animate-pulse rounded-full bg-cyan-50" />
+                </div>
+              </article>
+            ))}
+          </div>
+        ) : showsError ? (
+          <div className="rounded-[2rem] border border-red-100 bg-red-50 p-8 text-center shadow-sm">
+            <span className="material-symbols-outlined text-5xl text-red-500">error</span>
+            <h3 className="mt-3 text-2xl font-black text-slate-950">Could not load shows</h3>
+            <p className="mx-auto mt-2 max-w-xl text-sm font-semibold text-red-700">{showsError}</p>
+            <button className="mt-6 rounded-full bg-cyan-700 px-6 py-3 font-bold text-white transition hover:bg-cyan-800" type="button" onClick={() => setReloadKey((key) => key + 1)}>
+              Try Again
+            </button>
+          </div>
+        ) : shows.length === 0 ? (
+          <div className="rounded-[2rem] border border-cyan-100 bg-white p-10 text-center shadow-sm">
+            <span className="material-symbols-outlined text-5xl text-cyan-700">theater_comedy</span>
+            <h3 className="mt-3 text-2xl font-black text-slate-950">No active shows found</h3>
+            <p className="mx-auto mt-2 max-w-xl text-slate-600">
+              {submittedKeyword ? 'No active shows match your search yet.' : 'There are no active shows available right now. Please check back soon.'}
+            </p>
+            {submittedKeyword && (
+              <button className="mt-6 rounded-full bg-cyan-700 px-6 py-3 font-bold text-white transition hover:bg-cyan-800" type="button" onClick={clearShowSearch}>
+                Show all active shows
+              </button>
+            )}
+          </div>
+        ) : (
+          <>
+            <div className="grid grid-cols-1 gap-8 md:grid-cols-3">
+              {shows.map((show) => {
+                const status = scheduleStatus(show);
+                const nextSchedule = formatScheduleDate(show.nextStartTime);
+
+                return (
+                  <article className="group overflow-hidden rounded-[2rem] border border-cyan-100 bg-white shadow-sm transition duration-300 hover:-translate-y-2 hover:shadow-2xl hover:shadow-cyan-950/10" key={show.id}>
+                    <div className="relative h-72 overflow-hidden">
+                      <img alt={show.title} className="h-full w-full object-cover transition duration-700 group-hover:scale-110" src={show.imageUrl || fallbackShowImage} />
+                      <span className={`absolute left-5 top-5 flex items-center gap-2 rounded-full px-4 py-1.5 text-sm font-bold shadow-lg ${status.className}`}>
+                        <span className={`h-2 w-2 rounded-full ${status.dotClass}`} />
+                        {status.label}
+                      </span>
+                      <div className="absolute bottom-5 right-5 rounded-full bg-white/95 px-4 py-1.5 shadow-lg backdrop-blur">
+                        <span className="font-bold text-cyan-700">{show.durationMinutes ? `${show.durationMinutes} min` : 'Duration TBA'}</span>
+                      </div>
+                    </div>
+                    <div className="p-8">
+                      <h3 className="mb-3 text-2xl font-black text-slate-950">{show.title}</h3>
+                      <p className="mb-5 line-clamp-2 text-slate-600">{show.shortDescription || 'More show details are coming soon.'}</p>
+                      <div className="mb-8 rounded-2xl bg-cyan-50/70 p-4 text-sm text-slate-600">
+                        <p className="flex items-center gap-2 font-bold text-slate-800">
+                          <span className="material-symbols-outlined text-base text-cyan-700">event</span>
+                          {nextSchedule ? nextSchedule.full : 'Next schedule coming soon'}
+                        </p>
+                        {show.venueName && (
+                          <p className="mt-2 flex items-center gap-2">
+                            <span className="material-symbols-outlined text-base text-cyan-700">location_on</span>
+                            {show.venueName}
+                          </p>
+                        )}
+                      </div>
+                      <Link className="block w-full rounded-full border-2 border-cyan-700 py-3.5 text-center font-bold text-cyan-700 transition hover:bg-cyan-700 hover:text-white" to={`/shows/${show.id}`}>
+                        View Details
+                      </Link>
+                    </div>
+                  </article>
+                );
+              })}
+            </div>
+
+            {pagination.totalPages > 1 && (
+              <div className="mt-10 flex flex-col items-center justify-between gap-4 rounded-[2rem] border border-cyan-100 bg-white p-4 shadow-sm sm:flex-row">
+                <p className="text-sm font-semibold text-slate-600">
+                  Page {pagination.page + 1} of {pagination.totalPages} ({pagination.totalItems} shows)
+                </p>
+                <div className="flex gap-3">
+                  <button
+                    className="rounded-full border border-cyan-200 px-5 py-2.5 font-bold text-cyan-700 transition hover:bg-cyan-50 disabled:cursor-not-allowed disabled:opacity-40"
+                    disabled={!pagination.hasPrevious}
+                    type="button"
+                    onClick={() => setCurrentPage((page) => Math.max(0, page - 1))}
+                  >
+                    Previous
+                  </button>
+                  <button
+                    className="rounded-full bg-cyan-700 px-5 py-2.5 font-bold text-white transition hover:bg-cyan-800 disabled:cursor-not-allowed disabled:opacity-40"
+                    disabled={!pagination.hasNext}
+                    type="button"
+                    onClick={() => setCurrentPage((page) => page + 1)}
+                  >
+                    Next
+                  </button>
                 </div>
               </div>
-              <div className="p-8">
-                <h3 className="mb-3 text-2xl font-black text-slate-950">{show.title}</h3>
-                <p className="mb-8 line-clamp-2 text-slate-600">{show.description}</p>
-                <Link className="block w-full rounded-full border-2 border-cyan-700 py-3.5 text-center font-bold text-cyan-700 transition hover:bg-cyan-700 hover:text-white" to={`/shows/${encodeURIComponent(show.title.toLowerCase().replaceAll(' ', '-'))}`}>
-                  View Details
-                </Link>
-              </div>
-            </article>
-          ))}
-        </div>
+            )}
+          </>
+        )}
       </section>
 
       <section className="bg-white/60 py-20" id="schedules">
@@ -231,16 +467,31 @@ export default function HomePage() {
           </div>
 
           <div className="space-y-6">
-            {schedules.map((schedule) => (
-              <article className="flex flex-col items-center justify-between gap-6 rounded-[2rem] border border-cyan-100 bg-white p-6 shadow-sm transition hover:shadow-lg md:flex-row" key={`${schedule.title}-${schedule.time}`}>
+            {isLoadingShows ? (
+              <article className="rounded-[2rem] border border-cyan-100 bg-white p-8 text-center shadow-sm">
+                <div className="mx-auto h-10 w-10 animate-spin rounded-full border-4 border-cyan-100 border-t-cyan-700" />
+                <p className="mt-4 font-bold text-slate-600">Loading upcoming schedules...</p>
+              </article>
+            ) : upcomingSchedules.length === 0 ? (
+              <article className="rounded-[2rem] border border-cyan-100 bg-white p-8 text-center shadow-sm">
+                <span className="material-symbols-outlined text-5xl text-cyan-700">event_busy</span>
+                <h3 className="mt-3 text-2xl font-black text-slate-950">No upcoming schedules</h3>
+                <p className="mt-2 text-slate-600">Active shows are available, but their next schedule has not been published yet.</p>
+              </article>
+            ) : (
+              upcomingSchedules.map((schedule) => {
+                const status = scheduleStatus(schedule);
+
+                return (
+                  <article className="flex flex-col items-center justify-between gap-6 rounded-[2rem] border border-cyan-100 bg-white p-6 shadow-sm transition hover:shadow-lg md:flex-row" key={`${schedule.id}-${schedule.nextStartTime}`}>
                 <div className="flex w-full items-center gap-6 md:w-1/4">
                   <div className="min-w-[90px] rounded-2xl border border-cyan-100 bg-cyan-50 p-4 text-center">
-                    <p className="text-2xl font-black text-cyan-700">{schedule.day}</p>
-                    <p className="text-xs font-bold uppercase tracking-[0.18em] text-slate-500">{schedule.month}</p>
+                    <p className="text-2xl font-black text-cyan-700">{schedule.formattedSchedule.day}</p>
+                    <p className="text-xs font-bold uppercase tracking-[0.18em] text-slate-500">{schedule.formattedSchedule.month}</p>
                   </div>
                   <div>
-                    <p className="text-2xl font-black text-cyan-700">{schedule.time}</p>
-                    <p className="text-sm text-slate-500">{schedule.note}</p>
+                    <p className="text-2xl font-black text-cyan-700">{schedule.formattedSchedule.time}</p>
+                    <p className="text-sm text-slate-500">{schedule.durationMinutes ? `${schedule.durationMinutes} minute show` : 'Show duration TBA'}</p>
                   </div>
                 </div>
 
@@ -248,21 +499,23 @@ export default function HomePage() {
                   <h3 className="text-xl font-black text-slate-950">{schedule.title}</h3>
                   <p className="mt-1 flex items-center justify-center gap-1 text-sm text-slate-600 md:justify-start">
                     <span className="material-symbols-outlined text-sm">location_on</span>
-                    {schedule.venue}
+                    {schedule.venueName || 'Venue TBA'}
                   </p>
                 </div>
 
                 <div className="flex w-full items-center justify-between gap-6 md:w-auto md:justify-end">
-                  <span className={`flex items-center gap-2 rounded-full px-4 py-1.5 text-sm font-bold ${schedule.statusClass}`}>
-                    <span className={`h-2 w-2 rounded-full ${schedule.dotClass}`} />
-                    {schedule.status}
+                  <span className={`flex items-center gap-2 rounded-full px-4 py-1.5 text-sm font-bold ${status.className}`}>
+                    <span className={`h-2 w-2 rounded-full ${status.dotClass}`} />
+                    {status.label}
                   </span>
-                  <Link className="rounded-full bg-cyan-700 px-8 py-3.5 font-bold text-white shadow-md transition hover:bg-cyan-800" to="/bookings/create">
+                  <Link className="rounded-full bg-cyan-700 px-8 py-3.5 font-bold text-white shadow-md transition hover:bg-cyan-800" to={`/shows/${schedule.id}`}>
                     Book Now
                   </Link>
                 </div>
               </article>
-            ))}
+                );
+              })
+            )}
           </div>
         </div>
       </section>

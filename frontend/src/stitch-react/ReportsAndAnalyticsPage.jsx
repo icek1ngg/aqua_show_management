@@ -1,370 +1,595 @@
-import { useEffect } from 'react';
+import { useEffect, useMemo, useState } from 'react';
+import { Link } from 'react-router-dom';
+
+import { getManagerShows } from '../services/managerShowService.js';
+import {
+  getAttendanceReport,
+  getBookingStatusReport,
+  getDashboardReport,
+  getSalesReport,
+} from '../services/reportService.js';
+import { getSchedules } from '../services/scheduleService.js';
+
+const emptyFilters = {
+  fromDate: '',
+  toDate: '',
+  showId: '',
+  scheduleId: '',
+};
+
+const bookingStatuses = ['PROCESSING', 'PENDING_PAYMENT', 'PAID', 'EXPIRED', 'FAILED'];
+
+function getErrorMessage(error, fallback) {
+  return error?.response?.data?.message || error?.message || fallback;
+}
+
+function formatMoney(value) {
+  const amount = Number(value);
+
+  if (!Number.isFinite(amount)) {
+    return '$0';
+  }
+
+  return new Intl.NumberFormat('en-US', {
+    style: 'currency',
+    currency: 'USD',
+    maximumFractionDigits: amount % 1 === 0 ? 0 : 2,
+  }).format(amount);
+}
+
+function formatNumber(value) {
+  const number = Number(value);
+  return Number.isFinite(number) ? new Intl.NumberFormat('en-US').format(number) : '0';
+}
+
+function formatPercent(value) {
+  const number = Number(value);
+  return Number.isFinite(number) ? `${number.toFixed(number % 1 === 0 ? 0 : 1)}%` : '0%';
+}
+
+function formatStatus(status) {
+  return status ? status.replaceAll('_', ' ') : 'TBA';
+}
+
+function formatDateTime(value) {
+  if (!value) {
+    return 'TBA';
+  }
+
+  const date = new Date(value);
+  if (Number.isNaN(date.getTime())) {
+    return value;
+  }
+
+  return date.toLocaleString('en-US', {
+    month: 'short',
+    day: 'numeric',
+    year: 'numeric',
+    hour: '2-digit',
+    minute: '2-digit',
+  });
+}
+
+function truncateId(id) {
+  return id ? `${String(id).slice(0, 8)}...` : 'TBA';
+}
+
+function safeCount(map, status) {
+  return Number(map?.[status]) || 0;
+}
+
+function maxByShowRevenue(rows) {
+  return Math.max(1, ...rows.map((row) => Number(row.revenue) || 0));
+}
+
+function statusTone(status) {
+  if (status === 'PAID') {
+    return 'bg-primary text-on-primary';
+  }
+
+  if (status === 'PROCESSING' || status === 'PENDING_PAYMENT') {
+    return 'bg-tertiary-container text-on-tertiary-container';
+  }
+
+  return 'bg-error text-on-error';
+}
+
+function SidebarLink({ active, icon, label, to }) {
+  return (
+    <Link
+      className={[
+        'flex items-center gap-unit-md px-unit-lg py-unit-md transition-all',
+        active
+          ? 'border-l-4 border-primary-fixed bg-on-secondary-fixed-variant/30 text-primary-fixed sidebar-active-indicator'
+          : 'text-on-secondary-fixed-variant hover:bg-on-secondary-fixed-variant/20 hover:text-primary-fixed',
+      ].join(' ')}
+      to={to}
+    >
+      <span className="material-symbols-outlined">{icon}</span>
+      <span className={active ? 'font-body-md font-bold' : 'font-body-md'}>{label}</span>
+    </Link>
+  );
+}
+
+function MetricCard({ label, value, icon, tone = 'primary', helper }) {
+  const toneClass = {
+    primary: 'border-primary text-primary',
+    secondary: 'border-secondary text-secondary',
+    tertiary: 'border-tertiary text-tertiary',
+    neutral: 'border-outline text-on-surface',
+    error: 'border-error text-error',
+  }[tone];
+
+  return (
+    <div className={`glass-card rounded-lg border-l-4 p-unit-lg shadow-sm transition-transform hover:-translate-y-1 ${toneClass}`}>
+      <div className="flex items-start justify-between gap-unit-md">
+        <div>
+          <p className="mb-unit-sm font-label-md uppercase tracking-wider text-on-surface-variant">{label}</p>
+          <h3 className="font-headline-lg text-headline-lg">{value}</h3>
+        </div>
+        <span className="material-symbols-outlined text-[22px] opacity-80">{icon}</span>
+      </div>
+      {helper && <p className="mt-unit-xs text-label-md text-on-surface-variant">{helper}</p>}
+    </div>
+  );
+}
+
+function EmptySection({ icon = 'insights', message }) {
+  return (
+    <div className="flex min-h-[160px] flex-col items-center justify-center rounded-lg border border-dashed border-outline-variant/40 p-unit-lg text-center">
+      <span className="material-symbols-outlined text-4xl text-on-surface-variant">{icon}</span>
+      <p className="mt-unit-sm font-label-lg text-on-surface">{message}</p>
+    </div>
+  );
+}
 
 export default function ReportsAndAnalyticsPage() {
+  const [draftFilters, setDraftFilters] = useState(emptyFilters);
+  const [appliedFilters, setAppliedFilters] = useState(emptyFilters);
+  const [shows, setShows] = useState([]);
+  const [schedules, setSchedules] = useState([]);
+  const [dashboard, setDashboard] = useState(null);
+  const [sales, setSales] = useState(null);
+  const [attendance, setAttendance] = useState(null);
+  const [bookingStatus, setBookingStatus] = useState(null);
+  const [isLoading, setIsLoading] = useState(true);
+  const [isScheduleLoading, setIsScheduleLoading] = useState(false);
+  const [loadError, setLoadError] = useState('');
+  const [referenceError, setReferenceError] = useState('');
+  const [reloadKey, setReloadKey] = useState(0);
+
   useEffect(() => {
-    const script = document.createElement('script');
-    script.textContent = "// Micro-interactions for charts and UI\r\n        document.querySelectorAll('.glass-card').forEach(card => {\r\n            card.addEventListener('mouseenter', () => {\r\n                card.style.transform = 'translateY(-4px)';\r\n                card.style.transition = 'all 0.3s cubic-bezier(0.34, 1.56, 0.64, 1)';\r\n            });\r\n            card.addEventListener('mouseleave', () => {\r\n                card.style.transform = 'translateY(0px)';\r\n            });\r\n        });";
-    document.body.appendChild(script);
+    let isActive = true;
+
+    async function loadShows() {
+      try {
+        const response = await getManagerShows({ page: 0, size: 100 });
+
+        if (isActive) {
+          setShows(Array.isArray(response?.items) ? response.items : []);
+        }
+      } catch (error) {
+        if (isActive) {
+          setReferenceError(getErrorMessage(error, 'Could not load shows for report filters.'));
+        }
+      }
+    }
+
+    loadShows();
 
     return () => {
-      script.remove();
+      isActive = false;
     };
   }, []);
 
+  useEffect(() => {
+    let isActive = true;
+
+    async function loadSchedulesForShow() {
+      if (!draftFilters.showId) {
+        setSchedules([]);
+        setIsScheduleLoading(false);
+        return;
+      }
+
+      setIsScheduleLoading(true);
+      setReferenceError('');
+
+      try {
+        const response = await getSchedules({ showId: draftFilters.showId, page: 0, size: 100 });
+
+        if (isActive) {
+          setSchedules(Array.isArray(response?.items) ? response.items : []);
+        }
+      } catch (error) {
+        if (isActive) {
+          setSchedules([]);
+          setReferenceError(getErrorMessage(error, 'Could not load schedules for the selected show.'));
+        }
+      } finally {
+        if (isActive) {
+          setIsScheduleLoading(false);
+        }
+      }
+    }
+
+    loadSchedulesForShow();
+
+    return () => {
+      isActive = false;
+    };
+  }, [draftFilters.showId]);
+
+  useEffect(() => {
+    let isActive = true;
+
+    async function loadReports() {
+      setIsLoading(true);
+      setLoadError('');
+
+      try {
+        const [dashboardResponse, salesResponse, attendanceResponse, statusResponse] = await Promise.all([
+          getDashboardReport(appliedFilters),
+          getSalesReport(appliedFilters),
+          getAttendanceReport(appliedFilters),
+          getBookingStatusReport(appliedFilters),
+        ]);
+
+        if (!isActive) {
+          return;
+        }
+
+        setDashboard(dashboardResponse);
+        setSales(salesResponse);
+        setAttendance(attendanceResponse);
+        setBookingStatus(statusResponse);
+      } catch (error) {
+        if (!isActive) {
+          return;
+        }
+
+        setDashboard(null);
+        setSales(null);
+        setAttendance(null);
+        setBookingStatus(null);
+        setLoadError(getErrorMessage(error, 'Could not load reports.'));
+      } finally {
+        if (isActive) {
+          setIsLoading(false);
+        }
+      }
+    }
+
+    loadReports();
+
+    return () => {
+      isActive = false;
+    };
+  }, [appliedFilters, reloadKey]);
+
+  function handleFilterChange(event) {
+    const { name, value } = event.target;
+
+    setDraftFilters((current) => ({
+      ...current,
+      [name]: value,
+      ...(name === 'showId' ? { scheduleId: '' } : {}),
+    }));
+  }
+
+  function applyFilters() {
+    setAppliedFilters(draftFilters);
+  }
+
+  function resetFilters() {
+    setDraftFilters(emptyFilters);
+    setAppliedFilters(emptyFilters);
+  }
+
+  const statusRows = useMemo(() => {
+    const counts = bookingStatus?.counts || {};
+    const total = bookingStatuses.reduce((sum, status) => sum + safeCount(counts, status), 0);
+
+    return bookingStatuses.map((status) => {
+      const count = safeCount(counts, status);
+      return {
+        status,
+        count,
+        percent: total > 0 ? Math.round((count * 1000) / total) / 10 : 0,
+      };
+    });
+  }, [bookingStatus]);
+
+  const revenueByShow = Array.isArray(sales?.revenueByShow) ? sales.revenueByShow : [];
+  const maxRevenue = maxByShowRevenue(revenueByShow);
+  const totalPending = safeCount(bookingStatus?.counts, 'PROCESSING') + safeCount(bookingStatus?.counts, 'PENDING_PAYMENT');
+  const hasReports = Boolean(dashboard || sales || attendance || bookingStatus);
+
   return (
-    <div className="bg-background text-on-background">
-      <style>{"body {\r\n            font-family: 'Plus Jakarta Sans', sans-serif;\r\n            background-color: #f1fbfb;\r\n        }\r\n        .material-symbols-outlined {\r\n            font-variation-settings: 'FILL' 0, 'wght' 400, 'GRAD' 0, 'opsz' 24;\r\n        }\r\n        .glass-card {\r\n            background: rgba(255, 255, 255, 0.7);\r\n            backdrop-filter: blur(20px);\r\n            border: 1px solid rgba(255, 255, 255, 0.2);\r\n        }\r\n        .chart-gradient-teal {\r\n            background: linear-gradient(180deg, #00ced1 0%, #00696b 100%);\r\n        }\r\n        .sidebar-active-indicator {\r\n            box-shadow: 4px 0px 10px rgba(0, 105, 107, 0.2);\r\n        }"}</style>
-<aside className="fixed left-0 top-0 h-full w-sidebar-width bg-on-secondary-fixed shadow-lg flex flex-col h-full py-unit-lg z-50">
-<div className="px-unit-lg mb-unit-xl">
-<h1 className="font-headline-md text-headline-md font-bold text-primary-fixed">AquaShow MS</h1>
-<p className="font-body-md text-body-sm text-on-secondary-fixed-variant opacity-70">Management System</p>
-</div>
-<nav className="flex-1 space-y-unit-xs">
+    <div className="min-h-screen bg-background text-on-background">
+      <style>{`body {
+            font-family: 'Plus Jakarta Sans', sans-serif;
+            background-color: #f1fbfb;
+        }
+        .material-symbols-outlined {
+            font-variation-settings: 'FILL' 0, 'wght' 400, 'GRAD' 0, 'opsz' 24;
+        }
+        .glass-card {
+            background: rgba(255, 255, 255, 0.7);
+            backdrop-filter: blur(20px);
+            border: 1px solid rgba(255, 255, 255, 0.2);
+        }
+        .sidebar-active-indicator {
+            box-shadow: 4px 0px 10px rgba(0, 105, 107, 0.2);
+        }`}</style>
 
-<a className="flex items-center gap-unit-md text-on-secondary-fixed-variant px-unit-lg py-unit-md hover:text-primary-fixed hover:bg-on-secondary-fixed-variant/20 transition-all" href="/manager/dashboard">
-<span className="material-symbols-outlined">dashboard</span>
-<span className="font-body-md">Dashboard</span>
-</a>
-<a className="flex items-center gap-unit-md text-on-secondary-fixed-variant px-unit-lg py-unit-md hover:text-primary-fixed hover:bg-on-secondary-fixed-variant/20 transition-all" href="/manager/shows">
-<span className="material-symbols-outlined">theater_comedy</span>
-<span className="font-body-md">Shows</span>
-</a>
-<a className="flex items-center gap-unit-md text-on-secondary-fixed-variant px-unit-lg py-unit-md hover:text-primary-fixed hover:bg-on-secondary-fixed-variant/20 transition-all" href="/manager/venues">
-<span className="material-symbols-outlined">water_drop</span>
-<span className="font-body-md">Venues</span>
-</a>
-<a className="flex items-center gap-unit-md text-on-secondary-fixed-variant px-unit-lg py-unit-md hover:text-primary-fixed hover:bg-on-secondary-fixed-variant/20 transition-all" href="/manager/schedules">
-<span className="material-symbols-outlined">calendar_month</span>
-<span className="font-body-md">Schedules</span>
-</a>
-<a className="flex items-center gap-unit-md text-on-secondary-fixed-variant px-unit-lg py-unit-md hover:text-primary-fixed hover:bg-on-secondary-fixed-variant/20 transition-all" href="/manager/bookings">
-<span className="material-symbols-outlined">event_seat</span>
-<span className="font-body-md">Bookings</span>
-</a>
+      <aside className="fixed left-0 top-0 z-50 flex h-full w-sidebar-width flex-col bg-on-secondary-fixed py-unit-lg shadow-lg">
+        <div className="mb-unit-xl px-unit-lg">
+          <h1 className="font-headline-md text-headline-md font-bold text-primary-fixed">AquaShow MS</h1>
+          <p className="font-body-md text-body-sm text-on-secondary-fixed-variant opacity-70">Management System</p>
+        </div>
+        <nav className="flex-1 space-y-unit-xs">
+          <SidebarLink icon="dashboard" label="Dashboard" to="/manager/dashboard" />
+          <SidebarLink icon="theater_comedy" label="Shows" to="/manager/shows" />
+          <SidebarLink icon="water_drop" label="Venues" to="/manager/venues" />
+          <SidebarLink icon="calendar_month" label="Schedules" to="/manager/schedules" />
+          <SidebarLink icon="event_seat" label="Bookings" to="/manager/bookings" />
+          <SidebarLink active icon="analytics" label="Reports" to="/manager/reports" />
+          <SidebarLink icon="group" label="Users" to="/admin/users" />
+          <SidebarLink icon="admin_panel_settings" label="Roles" to="/admin/roles" />
+        </nav>
+        <div className="mt-auto px-unit-lg">
+          <Link className="block w-full rounded-lg bg-primary-container py-unit-md text-center font-label-lg text-on-primary-container transition-all hover:brightness-110" to="/manager/schedules">
+            Quick Schedule
+          </Link>
+          <div className="mt-unit-lg flex items-center gap-unit-md border-t border-on-secondary-fixed-variant/20 pt-unit-md">
+            <div className="flex h-10 w-10 items-center justify-center rounded-full bg-primary-fixed/10 text-primary-fixed">
+              <span className="material-symbols-outlined">admin_panel_settings</span>
+            </div>
+            <div>
+              <p className="font-label-lg text-primary-fixed">Manager</p>
+              <p className="text-[10px] uppercase tracking-widest text-on-secondary-fixed-variant">Reports Access</p>
+            </div>
+          </div>
+        </div>
+      </aside>
 
-<a className="flex items-center gap-unit-md text-primary-fixed border-l-4 border-primary-fixed bg-on-secondary-fixed-variant/30 px-unit-lg py-unit-md" href="/manager/reports">
-<span className="material-symbols-outlined">analytics</span>
-<span className="font-body-md font-bold">Reports</span>
-</a>
-<a className="flex items-center gap-unit-md text-on-secondary-fixed-variant px-unit-lg py-unit-md hover:text-primary-fixed hover:bg-on-secondary-fixed-variant/20 transition-all" href="/admin/users">
-<span className="material-symbols-outlined">group</span>
-<span className="font-body-md">Users</span>
-</a>
-<a className="flex items-center gap-unit-md text-on-secondary-fixed-variant px-unit-lg py-unit-md hover:text-primary-fixed hover:bg-on-secondary-fixed-variant/20 transition-all" href="/admin/roles">
-<span className="material-symbols-outlined">admin_panel_settings</span>
-<span className="font-body-md">Roles</span>
-</a>
-</nav>
-<div className="px-unit-lg mt-auto">
-<button className="w-full py-unit-md bg-primary-container text-on-primary-container rounded-lg font-label-lg hover:brightness-110 transition-all">
-                Quick Schedule
+      <main className="ml-sidebar-width flex min-h-screen flex-col">
+        <header className="sticky top-0 z-40 flex items-center justify-between border-b border-outline-variant/20 bg-surface/70 px-unit-lg py-unit-sm shadow-sm backdrop-blur-md">
+          <div className="flex items-center gap-unit-lg">
+            <h2 className="font-headline-md text-headline-md font-extrabold text-primary">Reports &amp; Analytics</h2>
+            <div className="hidden text-body-sm text-on-surface-variant lg:block">Booking, revenue, ticket, and check-in metrics</div>
+          </div>
+          <div className="flex items-center gap-unit-md">
+            <button className="rounded-full p-2 text-on-surface-variant transition-colors hover:bg-surface-container-high/50" type="button">
+              <span className="material-symbols-outlined">notifications</span>
             </button>
-<div className="flex items-center gap-unit-md mt-unit-lg pt-unit-md border-t border-on-secondary-fixed-variant/20">
-<img alt="AquaShow Admin Profile" className="w-10 h-10 rounded-full object-cover" data-alt="A professional headshot of a marine park manager in a clean white uniform, smiling warmly against a soft-focus background of a sunlit tropical aquatic center. The lighting is bright and airy, matching a high-end corporate aesthetic with subtle blue and teal undertones. High-quality professional photography style." src="https://lh3.googleusercontent.com/aida-public/AB6AXuDCbYJkp0pNvXTXiIisy-nc67tIW4TicjBPRQe8wj9xkEan3uNeHKuI2ZOA40wlTSntzQ3VMWmvf8hXpSl3jDvPYePrt-X3YyP8Ng6TjIHWsPTbfgzE-RFx1imI38S57RBgESwLXUZDxthN5wQT-YqHr8kxlnlnuUwgxoorfbaYRySRoNPQf1HU2V64TKlDF-pnPC_cpRW7nzrtxm8qngYBL_CMDRqv0ynzJDduJFF4XspN66qjboaF9OoCxYdrpCPyOUBE-8M8uuEx"/>
-<div>
-<p className="font-label-lg text-primary-fixed">Alex Rivers</p>
-<p className="text-[10px] text-on-secondary-fixed-variant uppercase tracking-widest">Admin Manager</p>
-</div>
-</div>
-</div>
-</aside>
-
-<main className="ml-sidebar-width flex flex-col min-h-screen">
-
-<header className="flex justify-between items-center px-unit-lg py-unit-sm sticky top-0 z-40 bg-surface/70 backdrop-blur-md border-b border-outline-variant/20 shadow-sm">
-<div className="flex items-center gap-unit-lg">
-<h2 className="font-headline-md text-headline-md font-extrabold text-primary">Reports &amp; Analytics</h2>
-<div className="relative hidden lg:block">
-<span className="material-symbols-outlined absolute left-3 top-1/2 -translate-y-1/2 text-on-surface-variant">search</span>
-<input className="pl-10 pr-4 py-2 bg-surface-container-low border-none rounded-full w-64 focus:ring-2 focus:ring-primary/20 text-body-sm" placeholder="Search reports..." type="text"/>
-</div>
-</div>
-<div className="flex items-center gap-unit-md">
-<button className="p-2 text-on-surface-variant hover:bg-surface-container-high/50 rounded-full transition-colors active:scale-95">
-<span className="material-symbols-outlined">notifications</span>
-</button>
-<button className="p-2 text-on-surface-variant hover:bg-surface-container-high/50 rounded-full transition-colors active:scale-95">
-<span className="material-symbols-outlined">help_outline</span>
-</button>
-<button className="p-2 text-on-surface-variant hover:bg-surface-container-high/50 rounded-full transition-colors active:scale-95">
-<span className="material-symbols-outlined">settings</span>
-</button>
-</div>
-</header>
-
-<section className="p-unit-lg space-y-unit-lg max-w-[1600px] mx-auto w-full">
-
-<div className="flex flex-col md:flex-row justify-between items-start md:items-center gap-unit-md">
-<div className="flex flex-wrap gap-unit-sm">
-<select className="bg-surface-container-lowest border border-outline-variant rounded-lg px-unit-md py-unit-sm text-body-sm focus:border-primary focus:ring-primary">
-<option>Last 30 Days</option>
-<option>Last Quarter</option>
-<option>This Year</option>
-<option>Custom Range</option>
-</select>
-<select className="bg-surface-container-lowest border border-outline-variant rounded-lg px-unit-md py-unit-sm text-body-sm focus:border-primary focus:ring-primary">
-<option>All Shows</option>
-<option>Dolphin Symphony</option>
-<option>Orca Odyssey</option>
-<option>Tropical Reef Ballet</option>
-</select>
-</div>
-<button className="flex items-center gap-unit-sm px-unit-lg py-unit-sm bg-primary text-on-primary rounded-full font-label-lg shadow-lg hover:shadow-primary/20 transition-all active:scale-95">
-<span className="material-symbols-outlined text-[20px]">download</span>
-                    Export PDF
-                </button>
-</div>
-
-<div className="grid grid-cols-1 md:grid-cols-3 lg:grid-cols-6 gap-unit-md">
-
-<div className="glass-card p-unit-lg rounded-lg shadow-sm border-l-4 border-primary">
-<p className="text-on-surface-variant font-label-md uppercase tracking-wider mb-unit-sm">Total Bookings</p>
-<h3 className="font-headline-lg text-headline-lg text-primary">12,482</h3>
-<div className="flex items-center gap-1 mt-unit-xs text-green-600 font-label-md">
-<span className="material-symbols-outlined text-[16px]">trending_up</span>
-<span>+12%</span>
-</div>
-</div>
-
-<div className="glass-card p-unit-lg rounded-lg shadow-sm border-l-4 border-secondary">
-<p className="text-on-surface-variant font-label-md uppercase tracking-wider mb-unit-sm">Paid Bookings</p>
-<h3 className="font-headline-lg text-headline-lg text-secondary">11,902</h3>
-<div className="flex items-center gap-1 mt-unit-xs text-green-600 font-label-md">
-<span className="material-symbols-outlined text-[16px]">trending_up</span>
-<span>+8%</span>
-</div>
-</div>
-
-<div className="glass-card p-unit-lg rounded-lg shadow-sm border-l-4 border-tertiary col-span-1 lg:col-span-2">
-<p className="text-on-surface-variant font-label-md uppercase tracking-wider mb-unit-sm">Total Revenue</p>
-<h3 className="font-headline-lg text-headline-lg text-tertiary">$482,910.00</h3>
-<div className="flex items-center gap-1 mt-unit-xs text-green-600 font-label-md">
-<span className="material-symbols-outlined text-[16px]">trending_up</span>
-<span>+$42k vs last month</span>
-</div>
-</div>
-
-<div className="glass-card p-unit-lg rounded-lg shadow-sm border-l-4 border-primary-container">
-<p className="text-on-surface-variant font-label-md uppercase tracking-wider mb-unit-sm">Attendance</p>
-<h3 className="font-headline-lg text-headline-lg text-on-primary-container">94.2%</h3>
-<div className="flex items-center gap-1 mt-unit-xs text-secondary font-label-md">
-<span className="material-symbols-outlined text-[16px]">verified</span>
-<span>High Capacity</span>
-</div>
-</div>
-
-<div className="glass-card p-unit-lg rounded-lg shadow-sm border-l-4 border-outline">
-<p className="text-on-surface-variant font-label-md uppercase tracking-wider mb-unit-sm">Check-ins</p>
-<h3 className="font-headline-lg text-headline-lg text-on-surface">10,841</h3>
-<div className="flex items-center gap-1 mt-unit-xs text-on-surface-variant font-label-md">
-<span className="material-symbols-outlined text-[16px]">group</span>
-<span>Today: 842</span>
-</div>
-</div>
-</div>
-
-<div className="grid grid-cols-1 lg:grid-cols-12 gap-unit-lg">
-
-<div className="lg:col-span-8 glass-card p-unit-lg rounded-lg shadow-md">
-<div className="flex justify-between items-center mb-unit-lg">
-<h4 className="font-headline-md text-headline-md text-on-surface">Daily Attendance Trend</h4>
-<div className="flex gap-unit-md text-body-sm text-on-surface-variant">
-<span className="flex items-center gap-1"><i className="w-3 h-3 rounded-full bg-primary"></i> Show A</span>
-<span className="flex items-center gap-1"><i className="w-3 h-3 rounded-full bg-secondary"></i> Show B</span>
-</div>
-</div>
-<div className="h-64 w-full relative flex items-end justify-between px-4 pb-8">
-
-<div className="absolute inset-0 flex items-end opacity-10">
-<div className="w-full h-[1px] bg-outline mb-12"></div>
-<div className="w-full h-[1px] bg-outline mb-24"></div>
-<div className="w-full h-[1px] bg-outline mb-36"></div>
-</div>
-<svg className="absolute bottom-12 left-0 w-full h-40 overflow-visible" preserveAspectRatio="none" viewBox="0 0 1000 100">
-<path className="text-primary" d="M0,80 Q100,20 200,50 T400,30 T600,70 T800,10 T1000,40" fill="none" stroke="currentColor" strokeWidth="3"></path>
-<path className="text-secondary" d="M0,90 Q120,40 250,70 T450,50 T650,90 T850,30 T1000,60" fill="none" stroke="currentColor" strokeWidth="3"></path>
-</svg>
-<div className="text-[10px] text-outline font-bold">MON</div>
-<div className="text-[10px] text-outline font-bold">TUE</div>
-<div className="text-[10px] text-outline font-bold">WED</div>
-<div className="text-[10px] text-outline font-bold">THU</div>
-<div className="text-[10px] text-outline font-bold">FRI</div>
-<div className="text-[10px] text-outline font-bold">SAT</div>
-<div className="text-[10px] text-outline font-bold">SUN</div>
-</div>
-</div>
-
-<div className="lg:col-span-4 glass-card p-unit-lg rounded-lg shadow-md flex flex-col">
-<h4 className="font-headline-md text-headline-md text-on-surface mb-unit-lg">Booking Distribution</h4>
-<div className="flex-1 flex flex-col items-center justify-center">
-<div className="relative w-48 h-48 rounded-full border-[16px] border-primary-container" style={{ borderRightColor: "#ffdcc3", borderBottomColor: "#baeafe" }}>
-<div className="absolute inset-0 flex flex-col items-center justify-center text-center">
-<span className="font-headline-md text-on-surface">12k</span>
-<span className="text-[10px] uppercase font-bold text-outline">Tickets</span>
-</div>
-</div>
-<div className="mt-unit-lg w-full space-y-2">
-<div className="flex justify-between items-center text-body-sm">
-<span className="flex items-center gap-2"><i className="w-3 h-3 rounded-full bg-primary-container"></i> Confirmed</span>
-<span className="font-bold">75%</span>
-</div>
-<div className="flex justify-between items-center text-body-sm">
-<span className="flex items-center gap-2"><i className="w-3 h-3 rounded-full bg-secondary-fixed"></i> Pending</span>
-<span className="font-bold">15%</span>
-</div>
-<div className="flex justify-between items-center text-body-sm">
-<span className="flex items-center gap-2"><i className="w-3 h-3 rounded-full bg-tertiary-fixed"></i> Cancelled</span>
-<span className="font-bold">10%</span>
-</div>
-</div>
-</div>
-</div>
-
-<div className="lg:col-span-12 glass-card p-unit-lg rounded-lg shadow-md">
-<div className="flex justify-between items-center mb-unit-lg">
-<h4 className="font-headline-md text-headline-md text-on-surface">Revenue by Show Performance</h4>
-<button className="text-primary font-label-lg hover:underline">View Detailed breakdown</button>
-</div>
-<div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-unit-xl">
-
-<div className="space-y-unit-sm">
-<div className="flex justify-between items-end mb-1">
-<span className="text-body-sm font-bold">Dolphin Symphony</span>
-<span className="text-primary font-label-lg">$142k</span>
-</div>
-<div className="h-4 bg-surface-container rounded-full overflow-hidden">
-<div className="h-full bg-primary rounded-full transition-all duration-1000" style={{ width: "85%" }}></div>
-</div>
-<p className="text-[10px] text-on-surface-variant uppercase tracking-tighter">Capacity: 92%</p>
-</div>
-
-<div className="space-y-unit-sm">
-<div className="flex justify-between items-end mb-1">
-<span className="text-body-sm font-bold">Orca Odyssey</span>
-<span className="text-primary font-label-lg">$185k</span>
-</div>
-<div className="h-4 bg-surface-container rounded-full overflow-hidden">
-<div className="h-full bg-primary rounded-full transition-all duration-1000" style={{ width: "95%" }}></div>
-</div>
-<p className="text-[10px] text-on-surface-variant uppercase tracking-tighter">Capacity: 98%</p>
-</div>
-
-<div className="space-y-unit-sm">
-<div className="flex justify-between items-end mb-1">
-<span className="text-body-sm font-bold">Sea Lion Splash</span>
-<span className="text-primary font-label-lg">$84k</span>
-</div>
-<div className="h-4 bg-surface-container rounded-full overflow-hidden">
-<div className="h-full bg-primary rounded-full transition-all duration-1000" style={{ width: "60%" }}></div>
-</div>
-<p className="text-[10px] text-on-surface-variant uppercase tracking-tighter">Capacity: 74%</p>
-</div>
-
-<div className="space-y-unit-sm">
-<div className="flex justify-between items-end mb-1">
-<span className="text-body-sm font-bold">Coral Reef Ballet</span>
-<span className="text-primary font-label-lg">$71k</span>
-</div>
-<div className="h-4 bg-surface-container rounded-full overflow-hidden">
-<div className="h-full bg-primary rounded-full transition-all duration-1000" style={{ width: "52%" }}></div>
-</div>
-<p className="text-[10px] text-on-surface-variant uppercase tracking-tighter">Capacity: 68%</p>
-</div>
-</div>
-</div>
-</div>
-
-<div className="glass-card rounded-lg overflow-hidden shadow-md">
-<div className="px-unit-lg py-unit-md border-b border-outline-variant/20 flex justify-between items-center bg-surface-container-low/30">
-<h4 className="font-headline-md text-on-surface">Top Booking Sources</h4>
-<button className="text-on-surface-variant hover:text-primary transition-colors">
-<span className="material-symbols-outlined">more_vert</span>
-</button>
-</div>
-<div className="overflow-x-auto">
-<table className="w-full text-left border-collapse">
-<thead>
-<tr className="bg-surface-container-high/20 text-on-surface-variant font-label-lg uppercase text-[12px] tracking-widest">
-<th className="px-unit-lg py-unit-md">Source</th>
-<th className="px-unit-lg py-unit-md">Bookings</th>
-<th className="px-unit-lg py-unit-md">Conversion</th>
-<th className="px-unit-lg py-unit-md">Revenue</th>
-<th className="px-unit-lg py-unit-md text-right">Trend</th>
-</tr>
-</thead>
-<tbody className="divide-y divide-outline-variant/10 text-body-sm">
-<tr className="hover:bg-primary/5 transition-colors">
-<td className="px-unit-lg py-unit-md flex items-center gap-3">
-<div className="w-8 h-8 rounded bg-primary-container/20 flex items-center justify-center text-primary">
-<span className="material-symbols-outlined text-[18px]">language</span>
-</div>
-                                    Direct Website
-                                </td>
-<td className="px-unit-lg py-unit-md font-bold">5,201</td>
-<td className="px-unit-lg py-unit-md">12.4%</td>
-<td className="px-unit-lg py-unit-md">$210,040</td>
-<td className="px-unit-lg py-unit-md text-right text-green-600">
-<span className="material-symbols-outlined text-[16px] align-middle">north_east</span>
-</td>
-</tr>
-<tr className="hover:bg-primary/5 transition-colors">
-<td className="px-unit-lg py-unit-md flex items-center gap-3">
-<div className="w-8 h-8 rounded bg-secondary-container/20 flex items-center justify-center text-secondary">
-<span className="material-symbols-outlined text-[18px]">confirmation_number</span>
-</div>
-                                    TicketMaster
-                                </td>
-<td className="px-unit-lg py-unit-md font-bold">3,892</td>
-<td className="px-unit-lg py-unit-md">8.2%</td>
-<td className="px-unit-lg py-unit-md">$158,230</td>
-<td className="px-unit-lg py-unit-md text-right text-green-600">
-<span className="material-symbols-outlined text-[16px] align-middle">north_east</span>
-</td>
-</tr>
-<tr className="hover:bg-primary/5 transition-colors">
-<td className="px-unit-lg py-unit-md flex items-center gap-3">
-<div className="w-8 h-8 rounded bg-tertiary-container/20 flex items-center justify-center text-tertiary">
-<span className="material-symbols-outlined text-[18px]">hotel</span>
-</div>
-                                    Hotel Concierge
-                                    <span className="px-2 py-0.5 bg-orange-100 text-orange-800 text-[10px] rounded-full font-bold">PARTNER</span>
-</td>
-<td className="px-unit-lg py-unit-md font-bold">1,405</td>
-<td className="px-unit-lg py-unit-md">18.1%</td>
-<td className="px-unit-lg py-unit-md">$62,400</td>
-<td className="px-unit-lg py-unit-md text-right text-red-600">
-<span className="material-symbols-outlined text-[16px] align-middle">south_east</span>
-</td>
-</tr>
-</tbody>
-</table>
-</div>
-</div>
-</section>
-
-<footer className="mt-auto px-unit-lg py-unit-md border-t border-outline-variant/20 flex flex-col md:flex-row justify-between items-center text-on-surface-variant text-[12px]">
-<p>© 2024 AquaShow Management System. Precision in every splash.</p>
-<div className="flex gap-unit-lg mt-unit-sm md:mt-0">
-<a className="hover:text-primary transition-colors" href="/">Privacy Policy</a>
-<a className="hover:text-primary transition-colors" href="/manager/reports">Audit Logs</a>
-<a className="hover:text-primary transition-colors" href="mailto:support@aquashow.local">Support</a>
-</div>
-</footer>
-</main>
-
-<div className="fixed bottom-unit-lg right-unit-lg flex flex-col gap-unit-sm items-end group">
-<div className="hidden group-hover:flex flex-col gap-unit-sm items-end animate-in fade-in slide-in-from-bottom-4 duration-300">
-<button className="bg-white text-primary px-4 py-2 rounded-full shadow-lg border border-primary/20 font-label-lg flex items-center gap-2">
-<span className="material-symbols-outlined text-sm">mail</span> Email Report
+            <button className="rounded-full p-2 text-on-surface-variant transition-colors hover:bg-surface-container-high/50" type="button">
+              <span className="material-symbols-outlined">help_outline</span>
             </button>
-<button className="bg-white text-primary px-4 py-2 rounded-full shadow-lg border border-primary/20 font-label-lg flex items-center gap-2">
-<span className="material-symbols-outlined text-sm">schedule_send</span> Schedule Automated
+            <button className="rounded-full p-2 text-on-surface-variant transition-colors hover:bg-surface-container-high/50" type="button">
+              <span className="material-symbols-outlined">settings</span>
             </button>
-</div>
-<button className="w-14 h-14 bg-primary text-on-primary rounded-full shadow-2xl flex items-center justify-center hover:scale-110 active:scale-95 transition-all">
-<span className="material-symbols-outlined text-2xl">insights</span>
-</button>
-</div>
+          </div>
+        </header>
+
+        <section className="mx-auto w-full max-w-[1600px] space-y-unit-lg p-unit-lg">
+          <div className="glass-card flex flex-col gap-unit-md rounded-lg p-unit-md shadow-sm md:flex-row md:items-end">
+            <div className="grid flex-1 grid-cols-1 gap-unit-md md:grid-cols-2 xl:grid-cols-4">
+              <div className="flex flex-col gap-1">
+                <label className="text-label-md text-on-surface-variant" htmlFor="report-from-date">From Date</label>
+                <input
+                  className="rounded-lg border border-outline-variant bg-surface-container-lowest px-unit-md py-unit-sm text-body-sm focus:border-primary focus:ring-primary"
+                  id="report-from-date"
+                  name="fromDate"
+                  type="date"
+                  value={draftFilters.fromDate}
+                  onChange={handleFilterChange}
+                />
+              </div>
+              <div className="flex flex-col gap-1">
+                <label className="text-label-md text-on-surface-variant" htmlFor="report-to-date">To Date</label>
+                <input
+                  className="rounded-lg border border-outline-variant bg-surface-container-lowest px-unit-md py-unit-sm text-body-sm focus:border-primary focus:ring-primary"
+                  id="report-to-date"
+                  name="toDate"
+                  type="date"
+                  value={draftFilters.toDate}
+                  onChange={handleFilterChange}
+                />
+              </div>
+              <div className="flex flex-col gap-1">
+                <label className="text-label-md text-on-surface-variant" htmlFor="report-show">Show</label>
+                <select
+                  className="rounded-lg border border-outline-variant bg-surface-container-lowest px-unit-md py-unit-sm text-body-sm focus:border-primary focus:ring-primary"
+                  id="report-show"
+                  name="showId"
+                  value={draftFilters.showId}
+                  onChange={handleFilterChange}
+                >
+                  <option value="">All Shows</option>
+                  {shows.map((show) => (
+                    <option key={show.id} value={show.id}>
+                      {show.title}
+                    </option>
+                  ))}
+                </select>
+              </div>
+              <div className="flex flex-col gap-1">
+                <label className="text-label-md text-on-surface-variant" htmlFor="report-schedule">Schedule</label>
+                <select
+                  className="rounded-lg border border-outline-variant bg-surface-container-lowest px-unit-md py-unit-sm text-body-sm focus:border-primary focus:ring-primary disabled:cursor-not-allowed disabled:opacity-60"
+                  disabled={!draftFilters.showId || isScheduleLoading}
+                  id="report-schedule"
+                  name="scheduleId"
+                  value={draftFilters.scheduleId}
+                  onChange={handleFilterChange}
+                >
+                  <option value="">{draftFilters.showId ? 'All Schedules' : 'Select a show first'}</option>
+                  {schedules.map((schedule) => (
+                    <option key={schedule.id} value={schedule.id}>
+                      {formatDateTime(schedule.startTime)} - {schedule.venueName || truncateId(schedule.venueId)}
+                    </option>
+                  ))}
+                </select>
+              </div>
+            </div>
+
+            <div className="flex gap-unit-sm">
+              <button className="flex items-center gap-unit-sm rounded-full bg-primary px-unit-lg py-unit-sm font-label-lg text-on-primary shadow-lg transition-all hover:shadow-primary/20" type="button" onClick={applyFilters}>
+                <span className="material-symbols-outlined text-[20px]">filter_alt</span>
+                Apply
+              </button>
+              <button className="rounded-full bg-surface-container-high px-unit-lg py-unit-sm font-label-lg text-on-surface-variant transition-all hover:bg-surface-container-highest" type="button" onClick={resetFilters}>
+                Reset
+              </button>
+            </div>
+          </div>
+
+          {referenceError && (
+            <div className="rounded-lg border border-error/20 bg-error/10 p-unit-md text-body-sm font-bold text-error">
+              {referenceError}
+            </div>
+          )}
+
+          {loadError && (
+            <div className="rounded-lg border border-error/20 bg-error/10 p-unit-lg text-center">
+              <span className="material-symbols-outlined text-4xl text-error">error</span>
+              <p className="mt-unit-sm font-label-lg text-error">{loadError}</p>
+              <button className="mt-unit-md rounded-lg bg-error px-unit-lg py-unit-sm font-label-lg text-on-error" type="button" onClick={() => setReloadKey((key) => key + 1)}>
+                Retry
+              </button>
+            </div>
+          )}
+
+          {isLoading && (
+            <div className="glass-card flex min-h-[360px] flex-col items-center justify-center rounded-lg p-unit-lg text-on-surface-variant">
+              <span className="material-symbols-outlined animate-spin text-5xl text-primary">progress_activity</span>
+              <p className="mt-unit-md font-label-lg">Loading report data...</p>
+            </div>
+          )}
+
+          {!isLoading && !loadError && !hasReports && <EmptySection message="No report data returned for this filter set." />}
+
+          {!isLoading && !loadError && hasReports && (
+            <>
+              <div className="grid grid-cols-1 gap-unit-md md:grid-cols-3 lg:grid-cols-6">
+                <MetricCard icon="event_seat" label="Total Bookings" value={formatNumber(dashboard?.totalBookings)} />
+                <MetricCard icon="check_circle" label="Paid Bookings" tone="secondary" value={formatNumber(dashboard?.paidBookings)} />
+                <MetricCard icon="payments" label="Total Revenue" tone="tertiary" value={formatMoney(dashboard?.totalRevenue)} helper={`${formatNumber(sales?.totalTicketsSold ?? dashboard?.totalTicketsSold)} tickets sold`} />
+                <MetricCard icon="confirmation_number" label="Tickets Sold" tone="primary" value={formatNumber(dashboard?.totalTicketsSold)} />
+                <MetricCard icon="fact_check" label="Check-ins" tone="neutral" value={formatNumber(dashboard?.totalCheckIns)} helper={`Attendance ${formatPercent(dashboard?.attendanceRate)}`} />
+                <MetricCard icon="pending_actions" label="Pending / Failed / Expired" tone="error" value={`${formatNumber(totalPending)} / ${formatNumber(dashboard?.failedBookings)} / ${formatNumber(dashboard?.expiredBookings)}`} />
+              </div>
+
+              <div className="grid grid-cols-1 gap-unit-lg lg:grid-cols-12">
+                <section className="glass-card rounded-lg p-unit-lg shadow-md lg:col-span-8">
+                  <div className="mb-unit-lg flex items-center justify-between">
+                    <h4 className="font-headline-md text-headline-md text-on-surface">Revenue by Show Performance</h4>
+                    <span className="font-label-lg text-primary">{formatMoney(sales?.totalRevenue)} total</span>
+                  </div>
+
+                  {revenueByShow.length === 0 ? (
+                    <EmptySection icon="bar_chart" message="No paid sales data for this filter set." />
+                  ) : (
+                    <div className="grid grid-cols-1 gap-unit-xl md:grid-cols-2">
+                      {revenueByShow.map((row) => {
+                        const revenue = Number(row.revenue) || 0;
+                        const width = Math.max(4, Math.round((revenue / maxRevenue) * 100));
+
+                        return (
+                          <div key={row.showId || row.showName} className="space-y-unit-sm">
+                            <div className="mb-1 flex items-end justify-between gap-unit-md">
+                              <span className="truncate text-body-sm font-bold">{row.showName || truncateId(row.showId)}</span>
+                              <span className="whitespace-nowrap font-label-lg text-primary">{formatMoney(row.revenue)}</span>
+                            </div>
+                            <div className="h-4 overflow-hidden rounded-full bg-surface-container">
+                              <div className="h-full rounded-full bg-primary transition-all duration-700" style={{ width: `${width}%` }} />
+                            </div>
+                            <p className="text-[10px] uppercase tracking-tighter text-on-surface-variant">{formatNumber(row.ticketsSold)} tickets sold</p>
+                          </div>
+                        );
+                      })}
+                    </div>
+                  )}
+                </section>
+
+                <section className="glass-card flex flex-col rounded-lg p-unit-lg shadow-md lg:col-span-4">
+                  <h4 className="mb-unit-lg font-headline-md text-headline-md text-on-surface">Attendance &amp; Check-ins</h4>
+                  {!attendance ? (
+                    <EmptySection icon="groups" message="No attendance data returned." />
+                  ) : (
+                    <div className="flex flex-1 flex-col justify-center gap-unit-lg">
+                      <div className="mx-auto flex h-48 w-48 flex-col items-center justify-center rounded-full border-[16px] border-primary-container text-center" style={{ borderRightColor: '#baeafe', borderBottomColor: '#ffdcc3' }}>
+                        <span className="font-headline-lg text-primary">{formatPercent(attendance.checkInRate)}</span>
+                        <span className="text-[10px] font-bold uppercase text-outline">Check-in Rate</span>
+                      </div>
+                      <div className="space-y-unit-sm">
+                        <div className="flex justify-between text-body-sm">
+                          <span>Total Valid Tickets</span>
+                          <strong>{formatNumber(attendance.totalValidTickets)}</strong>
+                        </div>
+                        <div className="flex justify-between text-body-sm">
+                          <span>Used Tickets</span>
+                          <strong>{formatNumber(attendance.totalUsedTickets)}</strong>
+                        </div>
+                        <div className="flex justify-between text-body-sm">
+                          <span>No-show Count</span>
+                          <strong>{formatNumber(attendance.noShowCount)}</strong>
+                        </div>
+                      </div>
+                    </div>
+                  )}
+                </section>
+              </div>
+
+              <section className="glass-card overflow-hidden rounded-lg shadow-md">
+                <div className="flex items-center justify-between border-b border-outline-variant/20 bg-surface-container-low/30 px-unit-lg py-unit-md">
+                  <h4 className="font-headline-md text-on-surface">Booking Status Breakdown</h4>
+                  <span className="text-body-sm text-on-surface-variant">Filtered by booking creation date</span>
+                </div>
+                <div className="overflow-x-auto">
+                  <table className="w-full border-collapse text-left">
+                    <thead>
+                      <tr className="bg-surface-container-high/20 text-[12px] font-label-lg uppercase tracking-widest text-on-surface-variant">
+                        <th className="px-unit-lg py-unit-md">Status</th>
+                        <th className="px-unit-lg py-unit-md">Bookings</th>
+                        <th className="px-unit-lg py-unit-md">Share</th>
+                        <th className="px-unit-lg py-unit-md">Distribution</th>
+                      </tr>
+                    </thead>
+                    <tbody className="divide-y divide-outline-variant/10 text-body-sm">
+                      {statusRows.map((row) => (
+                        <tr key={row.status} className="transition-colors hover:bg-primary/5">
+                          <td className="px-unit-lg py-unit-md">
+                            <span className={`inline-flex rounded-full px-3 py-1 text-label-md font-bold ${statusTone(row.status)}`}>{formatStatus(row.status)}</span>
+                          </td>
+                          <td className="px-unit-lg py-unit-md font-bold">{formatNumber(row.count)}</td>
+                          <td className="px-unit-lg py-unit-md">{formatPercent(row.percent)}</td>
+                          <td className="px-unit-lg py-unit-md">
+                            <div className="h-3 overflow-hidden rounded-full bg-surface-container">
+                              <div className="h-full rounded-full bg-primary" style={{ width: `${Math.max(0, row.percent)}%` }} />
+                            </div>
+                          </td>
+                        </tr>
+                      ))}
+                    </tbody>
+                  </table>
+                </div>
+              </section>
+            </>
+          )}
+        </section>
+
+        <footer className="mt-auto flex flex-col items-center justify-between border-t border-outline-variant/20 px-unit-lg py-unit-md text-[12px] text-on-surface-variant md:flex-row">
+          <p>© 2024 AquaShow Management System. Precision in every splash.</p>
+          <div className="mt-unit-sm flex gap-unit-lg md:mt-0">
+            <a className="transition-colors hover:text-primary" href="/">Privacy Policy</a>
+            <a className="transition-colors hover:text-primary" href="/manager/reports">Audit Logs</a>
+            <a className="transition-colors hover:text-primary" href="mailto:support@aquashow.local">Support</a>
+          </div>
+        </footer>
+      </main>
     </div>
   );
 }

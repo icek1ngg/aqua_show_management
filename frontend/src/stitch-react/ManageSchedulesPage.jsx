@@ -1,360 +1,904 @@
-import { useEffect } from 'react';
+import { useEffect, useMemo, useState } from 'react';
+import { Link } from 'react-router-dom';
+
+import { getManagerShows } from '../services/managerShowService.js';
+import {
+  activateSchedule,
+  createSchedule,
+  deactivateSchedule,
+  getSchedules,
+  updateSchedule,
+} from '../services/scheduleService.js';
+import { getVenues } from '../services/venueService.js';
+
+const emptyForm = {
+  showId: '',
+  venueId: '',
+  startTime: '',
+  endTime: '',
+  capacity: '',
+  price: '',
+  status: 'ACTIVE',
+};
+
+function formatDateTime(value) {
+  if (!value) {
+    return 'TBA';
+  }
+
+  const date = new Date(value);
+  if (Number.isNaN(date.getTime())) {
+    return 'TBA';
+  }
+
+  return date.toLocaleString('en-US', {
+    month: 'short',
+    day: 'numeric',
+    year: 'numeric',
+    hour: '2-digit',
+    minute: '2-digit',
+  });
+}
+
+function formatMoney(value) {
+  const amount = Number(value);
+
+  if (!Number.isFinite(amount)) {
+    return 'TBA';
+  }
+
+  return new Intl.NumberFormat('en-US', {
+    style: 'currency',
+    currency: 'USD',
+    maximumFractionDigits: amount % 1 === 0 ? 0 : 2,
+  }).format(amount);
+}
+
+function toDateTimeLocal(value) {
+  if (!value) {
+    return '';
+  }
+
+  const date = new Date(value);
+  if (Number.isNaN(date.getTime())) {
+    return '';
+  }
+
+  const offsetMs = date.getTimezoneOffset() * 60 * 1000;
+  return new Date(date.getTime() - offsetMs).toISOString().slice(0, 16);
+}
+
+function truncateId(id) {
+  return id ? `${id.slice(0, 8)}...` : 'TBA';
+}
+
+function getErrorMessage(error, fallback) {
+  return error?.response?.data?.message || error?.message || fallback;
+}
+
+function getValidationErrors(error) {
+  return error?.response?.data?.errors || {};
+}
+
+function statusBadge(status) {
+  if (status === 'ACTIVE') {
+    return 'bg-primary/10 text-primary';
+  }
+
+  return 'bg-surface-container-highest text-on-surface-variant';
+}
+
+function capacityPercent(schedule) {
+  const capacity = Number(schedule.capacity);
+  const availableTickets = Number(schedule.availableTickets);
+
+  if (!Number.isFinite(capacity) || capacity <= 0 || !Number.isFinite(availableTickets)) {
+    return 0;
+  }
+
+  const sold = Math.max(0, capacity - availableTickets);
+  return Math.min(100, Math.round((sold / capacity) * 100));
+}
+
+function toForm(schedule) {
+  return {
+    showId: schedule?.showId || '',
+    venueId: schedule?.venueId || '',
+    startTime: toDateTimeLocal(schedule?.startTime),
+    endTime: toDateTimeLocal(schedule?.endTime),
+    capacity: schedule?.capacity ? String(schedule.capacity) : '',
+    price: schedule?.price != null ? String(schedule.price) : '',
+    status: schedule?.status || 'ACTIVE',
+  };
+}
+
+function FieldError({ children }) {
+  if (!children) {
+    return null;
+  }
+
+  return <p className="mt-1 text-label-md font-bold text-error">{children}</p>;
+}
+
+function SidebarLink({ active, icon, label, to }) {
+  return (
+    <Link
+      className={[
+        'flex items-center gap-unit-md px-unit-lg py-unit-md transition-all',
+        active
+          ? 'border-l-4 border-primary-fixed bg-on-secondary-fixed-variant/30 text-primary-fixed'
+          : 'text-on-secondary-fixed-variant hover:bg-on-secondary-fixed-variant/20 hover:text-primary-fixed',
+      ].join(' ')}
+      to={to}
+    >
+      <span className="material-symbols-outlined">{icon}</span>
+      <span>{label}</span>
+    </Link>
+  );
+}
+
+function StatCard({ label, value, tone = 'primary' }) {
+  const toneClass = {
+    primary: 'border-primary text-primary',
+    secondary: 'border-secondary text-secondary',
+    tertiary: 'border-tertiary-container text-tertiary',
+    neutral: 'border-primary-container text-on-primary-container',
+  }[tone];
+
+  return (
+    <div className={`glass-card rounded-lg border-l-4 p-unit-lg ${toneClass}`}>
+      <p className="text-label-md text-on-surface-variant">{label}</p>
+      <h3 className="mt-1 text-headline-lg font-bold">{value}</h3>
+    </div>
+  );
+}
+
+function ScheduleFormModal({
+  formMode,
+  formValues,
+  shows,
+  venues,
+  selectedVenue,
+  fieldErrors,
+  generalError,
+  isSaving,
+  onChange,
+  onClose,
+  onSubmit,
+}) {
+  const isEdit = formMode === 'edit';
+
+  return (
+    <div className="fixed inset-0 z-[100] flex items-center justify-center bg-on-background/40 p-unit-lg backdrop-blur-sm">
+      <button className="absolute inset-0" type="button" aria-label="Close schedule dialog" onClick={onClose} />
+      <div className="glass-card relative flex max-h-[90vh] w-full max-w-2xl flex-col overflow-hidden rounded-lg shadow-2xl">
+        <div className="flex items-center justify-between border-b border-outline-variant/20 p-unit-lg">
+          <h2 className="font-headline-md text-headline-md font-bold text-primary">{isEdit ? 'Update Schedule' : 'New Show Schedule'}</h2>
+          <button className="rounded-full p-unit-sm text-error transition-colors hover:bg-error/10" disabled={isSaving} type="button" onClick={onClose}>
+            <span className="material-symbols-outlined">close</span>
+          </button>
+        </div>
+
+        <form className="max-h-[716px] space-y-unit-lg overflow-y-auto p-unit-lg" onSubmit={onSubmit}>
+          {generalError && (
+            <div className="rounded-md border border-error/20 bg-error/10 p-unit-md text-body-sm font-bold text-error">
+              {generalError}
+            </div>
+          )}
+
+          <div className="grid grid-cols-1 gap-unit-lg md:grid-cols-2">
+            <div className="space-y-unit-xs">
+              <label className="text-label-md font-bold text-on-surface-variant" htmlFor="schedule-show">
+                Select Show
+              </label>
+              <select
+                className="w-full rounded-md border-none bg-surface-container-low px-unit-md py-unit-md text-body-md focus:ring-2 focus:ring-primary disabled:cursor-not-allowed disabled:opacity-60"
+                disabled={isEdit}
+                id="schedule-show"
+                name="showId"
+                value={formValues.showId}
+                onChange={onChange}
+              >
+                <option value="">Choose active show</option>
+                {shows.map((show) => (
+                  <option key={show.id} value={show.id}>
+                    {show.title}
+                  </option>
+                ))}
+              </select>
+              <FieldError>{fieldErrors.showId}</FieldError>
+              {isEdit && <p className="text-[10px] font-medium text-on-surface-variant">Backend update does not accept changing show.</p>}
+            </div>
+
+            <div className="space-y-unit-xs">
+              <label className="text-label-md font-bold text-on-surface-variant" htmlFor="schedule-venue">
+                Select Venue
+              </label>
+              <select
+                className="w-full rounded-md border-none bg-surface-container-low px-unit-md py-unit-md text-body-md focus:ring-2 focus:ring-primary"
+                id="schedule-venue"
+                name="venueId"
+                value={formValues.venueId}
+                onChange={onChange}
+              >
+                <option value="">Choose active venue</option>
+                {venues.map((venue) => (
+                  <option key={venue.id} value={venue.id}>
+                    {venue.name}{venue.location ? ` - ${venue.location}` : ''}
+                  </option>
+                ))}
+              </select>
+              <FieldError>{fieldErrors.venueId}</FieldError>
+            </div>
+          </div>
+
+          <div className="grid grid-cols-1 gap-unit-lg md:grid-cols-2">
+            <div className="space-y-unit-xs">
+              <label className="text-label-md font-bold text-on-surface-variant" htmlFor="schedule-start">
+                Start Time
+              </label>
+              <input
+                className="w-full rounded-md border-none bg-surface-container-low px-unit-md py-unit-md text-body-md focus:ring-2 focus:ring-primary"
+                id="schedule-start"
+                name="startTime"
+                type="datetime-local"
+                value={formValues.startTime}
+                onChange={onChange}
+              />
+              <FieldError>{fieldErrors.startTime}</FieldError>
+            </div>
+
+            <div className="space-y-unit-xs">
+              <label className="text-label-md font-bold text-on-surface-variant" htmlFor="schedule-end">
+                End Time
+              </label>
+              <input
+                className="w-full rounded-md border-none bg-surface-container-low px-unit-md py-unit-md text-body-md focus:ring-2 focus:ring-primary"
+                id="schedule-end"
+                name="endTime"
+                type="datetime-local"
+                value={formValues.endTime}
+                onChange={onChange}
+              />
+              <FieldError>{fieldErrors.endTime}</FieldError>
+            </div>
+          </div>
+
+          <div className="grid grid-cols-1 gap-unit-lg md:grid-cols-3">
+            <div className="space-y-unit-xs">
+              <label className="text-label-md font-bold text-on-surface-variant" htmlFor="schedule-capacity">
+                Capacity
+              </label>
+              <input
+                className="w-full rounded-md border-none bg-surface-container-low px-unit-md py-unit-md text-body-md focus:ring-2 focus:ring-primary"
+                id="schedule-capacity"
+                min="1"
+                name="capacity"
+                placeholder="500"
+                type="number"
+                value={formValues.capacity}
+                onChange={onChange}
+              />
+              <FieldError>{fieldErrors.capacity}</FieldError>
+              {selectedVenue && <p className="text-[10px] font-medium text-tertiary">Max Venue Cap: {selectedVenue.capacity}</p>}
+            </div>
+
+            <div className="space-y-unit-xs">
+              <label className="text-label-md font-bold text-on-surface-variant" htmlFor="schedule-price">
+                Ticket Price
+              </label>
+              <input
+                className="w-full rounded-md border-none bg-surface-container-low px-unit-md py-unit-md text-body-md focus:ring-2 focus:ring-primary"
+                id="schedule-price"
+                min="0.01"
+                name="price"
+                placeholder="45.00"
+                step="0.01"
+                type="number"
+                value={formValues.price}
+                onChange={onChange}
+              />
+              <FieldError>{fieldErrors.price}</FieldError>
+            </div>
+
+            {isEdit && (
+              <div className="space-y-unit-xs">
+                <label className="text-label-md font-bold text-on-surface-variant" htmlFor="schedule-status">
+                  Status
+                </label>
+                <select
+                  className="w-full rounded-md border-none bg-surface-container-low px-unit-md py-unit-md text-body-md focus:ring-2 focus:ring-primary"
+                  id="schedule-status"
+                  name="status"
+                  value={formValues.status}
+                  onChange={onChange}
+                >
+                  <option value="ACTIVE">ACTIVE</option>
+                  <option value="INACTIVE">INACTIVE</option>
+                </select>
+                <FieldError>{fieldErrors.status}</FieldError>
+              </div>
+            )}
+          </div>
+
+          <div className="flex gap-unit-md rounded-md border border-tertiary-container/30 bg-tertiary-container/10 p-unit-md">
+            <span className="material-symbols-outlined text-tertiary-container">info</span>
+            <div className="space-y-1">
+              <h4 className="text-label-md font-bold text-tertiary">Backend Validation Applies</h4>
+              <p className="text-body-sm text-on-surface-variant">
+                Start must be before end, at least 24 hours ahead, within venue capacity, non-overlapping, and price must be greater than 0.
+              </p>
+            </div>
+          </div>
+
+          <div className="flex justify-end gap-unit-md border-t border-outline-variant/20 pt-unit-lg">
+            <button className="rounded-md px-unit-xl py-unit-md font-label-lg text-on-surface-variant transition-colors hover:bg-surface-container-high" disabled={isSaving} type="button" onClick={onClose}>
+              Cancel
+            </button>
+            <button className="rounded-md bg-primary px-unit-xl py-unit-md font-label-lg text-on-primary transition-all hover:opacity-90 active:scale-95 disabled:cursor-not-allowed disabled:opacity-60" disabled={isSaving} type="submit">
+              {isSaving ? 'Saving...' : isEdit ? 'Update Schedule' : 'Create Schedule'}
+            </button>
+          </div>
+        </form>
+      </div>
+    </div>
+  );
+}
+
+function ConfirmDeactivateDialog({ schedule, isWorking, error, onCancel, onConfirm }) {
+  return (
+    <div className="fixed inset-0 z-[100] flex items-center justify-center bg-on-background/40 p-unit-lg backdrop-blur-sm">
+      <button className="absolute inset-0" type="button" aria-label="Cancel deactivate" onClick={onCancel} />
+      <div className="glass-card relative w-full max-w-md rounded-lg p-unit-lg text-center shadow-2xl">
+        <div className="mx-auto mb-unit-lg flex h-16 w-16 items-center justify-center rounded-full bg-error/10">
+          <span className="material-symbols-outlined text-4xl text-error">warning</span>
+        </div>
+        <h3 className="font-headline-md text-headline-md font-bold text-on-surface">Deactivate Schedule?</h3>
+        <p className="mt-unit-sm text-body-md text-on-surface-variant">
+          This will hide the schedule for <strong>{schedule?.showTitle}</strong>. Backend will reject this if paid bookings exist.
+        </p>
+        {error && <p className="mt-unit-md rounded-md bg-error/10 p-unit-sm text-label-md font-bold text-error">{error}</p>}
+        <div className="mt-unit-lg flex gap-unit-md">
+          <button className="flex-1 rounded-md border border-outline-variant px-unit-md py-unit-md font-label-lg text-on-surface-variant hover:bg-surface-container-high" disabled={isWorking} type="button" onClick={onCancel}>
+            Cancel
+          </button>
+          <button className="flex-1 rounded-md bg-error px-unit-md py-unit-md font-label-lg text-on-error hover:brightness-110 disabled:cursor-not-allowed disabled:opacity-60" disabled={isWorking} type="button" onClick={onConfirm}>
+            {isWorking ? 'Deactivating...' : 'Deactivate'}
+          </button>
+        </div>
+      </div>
+    </div>
+  );
+}
 
 export default function ManageSchedulesPage() {
+  const [schedules, setSchedules] = useState([]);
+  const [shows, setShows] = useState([]);
+  const [venues, setVenues] = useState([]);
+  const [pagination, setPagination] = useState({
+    page: 0,
+    size: 10,
+    totalItems: 0,
+    totalPages: 0,
+    hasNext: false,
+    hasPrevious: false,
+  });
+  const [currentPage, setCurrentPage] = useState(0);
+  const [filters, setFilters] = useState({
+    showId: '',
+    venueId: '',
+    status: '',
+    fromTime: '',
+    toTime: '',
+  });
+  const [isLoading, setIsLoading] = useState(true);
+  const [loadError, setLoadError] = useState('');
+  const [successMessage, setSuccessMessage] = useState('');
+  const [actionError, setActionError] = useState('');
+  const [reloadKey, setReloadKey] = useState(0);
+
+  const [formMode, setFormMode] = useState(null);
+  const [editingSchedule, setEditingSchedule] = useState(null);
+  const [formValues, setFormValues] = useState(emptyForm);
+  const [fieldErrors, setFieldErrors] = useState({});
+  const [formError, setFormError] = useState('');
+  const [isSaving, setIsSaving] = useState(false);
+
+  const [scheduleToDeactivate, setScheduleToDeactivate] = useState(null);
+  const [workingScheduleId, setWorkingScheduleId] = useState(null);
+
   useEffect(() => {
-    const script = document.createElement('script');
-    script.textContent = "function openModal() {\r\n            const modal = document.getElementById('modalOverlay');\r\n            modal.classList.remove('hidden');\r\n            modal.classList.add('flex');\r\n            document.body.style.overflow = 'hidden';\r\n        }\r\n\r\n        function closeModal() {\r\n            const modal = document.getElementById('modalOverlay');\r\n            modal.classList.add('hidden');\r\n            modal.classList.remove('flex');\r\n            document.body.style.overflow = 'auto';\r\n        }\r\n\r\n        // Close on escape key\r\n        document.addEventListener('keydown', (e) => {\r\n            if (e.key === 'Escape') closeModal();\r\n        });\r\n\r\n        // Close on overlay click\r\n        document.getElementById('modalOverlay').addEventListener('click', (e) => {\r\n            if (e.target === document.getElementById('modalOverlay')) closeModal();\r\n        });";
-    document.body.appendChild(script);
+    let isActive = true;
+
+    async function loadReferenceData() {
+      try {
+        const [showResponse, venueResponse] = await Promise.all([
+          getManagerShows({ status: 'ACTIVE', page: 0, size: 100 }),
+          getVenues({ status: 'ACTIVE', page: 0, size: 100 }),
+        ]);
+
+        if (!isActive) {
+          return;
+        }
+
+        setShows(Array.isArray(showResponse?.items) ? showResponse.items : []);
+        setVenues(Array.isArray(venueResponse?.items) ? venueResponse.items : []);
+      } catch (error) {
+        if (isActive) {
+          setActionError(getErrorMessage(error, 'Could not load shows or venues for schedule forms.'));
+        }
+      }
+    }
+
+    loadReferenceData();
 
     return () => {
-      script.remove();
+      isActive = false;
     };
   }, []);
 
+  useEffect(() => {
+    let isActive = true;
+
+    async function loadSchedules() {
+      setIsLoading(true);
+      setLoadError('');
+
+      try {
+        const response = await getSchedules({
+          showId: filters.showId,
+          venueId: filters.venueId,
+          status: filters.status,
+          fromTime: filters.fromTime,
+          toTime: filters.toTime,
+          page: currentPage,
+          size: pagination.size,
+        });
+
+        if (!isActive) {
+          return;
+        }
+
+        const items = Array.isArray(response?.items) ? response.items : [];
+        setSchedules(items);
+        setPagination({
+          page: response?.page ?? currentPage,
+          size: response?.size ?? pagination.size,
+          totalItems: response?.totalItems ?? items.length,
+          totalPages: response?.totalPages ?? (items.length ? 1 : 0),
+          hasNext: Boolean(response?.hasNext),
+          hasPrevious: Boolean(response?.hasPrevious),
+        });
+      } catch (error) {
+        if (!isActive) {
+          return;
+        }
+
+        setSchedules([]);
+        setPagination((current) => ({
+          ...current,
+          page: currentPage,
+          totalItems: 0,
+          totalPages: 0,
+          hasNext: false,
+          hasPrevious: false,
+        }));
+        setLoadError(getErrorMessage(error, 'Could not load schedules.'));
+      } finally {
+        if (isActive) {
+          setIsLoading(false);
+        }
+      }
+    }
+
+    loadSchedules();
+
+    return () => {
+      isActive = false;
+    };
+  }, [currentPage, filters, pagination.size, reloadKey]);
+
+  const stats = useMemo(() => {
+    const active = schedules.filter((schedule) => schedule.status === 'ACTIVE').length;
+    const inactive = schedules.filter((schedule) => schedule.status === 'INACTIVE').length;
+    const availableTickets = schedules.reduce((total, schedule) => total + (Number(schedule.availableTickets) || 0), 0);
+
+    return {
+      total: pagination.totalItems,
+      active,
+      inactive,
+      availableTickets,
+    };
+  }, [pagination.totalItems, schedules]);
+
+  const selectedVenue = useMemo(
+    () => venues.find((venue) => venue.id === formValues.venueId),
+    [formValues.venueId, venues],
+  );
+
+  const handleFilterChange = (event) => {
+    const { name, value } = event.target;
+    setFilters((current) => ({ ...current, [name]: value }));
+    setCurrentPage(0);
+  };
+
+  const clearFilters = () => {
+    setFilters({
+      showId: '',
+      venueId: '',
+      status: '',
+      fromTime: '',
+      toTime: '',
+    });
+    setCurrentPage(0);
+  };
+
+  const openCreateForm = () => {
+    setFormMode('create');
+    setEditingSchedule(null);
+    setFormValues(emptyForm);
+    setFieldErrors({});
+    setFormError('');
+  };
+
+  const openEditForm = (schedule) => {
+    setFormMode('edit');
+    setEditingSchedule(schedule);
+    setFormValues(toForm(schedule));
+    setFieldErrors({});
+    setFormError('');
+  };
+
+  const closeForm = () => {
+    if (isSaving) {
+      return;
+    }
+    setFormMode(null);
+    setEditingSchedule(null);
+    setFieldErrors({});
+    setFormError('');
+  };
+
+  const handleFormChange = (event) => {
+    const { name, value } = event.target;
+    setFormValues((current) => ({ ...current, [name]: value }));
+    setFieldErrors((current) => ({ ...current, [name]: '' }));
+  };
+
+  const handleSubmit = async (event) => {
+    event.preventDefault();
+    setIsSaving(true);
+    setFieldErrors({});
+    setFormError('');
+    setSuccessMessage('');
+    setActionError('');
+
+    const basePayload = {
+      venueId: formValues.venueId || null,
+      startTime: formValues.startTime || null,
+      endTime: formValues.endTime || null,
+      capacity: formValues.capacity ? Number(formValues.capacity) : null,
+      price: formValues.price ? Number(formValues.price) : null,
+    };
+    const payload = formMode === 'edit'
+      ? { ...basePayload, status: formValues.status }
+      : { ...basePayload, showId: formValues.showId || null };
+
+    try {
+      if (formMode === 'edit' && editingSchedule) {
+        await updateSchedule(editingSchedule.id, payload);
+        setSuccessMessage('Schedule updated successfully.');
+      } else {
+        await createSchedule(payload);
+        setSuccessMessage('Schedule created successfully.');
+      }
+
+      closeForm();
+      setReloadKey((key) => key + 1);
+    } catch (error) {
+      setFieldErrors(getValidationErrors(error));
+      setFormError(getErrorMessage(error, 'Could not save schedule. Please review the form and try again.'));
+    } finally {
+      setIsSaving(false);
+    }
+  };
+
+  const handleActivate = async (schedule) => {
+    setWorkingScheduleId(schedule.id);
+    setSuccessMessage('');
+    setActionError('');
+
+    try {
+      await activateSchedule(schedule.id);
+      setSuccessMessage('Schedule activated successfully.');
+      setReloadKey((key) => key + 1);
+    } catch (error) {
+      setActionError(getErrorMessage(error, 'Could not activate schedule.'));
+    } finally {
+      setWorkingScheduleId(null);
+    }
+  };
+
+  const handleConfirmDeactivate = async () => {
+    if (!scheduleToDeactivate) {
+      return;
+    }
+
+    setWorkingScheduleId(scheduleToDeactivate.id);
+    setSuccessMessage('');
+    setActionError('');
+
+    try {
+      await deactivateSchedule(scheduleToDeactivate.id);
+      setSuccessMessage('Schedule deactivated successfully.');
+      setScheduleToDeactivate(null);
+      setReloadKey((key) => key + 1);
+    } catch (error) {
+      setActionError(getErrorMessage(error, 'Could not deactivate schedule.'));
+    } finally {
+      setWorkingScheduleId(null);
+    }
+  };
+
   return (
-    <div className="bg-background font-body-md text-on-background min-h-screen">
-      <style>{".material-symbols-outlined {\r\n            font-variation-settings: 'FILL' 0, 'wght' 400, 'GRAD' 0, 'opsz' 24;\r\n        }\r\n        .glass-card {\r\n            background: rgba(255, 255, 255, 0.7);\r\n            backdrop-filter: blur(20px);\r\n            border: 1px solid rgba(255, 255, 255, 0.2);\r\n            box-shadow: 0 8px 32px 0 rgba(0, 105, 107, 0.08);\r\n        }\r\n        .sidebar-active-indicator {\r\n            position: absolute;\r\n            left: 0;\r\n            width: 4px;\r\n            height: 100%;\r\n            background-color: theme('colors.primary-fixed');\r\n        }"}</style>
-<aside className="fixed left-0 top-0 h-full w-sidebar-width bg-on-secondary-fixed shadow-lg flex flex-col py-unit-lg z-50">
-<div className="px-unit-lg mb-unit-xl">
-<h1 className="font-headline-md text-headline-md font-bold text-primary-fixed">AquaShow MS</h1>
-<p className="font-body-sm text-body-sm text-on-secondary-fixed-variant opacity-70">Management System</p>
-</div>
-<nav className="flex-1 space-y-unit-xs">
-<a className="flex items-center gap-unit-md text-on-secondary-fixed-variant px-unit-lg py-unit-md hover:text-primary-fixed hover:bg-on-secondary-fixed-variant/20 transition-all" href="/manager/dashboard">
-<span className="material-symbols-outlined" data-icon="dashboard">dashboard</span>
-<span>Dashboard</span>
-</a>
-<a className="flex items-center gap-unit-md text-on-secondary-fixed-variant px-unit-lg py-unit-md hover:text-primary-fixed hover:bg-on-secondary-fixed-variant/20 transition-all" href="/manager/shows">
-<span className="material-symbols-outlined" data-icon="theater_comedy">theater_comedy</span>
-<span>Shows</span>
-</a>
-<a className="flex items-center gap-unit-md text-on-secondary-fixed-variant px-unit-lg py-unit-md hover:text-primary-fixed hover:bg-on-secondary-fixed-variant/20 transition-all" href="/manager/venues">
-<span className="material-symbols-outlined" data-icon="water_drop">water_drop</span>
-<span>Venues</span>
-</a>
+    <div className="min-h-screen bg-background font-body-md text-on-background">
+      <style>{".material-symbols-outlined {\r\n            font-variation-settings: 'FILL' 0, 'wght' 400, 'GRAD' 0, 'opsz' 24;\r\n        }\r\n        .glass-card {\r\n            background: rgba(255, 255, 255, 0.7);\r\n            backdrop-filter: blur(20px);\r\n            border: 1px solid rgba(255, 255, 255, 0.2);\r\n            box-shadow: 0 8px 32px 0 rgba(0, 105, 107, 0.08);\r\n        }"}</style>
 
-<a className="flex items-center gap-unit-md text-primary-fixed border-l-4 border-primary-fixed bg-on-secondary-fixed-variant/30 px-unit-lg py-unit-md transition-all" href="/manager/schedules">
-<span className="material-symbols-outlined" data-icon="calendar_month">calendar_month</span>
-<span>Schedules</span>
-</a>
-<a className="flex items-center gap-unit-md text-on-secondary-fixed-variant px-unit-lg py-unit-md hover:text-primary-fixed hover:bg-on-secondary-fixed-variant/20 transition-all" href="/manager/bookings">
-<span className="material-symbols-outlined" data-icon="event_seat">event_seat</span>
-<span>Bookings</span>
-</a>
-<a className="flex items-center gap-unit-md text-on-secondary-fixed-variant px-unit-lg py-unit-md hover:text-primary-fixed hover:bg-on-secondary-fixed-variant/20 transition-all" href="/manager/reports">
-<span className="material-symbols-outlined" data-icon="analytics">analytics</span>
-<span>Reports</span>
-</a>
-<a className="flex items-center gap-unit-md text-on-secondary-fixed-variant px-unit-lg py-unit-md hover:text-primary-fixed hover:bg-on-secondary-fixed-variant/20 transition-all" href="/admin/users">
-<span className="material-symbols-outlined" data-icon="group">group</span>
-<span>Users</span>
-</a>
-<a className="flex items-center gap-unit-md text-on-secondary-fixed-variant px-unit-lg py-unit-md hover:text-primary-fixed hover:bg-on-secondary-fixed-variant/20 transition-all" href="/admin/roles">
-<span className="material-symbols-outlined" data-icon="admin_panel_settings">admin_panel_settings</span>
-<span>Roles</span>
-</a>
-</nav>
-<div className="px-unit-lg mt-auto">
-<button className="w-full bg-primary-container text-on-primary-container py-unit-md rounded-lg font-label-lg flex items-center justify-center gap-unit-sm hover:opacity-90 active:scale-[0.99] transition-all" onClick={() => window.openModal?.()}>
-<span className="material-symbols-outlined" data-icon="add">add</span>
-                Quick Schedule
+      <aside className="fixed left-0 top-0 z-50 flex h-full w-sidebar-width flex-col bg-on-secondary-fixed py-unit-lg shadow-lg">
+        <div className="mb-unit-xl px-unit-lg">
+          <h1 className="font-headline-md text-headline-md font-bold text-primary-fixed">AquaShow MS</h1>
+          <p className="font-body-sm text-body-sm text-on-secondary-fixed-variant opacity-70">Management System</p>
+        </div>
+        <nav className="flex-1 space-y-unit-xs">
+          <SidebarLink icon="dashboard" label="Dashboard" to="/manager/dashboard" />
+          <SidebarLink icon="theater_comedy" label="Shows" to="/manager/shows" />
+          <SidebarLink icon="water_drop" label="Venues" to="/manager/venues" />
+          <SidebarLink active icon="calendar_month" label="Schedules" to="/manager/schedules" />
+          <SidebarLink icon="event_seat" label="Bookings" to="/manager/bookings" />
+          <SidebarLink icon="analytics" label="Reports" to="/manager/reports" />
+          <SidebarLink icon="group" label="Users" to="/admin/users" />
+          <SidebarLink icon="admin_panel_settings" label="Roles" to="/admin/roles" />
+        </nav>
+        <div className="mt-auto px-unit-lg">
+          <button className="flex w-full items-center justify-center gap-unit-sm rounded-lg bg-primary-container py-unit-md font-label-lg text-on-primary-container transition-all hover:opacity-90 active:scale-[0.99]" type="button" onClick={openCreateForm}>
+            <span className="material-symbols-outlined">add</span>
+            New Schedule
+          </button>
+        </div>
+      </aside>
+
+      <main className="ml-sidebar-width flex min-h-screen flex-col">
+        <header className="sticky top-0 z-40 flex items-center justify-between border-b border-outline-variant/20 bg-surface/70 px-unit-lg py-unit-sm shadow-sm backdrop-blur-md">
+          <div className="flex items-center gap-unit-lg">
+            <h2 className="font-headline-md text-headline-md font-extrabold text-primary">Manage Show Schedules</h2>
+          </div>
+          <div className="flex items-center gap-unit-md">
+            <button className="rounded-full bg-primary px-unit-lg py-2 font-label-lg text-on-primary transition hover:shadow-md" type="button" onClick={openCreateForm}>
+              <span className="material-symbols-outlined mr-1 text-[18px]">add</span>
+              Create Schedule
             </button>
-</div>
-</aside>
+            <button className="rounded-full border border-outline-variant px-unit-md py-2 text-label-lg text-on-surface-variant hover:bg-surface-container-high" type="button" onClick={() => setReloadKey((key) => key + 1)}>
+              Refresh
+            </button>
+          </div>
+        </header>
 
-<main className="ml-sidebar-width min-h-screen flex flex-col">
+        <div className="space-y-unit-lg p-unit-lg">
+          {successMessage && (
+            <div className="rounded-lg border border-primary/20 bg-primary-container/20 px-unit-lg py-3 font-label-lg text-primary">
+              {successMessage}
+            </div>
+          )}
+          {actionError && (
+            <div className="rounded-lg border border-error/20 bg-error/10 px-unit-lg py-3 font-label-lg text-error">
+              {actionError}
+            </div>
+          )}
 
-<header className="flex justify-between items-center px-unit-lg py-unit-sm sticky top-0 z-40 bg-surface/70 backdrop-blur-md border-b border-outline-variant/20 shadow-sm">
-<div className="flex items-center gap-unit-lg">
-<h2 className="font-headline-md text-headline-md font-extrabold text-primary">Manage Show Schedules</h2>
-<div className="hidden md:flex bg-surface-container rounded-full px-unit-md py-unit-xs items-center gap-unit-sm w-96">
-<span className="material-symbols-outlined text-on-surface-variant" data-icon="search">search</span>
-<input className="bg-transparent border-none focus:ring-0 text-body-sm w-full" placeholder="Search schedules..." type="text"/>
-</div>
-</div>
-<div className="flex items-center gap-unit-md">
-<button className="p-unit-sm hover:bg-surface-container-high/50 rounded-full transition-colors active:scale-95 duration-150">
-<span className="material-symbols-outlined" data-icon="notifications">notifications</span>
-</button>
-<button className="p-unit-sm hover:bg-surface-container-high/50 rounded-full transition-colors active:scale-95 duration-150">
-<span className="material-symbols-outlined" data-icon="settings">settings</span>
-</button>
-<div className="w-10 h-10 rounded-full overflow-hidden border-2 border-primary-container">
-<img alt="AquaShow Admin Profile" data-alt="A professional headshot of a marine park manager in a clean, high-key office environment. The person has a friendly but authoritative expression, wearing a smart-casual uniform. The background is softly blurred with hints of aquatic-themed decor and modern office architecture. The lighting is bright and airy, consistent with a premium management software profile." src="https://lh3.googleusercontent.com/aida-public/AB6AXuC1cLKGGgumY00LTFBZbhr92m2Lv2x6g9m6RC999hJ80ltkdaVSFGrNM55XvsWWeH3JcGWCQSZqvE2EsonCmGQ9l8-KFAAHXTeh3fK4xFbpM8WkLfMuF2WRkqZyX5v0ndyU-l2VhdPSuXFOvc5QYxVODVfpkNhHJYdZ83G7MeTR8m4ybQaElnIhDdE-xhCccLZrC7CHyZnYL5a7q6vZkvmRsp7jfNnCeLi0DPaaKqj_3yHSw1WnXqgYIo1kP_igj4kA82V5bxpiTUiU"/>
-</div>
-</div>
-</header>
+          <div className="glass-card flex flex-wrap items-end gap-unit-md rounded-lg p-unit-md">
+            <div className="min-w-[200px] flex-1 space-y-unit-xs">
+              <label className="text-label-md uppercase text-on-surface-variant" htmlFor="filter-show">
+                Show
+              </label>
+              <select className="w-full rounded-md border-none bg-surface-container-low text-body-sm focus:ring-2 focus:ring-primary" id="filter-show" name="showId" value={filters.showId} onChange={handleFilterChange}>
+                <option value="">All Shows</option>
+                {shows.map((show) => (
+                  <option key={show.id} value={show.id}>
+                    {show.title}
+                  </option>
+                ))}
+              </select>
+            </div>
 
-<div className="p-unit-lg space-y-unit-lg">
+            <div className="min-w-[200px] flex-1 space-y-unit-xs">
+              <label className="text-label-md uppercase text-on-surface-variant" htmlFor="filter-venue">
+                Venue
+              </label>
+              <select className="w-full rounded-md border-none bg-surface-container-low text-body-sm focus:ring-2 focus:ring-primary" id="filter-venue" name="venueId" value={filters.venueId} onChange={handleFilterChange}>
+                <option value="">All Venues</option>
+                {venues.map((venue) => (
+                  <option key={venue.id} value={venue.id}>
+                    {venue.name}
+                  </option>
+                ))}
+              </select>
+            </div>
 
-<div className="glass-card p-unit-md rounded-lg flex flex-wrap items-end gap-unit-md">
-<div className="flex-1 min-w-[200px] space-y-unit-xs">
-<label className="text-label-md text-on-surface-variant uppercase">Show</label>
-<select className="w-full bg-surface-container-low border-none rounded-md text-body-sm focus:ring-2 focus:ring-primary">
-<option>All Shows</option>
-<option>Dolphin Symphony</option>
-<option>The Orca Tale</option>
-<option>Deep Sea bioluminescence</option>
-</select>
-</div>
-<div className="flex-1 min-w-[200px] space-y-unit-xs">
-<label className="text-label-md text-on-surface-variant uppercase">Venue</label>
-<select className="w-full bg-surface-container-low border-none rounded-md text-body-sm focus:ring-2 focus:ring-primary">
-<option>All Venues</option>
-<option>Main Lagoon</option>
-<option>Sunset Arena</option>
-<option>Ocean Dome</option>
-</select>
-</div>
-<div className="flex-1 min-w-[150px] space-y-unit-xs">
-<label className="text-label-md text-on-surface-variant uppercase">Status</label>
-<select className="w-full bg-surface-container-low border-none rounded-md text-body-sm focus:ring-2 focus:ring-primary">
-<option>All Statuses</option>
-<option>ACTIVE</option>
-<option>INACTIVE</option>
-<option>COMPLETED</option>
-</select>
-</div>
-<div className="flex-1 min-w-[200px] space-y-unit-xs">
-<label className="text-label-md text-on-surface-variant uppercase">Date Range</label>
-<div className="flex items-center bg-surface-container-low rounded-md px-unit-sm">
-<input className="bg-transparent border-none text-body-sm focus:ring-0" type="date"/>
-<span className="text-on-surface-variant px-unit-xs">-</span>
-<input className="bg-transparent border-none text-body-sm focus:ring-0" type="date"/>
-</div>
-</div>
-<div className="flex items-center gap-unit-xs bg-surface-container-high p-1 rounded-lg">
-<button className="p-unit-sm rounded-md bg-surface-container-lowest text-primary shadow-sm">
-<span className="material-symbols-outlined" data-icon="table_rows">table_rows</span>
-</button>
-<button className="p-unit-sm rounded-md text-on-surface-variant hover:bg-surface-container-lowest transition-colors">
-<span className="material-symbols-outlined" data-icon="calendar_view_day">calendar_view_day</span>
-</button>
-</div>
-</div>
+            <div className="min-w-[150px] flex-1 space-y-unit-xs">
+              <label className="text-label-md uppercase text-on-surface-variant" htmlFor="filter-status">
+                Status
+              </label>
+              <select className="w-full rounded-md border-none bg-surface-container-low text-body-sm focus:ring-2 focus:ring-primary" id="filter-status" name="status" value={filters.status} onChange={handleFilterChange}>
+                <option value="">All Statuses</option>
+                <option value="ACTIVE">ACTIVE</option>
+                <option value="INACTIVE">INACTIVE</option>
+              </select>
+            </div>
 
-<div className="grid grid-cols-1 md:grid-cols-4 gap-unit-lg">
-<div className="glass-card p-unit-lg rounded-lg border-l-4 border-primary">
-<p className="text-label-md text-on-surface-variant">Scheduled Today</p>
-<h3 className="text-headline-lg font-bold text-primary mt-1">12 Shows</h3>
-</div>
-<div className="glass-card p-unit-lg rounded-lg border-l-4 border-secondary">
-<p className="text-label-md text-on-surface-variant">Avg. Occupancy</p>
-<h3 className="text-headline-lg font-bold text-secondary mt-1">84%</h3>
-</div>
-<div className="glass-card p-unit-lg rounded-lg border-l-4 border-tertiary-container">
-<p className="text-label-md text-on-surface-variant">Active Warnings</p>
-<h3 className="text-headline-lg font-bold text-tertiary mt-1">2 Conflicts</h3>
-</div>
-<div className="glass-card p-unit-lg rounded-lg border-l-4 border-primary-container">
-<p className="text-label-md text-on-surface-variant">Tickets Sold</p>
-<h3 className="text-headline-lg font-bold text-on-primary-container mt-1">4.2k</h3>
-</div>
-</div>
+            <div className="min-w-[260px] flex-1 space-y-unit-xs">
+              <label className="text-label-md uppercase text-on-surface-variant">Start Date Range</label>
+              <div className="flex items-center rounded-md bg-surface-container-low px-unit-sm">
+                <input className="min-w-0 bg-transparent text-body-sm focus:ring-0" name="fromTime" type="datetime-local" value={filters.fromTime} onChange={handleFilterChange} />
+                <span className="px-unit-xs text-on-surface-variant">-</span>
+                <input className="min-w-0 bg-transparent text-body-sm focus:ring-0" name="toTime" type="datetime-local" value={filters.toTime} onChange={handleFilterChange} />
+              </div>
+            </div>
 
-<div className="glass-card rounded-lg overflow-hidden">
-<table className="w-full text-left border-collapse">
-<thead>
-<tr className="bg-surface-container text-on-surface-variant font-label-lg">
-<th className="px-unit-lg py-unit-md">Show</th>
-<th className="px-unit-lg py-unit-md">Venue</th>
-<th className="px-unit-lg py-unit-md">Start Time</th>
-<th className="px-unit-lg py-unit-md">End Time</th>
-<th className="px-unit-lg py-unit-md text-center">Capacity</th>
-<th className="px-unit-lg py-unit-md text-center">Tickets</th>
-<th className="px-unit-lg py-unit-md">Price</th>
-<th className="px-unit-lg py-unit-md">Status</th>
-<th className="px-unit-lg py-unit-md text-right">Actions</th>
-</tr>
-</thead>
-<tbody className="divide-y divide-outline-variant/10">
+            <button className="rounded-lg border border-outline-variant px-unit-md py-unit-sm text-label-lg text-on-surface-variant hover:bg-surface-variant/30" type="button" onClick={clearFilters}>
+              Clear
+            </button>
+          </div>
 
-<tr className="hover:bg-surface-container-low transition-colors group">
-<td className="px-unit-lg py-unit-md">
-<div className="flex items-center gap-unit-md">
-<div className="w-12 h-12 rounded-lg overflow-hidden flex-shrink-0">
-<img alt="Dolphin Symphony" data-alt="A spectacular underwater photograph showing two dolphins jumping in perfect synchronization against a bright blue lagoon backdrop. The water is crystalline, with sparkling surface reflections and soft teal tones. The overall atmosphere is energetic, clean, and representative of a premium marine show. Lighting is cinematic and bright." src="https://lh3.googleusercontent.com/aida-public/AB6AXuANM6rgOqgnBIK1LoKg_8wEzuUgRV76L55lB7ATaBCjZye3GmdzC2452tyqTL_z39BTzZam_QgtV-Chlnz5wKpgOxmqCk4J88VT9scUUAXI2nw5mcNzW5TgDKu-SDQIxmvExgWDD4mY2i7cejaxPyF0CQHqtMl4yyeMfA36w9OeZhtyzplzT4x6_o46Dd5FFG94xovjRwakJuLHskrj3liAwCuAA2fn4DzrEsxKp57fAnOH6QzkRbfNYUgglDrTTNhzggHEniPMvQE3"/>
-</div>
-<span className="font-bold text-primary">Dolphin Symphony</span>
-</div>
-</td>
-<td className="px-unit-lg py-unit-md text-on-surface-variant">Main Lagoon</td>
-<td className="px-unit-lg py-unit-md font-medium">10:00 AM</td>
-<td className="px-unit-lg py-unit-md text-on-surface-variant">11:15 AM</td>
-<td className="px-unit-lg py-unit-md text-center">450</td>
-<td className="px-unit-lg py-unit-md">
-<div className="flex flex-col items-center gap-1">
-<span className="text-body-sm font-bold">120/450</span>
-<div className="w-24 h-1.5 bg-surface-container-highest rounded-full overflow-hidden">
-<div className="h-full bg-primary" style={{ width: "26%" }}></div>
-</div>
-</div>
-</td>
-<td className="px-unit-lg py-unit-md font-bold">$45.00</td>
-<td className="px-unit-lg py-unit-md">
-<span className="bg-primary/10 text-primary px-3 py-1 rounded-full text-label-md font-bold uppercase">ACTIVE</span>
-</td>
-<td className="px-unit-lg py-unit-md text-right">
-<div className="flex justify-end gap-unit-sm opacity-0 group-hover:opacity-100 transition-opacity">
-<button className="p-2 hover:bg-primary/10 text-primary rounded-full"><span className="material-symbols-outlined" data-icon="edit">edit</span></button>
-<button className="p-2 hover:bg-error/10 text-error rounded-full"><span className="material-symbols-outlined" data-icon="delete">delete</span></button>
-</div>
-</td>
-</tr>
+          <div className="grid grid-cols-1 gap-unit-lg md:grid-cols-4">
+            <StatCard label="Total Schedules" value={stats.total} />
+            <StatCard label="Active On Page" value={stats.active} tone="secondary" />
+            <StatCard label="Inactive On Page" value={stats.inactive} tone="tertiary" />
+            <StatCard label="Available Tickets" value={stats.availableTickets} tone="neutral" />
+          </div>
 
-<tr className="hover:bg-surface-container-low transition-colors group">
-<td className="px-unit-lg py-unit-md">
-<div className="flex items-center gap-unit-md">
-<div className="w-12 h-12 rounded-lg overflow-hidden flex-shrink-0">
-<img alt="The Orca Tale" data-alt="A powerful and majestic Orca leaping out of a deep indigo ocean, splashing white foam against a sunset sky with orange and purple hues. The composition is dramatic and evokes a sense of awe. The lighting is warm and evocative, symbolizing a grand evening performance in a high-end marine park." src="https://lh3.googleusercontent.com/aida-public/AB6AXuCT46Pmdqhv7aLip-fChIVax42KvlFqM2IZha7xymvGw5jB6bwcLIufB0sH7zU04_mEPKcdzXEMMUa7FpfgVTrIuUyL-nZOrKV0T1O7u0CiCZlswGS1gTsf_W0h1AvurYQZN20xaBfLnIOcEX9kRx1MGCyLOyt5s7If1vAbrn9wlupoKiFNGgcUOnQagE4AhtyhHE_W501JAVJNNiBRSy5E_bUV8f4wVtaB6TbmgDTmpPtMQelbOXEgNm-G-eS8rRBpqX4-gK9KZP8V"/>
-</div>
-<span className="font-bold text-primary">The Orca Tale</span>
-</div>
-</td>
-<td className="px-unit-lg py-unit-md text-on-surface-variant">Sunset Arena</td>
-<td className="px-unit-lg py-unit-md font-medium">02:30 PM</td>
-<td className="px-unit-lg py-unit-md text-on-surface-variant">04:00 PM</td>
-<td className="px-unit-lg py-unit-md text-center">800</td>
-<td className="px-unit-lg py-unit-md">
-<div className="flex flex-col items-center gap-1">
-<span className="text-body-sm font-bold">780/800</span>
-<div className="w-24 h-1.5 bg-surface-container-highest rounded-full overflow-hidden">
-<div className="h-full bg-tertiary-container" style={{ width: "97%" }}></div>
-</div>
-</div>
-</td>
-<td className="px-unit-lg py-unit-md font-bold">$65.00</td>
-<td className="px-unit-lg py-unit-md">
-<span className="bg-primary/10 text-primary px-3 py-1 rounded-full text-label-md font-bold uppercase">ACTIVE</span>
-</td>
-<td className="px-unit-lg py-unit-md text-right">
-<div className="flex justify-end gap-unit-sm opacity-0 group-hover:opacity-100 transition-opacity">
-<button className="p-2 hover:bg-primary/10 text-primary rounded-full"><span className="material-symbols-outlined" data-icon="edit">edit</span></button>
-<button className="p-2 hover:bg-error/10 text-error rounded-full"><span className="material-symbols-outlined" data-icon="delete">delete</span></button>
-</div>
-</td>
-</tr>
+          <div className="glass-card overflow-hidden rounded-lg">
+            {isLoading ? (
+              <div className="space-y-3 p-unit-lg">
+                {Array.from({ length: 5 }).map((_, index) => (
+                  <div className="h-20 animate-pulse rounded-lg bg-surface-container-low" key={index} />
+                ))}
+              </div>
+            ) : loadError ? (
+              <div className="p-unit-xl text-center">
+                <span className="material-symbols-outlined text-5xl text-error">error</span>
+                <h3 className="mt-unit-sm font-headline-md text-headline-md text-on-surface">Could not load schedules</h3>
+                <p className="mt-2 text-body-md text-error">{loadError}</p>
+                <button className="mt-unit-lg rounded-md bg-primary px-unit-lg py-unit-md font-label-lg text-on-primary" type="button" onClick={() => setReloadKey((key) => key + 1)}>
+                  Try Again
+                </button>
+              </div>
+            ) : schedules.length === 0 ? (
+              <div className="p-unit-xl text-center">
+                <span className="material-symbols-outlined text-5xl text-primary">event_busy</span>
+                <h3 className="mt-unit-sm font-headline-md text-headline-md text-on-surface">No schedules found</h3>
+                <p className="mt-2 text-body-md text-on-surface-variant">Create a schedule or adjust the current filters.</p>
+                <button className="mt-unit-lg rounded-md bg-primary px-unit-lg py-unit-md font-label-lg text-on-primary" type="button" onClick={openCreateForm}>
+                  Create Schedule
+                </button>
+              </div>
+            ) : (
+              <>
+                <div className="overflow-x-auto">
+                  <table className="w-full border-collapse text-left">
+                    <thead>
+                      <tr className="bg-surface-container font-label-lg text-on-surface-variant">
+                        <th className="px-unit-lg py-unit-md">Schedule ID</th>
+                        <th className="px-unit-lg py-unit-md">Show</th>
+                        <th className="px-unit-lg py-unit-md">Venue</th>
+                        <th className="px-unit-lg py-unit-md">Start Time</th>
+                        <th className="px-unit-lg py-unit-md">End Time</th>
+                        <th className="px-unit-lg py-unit-md text-center">Capacity</th>
+                        <th className="px-unit-lg py-unit-md text-center">Available</th>
+                        <th className="px-unit-lg py-unit-md">Price</th>
+                        <th className="px-unit-lg py-unit-md">Status</th>
+                        <th className="px-unit-lg py-unit-md text-right">Actions</th>
+                      </tr>
+                    </thead>
+                    <tbody className="divide-y divide-outline-variant/10">
+                      {schedules.map((schedule) => {
+                        const percent = capacityPercent(schedule);
 
-<tr className="hover:bg-surface-container-low transition-colors group">
-<td className="px-unit-lg py-unit-md">
-<div className="flex items-center gap-unit-md">
-<div className="w-12 h-12 rounded-lg overflow-hidden flex-shrink-0">
-<img alt="Jellyfish Glow" data-alt="A magical scene of glowing bioluminescent jellyfish floating in a dark oceanic abyss. Vivid neon blues, pinks, and purples contrast against the deep black water. The lighting is surreal and ethereal, capturing the quiet beauty of a specialized marine dome attraction. Minimalist and ultra-modern aesthetic." src="https://lh3.googleusercontent.com/aida-public/AB6AXuAacnVbHAmObUmsKMTCjaXz8M8aRjIuqivvKqIZyV5BotE3bBPBOQFeLj7HHp3jfXcCcp8A8kokN9Vr580spc3AZZdR0tOqEQwdwJiaqc_2ZrKV0H0BsKhlJMKmVkzabeIkxmrHFTJukZtBQjhedC3tQBOHUlnHsxfo9wumFF3rBHPS-OGdKRlznxFLWy9vWvVn3l79ClH6rEzTqJ3u9tVE1CJbyag7xGXe-Oiu0nJ5dwUaeFxvVqLrk3N5HmTYXmgYyaAXm4KCnQ2K"/>
-</div>
-<span className="font-bold text-primary text-opacity-50 line-through">Jellyfish Glow</span>
-</div>
-</td>
-<td className="px-unit-lg py-unit-md text-on-surface-variant">Ocean Dome</td>
-<td className="px-unit-lg py-unit-md font-medium">09:00 AM</td>
-<td className="px-unit-lg py-unit-md text-on-surface-variant">10:00 AM</td>
-<td className="px-unit-lg py-unit-md text-center">150</td>
-<td className="px-unit-lg py-unit-md">
-<div className="flex flex-col items-center gap-1">
-<span className="text-body-sm font-bold">150/150</span>
-<div className="w-24 h-1.5 bg-surface-container-highest rounded-full overflow-hidden">
-<div className="h-full bg-secondary-container" style={{ width: "100%" }}></div>
-</div>
-</div>
-</td>
-<td className="px-unit-lg py-unit-md font-bold">$25.00</td>
-<td className="px-unit-lg py-unit-md">
-<span className="bg-surface-container-highest text-on-surface-variant px-3 py-1 rounded-full text-label-md font-bold uppercase">COMPLETED</span>
-</td>
-<td className="px-unit-lg py-unit-md text-right">
-<div className="flex justify-end gap-unit-sm opacity-0 group-hover:opacity-100 transition-opacity">
-<button className="p-2 hover:bg-primary/10 text-primary rounded-full"><span className="material-symbols-outlined" data-icon="visibility">visibility</span></button>
-</div>
-</td>
-</tr>
-</tbody>
-</table>
+                        return (
+                          <tr className={`group transition-colors hover:bg-surface-container-low ${schedule.status === 'INACTIVE' ? 'opacity-70' : ''}`} key={schedule.id}>
+                            <td className="px-unit-lg py-unit-md font-mono text-[12px] text-on-surface-variant" title={schedule.id}>{truncateId(schedule.id)}</td>
+                            <td className="px-unit-lg py-unit-md">
+                              <span className="font-bold text-primary">{schedule.showTitle}</span>
+                            </td>
+                            <td className="px-unit-lg py-unit-md text-on-surface-variant">{schedule.venueName || 'TBA'}</td>
+                            <td className="px-unit-lg py-unit-md font-medium">{formatDateTime(schedule.startTime)}</td>
+                            <td className="px-unit-lg py-unit-md text-on-surface-variant">{formatDateTime(schedule.endTime)}</td>
+                            <td className="px-unit-lg py-unit-md text-center">{schedule.capacity ?? 'TBA'}</td>
+                            <td className="px-unit-lg py-unit-md">
+                              <div className="flex flex-col items-center gap-1">
+                                <span className="text-body-sm font-bold">{schedule.availableTickets ?? 'TBA'}</span>
+                                <div className="h-1.5 w-24 overflow-hidden rounded-full bg-surface-container-highest">
+                                  <div className="h-full bg-primary" style={{ width: `${percent}%` }} />
+                                </div>
+                              </div>
+                            </td>
+                            <td className="px-unit-lg py-unit-md font-bold">{formatMoney(schedule.price)}</td>
+                            <td className="px-unit-lg py-unit-md">
+                              <span className={`rounded-full px-3 py-1 text-label-md font-bold uppercase ${statusBadge(schedule.status)}`}>{schedule.status}</span>
+                            </td>
+                            <td className="px-unit-lg py-unit-md text-right">
+                              <div className="flex justify-end gap-unit-sm">
+                                <button className="rounded-full p-2 text-primary hover:bg-primary/10" type="button" onClick={() => openEditForm(schedule)}>
+                                  <span className="material-symbols-outlined">edit</span>
+                                </button>
+                                {schedule.status === 'ACTIVE' ? (
+                                  <button className="rounded-full p-2 text-error hover:bg-error/10 disabled:cursor-not-allowed disabled:opacity-50" disabled={workingScheduleId === schedule.id} type="button" onClick={() => { setActionError(''); setScheduleToDeactivate(schedule); }}>
+                                    <span className="material-symbols-outlined">block</span>
+                                  </button>
+                                ) : (
+                                  <button className="rounded-full p-2 text-primary hover:bg-primary/10 disabled:cursor-not-allowed disabled:opacity-50" disabled={workingScheduleId === schedule.id} type="button" onClick={() => handleActivate(schedule)}>
+                                    <span className="material-symbols-outlined">check_circle</span>
+                                  </button>
+                                )}
+                              </div>
+                            </td>
+                          </tr>
+                        );
+                      })}
+                    </tbody>
+                  </table>
+                </div>
 
-<div className="p-unit-md border-t border-outline-variant/10 flex items-center justify-between">
-<span className="text-body-sm text-on-surface-variant">Showing 1-10 of 42 schedules</span>
-<div className="flex items-center gap-unit-xs">
-<button className="p-unit-sm rounded-md hover:bg-surface-container-high transition-colors"><span className="material-symbols-outlined" data-icon="chevron_left">chevron_left</span></button>
-<button className="w-8 h-8 rounded-md bg-primary text-on-primary font-bold">1</button>
-<button className="w-8 h-8 rounded-md hover:bg-surface-container-high">2</button>
-<button className="w-8 h-8 rounded-md hover:bg-surface-container-high">3</button>
-<button className="p-unit-sm rounded-md hover:bg-surface-container-high transition-colors"><span className="material-symbols-outlined" data-icon="chevron_right">chevron_right</span></button>
-</div>
-</div>
-</div>
-</div>
-</main>
+                <div className="flex flex-col gap-unit-md border-t border-outline-variant/10 p-unit-md md:flex-row md:items-center md:justify-between">
+                  <span className="text-body-sm text-on-surface-variant">
+                    Showing {schedules.length} of {pagination.totalItems} schedules
+                    {pagination.totalPages > 0 ? ` · Page ${pagination.page + 1} of ${pagination.totalPages}` : ''}
+                  </span>
+                  <div className="flex items-center gap-unit-xs">
+                    <button className="rounded-md p-unit-sm transition-colors hover:bg-surface-container-high disabled:cursor-not-allowed disabled:opacity-40" disabled={!pagination.hasPrevious} type="button" onClick={() => setCurrentPage((page) => Math.max(0, page - 1))}>
+                      <span className="material-symbols-outlined">chevron_left</span>
+                    </button>
+                    <span className="flex h-8 min-w-8 items-center justify-center rounded-md bg-primary px-3 font-bold text-on-primary">{pagination.page + 1}</span>
+                    <button className="rounded-md p-unit-sm transition-colors hover:bg-surface-container-high disabled:cursor-not-allowed disabled:opacity-40" disabled={!pagination.hasNext} type="button" onClick={() => setCurrentPage((page) => page + 1)}>
+                      <span className="material-symbols-outlined">chevron_right</span>
+                    </button>
+                  </div>
+                </div>
+              </>
+            )}
+          </div>
+        </div>
+      </main>
 
-<div className="fixed inset-0 bg-on-background/40 backdrop-blur-sm z-[100] hidden items-center justify-center p-unit-lg" id="modalOverlay">
-<div className="glass-card w-full max-w-2xl rounded-lg shadow-2xl overflow-hidden flex flex-col animate-in fade-in zoom-in duration-300">
-<div className="p-unit-lg border-b border-outline-variant/20 flex justify-between items-center">
-<h2 className="font-headline-md text-headline-md font-bold text-primary">New Show Schedule</h2>
-<button className="p-unit-sm hover:bg-error/10 text-error rounded-full transition-colors" onClick={() => window.closeModal?.()}>
-<span className="material-symbols-outlined" data-icon="close">close</span>
-</button>
-</div>
-<form className="p-unit-lg overflow-y-auto max-h-[716px] space-y-unit-lg" id="scheduleForm">
-<div className="grid grid-cols-2 gap-unit-lg">
-<div className="space-y-unit-xs">
-<label className="text-label-md font-bold text-on-surface-variant">Select Show</label>
-<select className="w-full bg-surface-container-low border-none rounded-md text-body-md focus:ring-2 focus:ring-primary py-unit-md px-unit-md">
-<option>Dolphin Symphony</option>
-<option>The Orca Tale</option>
-</select>
-</div>
-<div className="space-y-unit-xs">
-<label className="text-label-md font-bold text-on-surface-variant">Select Venue</label>
-<select className="w-full bg-surface-container-low border-none rounded-md text-body-md focus:ring-2 focus:ring-primary py-unit-md px-unit-md">
-<option>Main Lagoon</option>
-<option>Sunset Arena</option>
-</select>
-</div>
-</div>
-<div className="grid grid-cols-2 gap-unit-lg">
-<div className="space-y-unit-xs">
-<label className="text-label-md font-bold text-on-surface-variant">Start Time</label>
-<div className="relative">
-<input className="w-full bg-surface-container-low border-none rounded-md text-body-md focus:ring-2 focus:ring-primary py-unit-md px-unit-md" type="time"/>
-</div>
-</div>
-<div className="space-y-unit-xs">
-<label className="text-label-md font-bold text-on-surface-variant">End Time</label>
-<div className="relative">
-<input className="w-full bg-surface-container-low border-none rounded-md text-body-md focus:ring-2 focus:ring-primary py-unit-md px-unit-md" type="time"/>
-</div>
-</div>
-</div>
-<div className="grid grid-cols-3 gap-unit-lg">
-<div className="space-y-unit-xs">
-<label className="text-label-md font-bold text-on-surface-variant">Capacity</label>
-<input className="w-full bg-surface-container-low border-none rounded-md text-body-md focus:ring-2 focus:ring-primary py-unit-md px-unit-md" placeholder="500" type="number"/>
-<p className="text-[10px] text-tertiary font-medium">Max Venue Cap: 800</p>
-</div>
-<div className="space-y-unit-xs">
-<label className="text-label-md font-bold text-on-surface-variant">Ticket Price ($)</label>
-<input className="w-full bg-surface-container-low border-none rounded-md text-body-md focus:ring-2 focus:ring-primary py-unit-md px-unit-md" placeholder="45.00" step="0.01" type="number"/>
-</div>
-<div className="space-y-unit-xs">
-<label className="text-label-md font-bold text-on-surface-variant">Status</label>
-<select className="w-full bg-surface-container-low border-none rounded-md text-body-md focus:ring-2 focus:ring-primary py-unit-md px-unit-md">
-<option>ACTIVE</option>
-<option>INACTIVE</option>
-</select>
-</div>
-</div>
+      {formMode && (
+        <ScheduleFormModal
+          formMode={formMode}
+          formValues={formValues}
+          shows={shows}
+          venues={venues}
+          selectedVenue={selectedVenue}
+          fieldErrors={fieldErrors}
+          generalError={formError}
+          isSaving={isSaving}
+          onChange={handleFormChange}
+          onClose={closeForm}
+          onSubmit={handleSubmit}
+        />
+      )}
 
-<div className="bg-tertiary-container/10 border border-tertiary-container/30 p-unit-md rounded-md flex gap-unit-md">
-<span className="material-symbols-outlined text-tertiary-container" data-icon="warning">warning</span>
-<div className="space-y-1">
-<h4 className="text-label-md font-bold text-tertiary">Conflict Detection</h4>
-<p className="text-body-sm text-on-surface-variant">Selected time overlaps with "Lagoon Maintenance" (09:00 - 10:30). Please adjust start time.</p>
-</div>
-</div>
-</form>
-<div className="p-unit-lg bg-surface-container-low flex justify-end gap-unit-md">
-<button className="px-unit-xl py-unit-md text-on-surface-variant font-label-lg hover:bg-surface-container-high rounded-md transition-colors" onClick={() => window.closeModal?.()}>Cancel</button>
-<button className="px-unit-xl py-unit-md bg-primary text-on-primary font-label-lg rounded-md hover:opacity-90 active:scale-95 transition-all">Create Schedule</button>
-</div>
-</div>
-</div>
+      {scheduleToDeactivate && (
+        <ConfirmDeactivateDialog
+          schedule={scheduleToDeactivate}
+          isWorking={workingScheduleId === scheduleToDeactivate.id}
+          error={actionError}
+          onCancel={() => {
+            if (!workingScheduleId) {
+              setScheduleToDeactivate(null);
+              setActionError('');
+            }
+          }}
+          onConfirm={handleConfirmDeactivate}
+        />
+      )}
     </div>
   );
 }

@@ -1,4 +1,5 @@
 const ACCESS_TOKEN_KEY = 'accessToken';
+const ACCESS_TOKEN_ALIASES = ['accessToken', 'token', 'jwt', 'authToken', 'access_token'];
 const ACCESS_TOKEN_EXPIRES_AT_KEY = 'accessTokenExpiresAt';
 const USER_KEY = 'user';
 const TOKEN_UPDATED_EVENT = 'auth:token-updated';
@@ -69,7 +70,7 @@ export function getStoredUser() {
 
 function removeStoredAuth() {
   [window.localStorage, window.sessionStorage].forEach((storage) => {
-    storage.removeItem(ACCESS_TOKEN_KEY);
+    ACCESS_TOKEN_ALIASES.forEach((key) => storage.removeItem(key));
     storage.removeItem(ACCESS_TOKEN_EXPIRES_AT_KEY);
     storage.removeItem(USER_KEY);
   });
@@ -98,7 +99,7 @@ export function clearStoredToken() {
 }
 
 export function getStoredToken() {
-  const localToken = window.localStorage.getItem(ACCESS_TOKEN_KEY);
+  const localToken = ACCESS_TOKEN_ALIASES.map((key) => window.localStorage.getItem(key)).find(Boolean);
   const localExpiresAt = window.localStorage.getItem(ACCESS_TOKEN_EXPIRES_AT_KEY);
 
   if (localToken) {
@@ -110,7 +111,7 @@ export function getStoredToken() {
     return { token: localToken, expiresAt: localExpiresAt ? Number(localExpiresAt) : null, storage: 'localStorage' };
   }
 
-  const sessionToken = window.sessionStorage.getItem(ACCESS_TOKEN_KEY);
+  const sessionToken = ACCESS_TOKEN_ALIASES.map((key) => window.sessionStorage.getItem(key)).find(Boolean);
   const sessionExpiresAt = window.sessionStorage.getItem(ACCESS_TOKEN_EXPIRES_AT_KEY);
 
   if (sessionToken) {
