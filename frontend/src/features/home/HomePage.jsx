@@ -237,6 +237,12 @@ export default function HomePage() {
     setSelectedDate(nextShow?.nextStartTime ? String(nextShow.nextStartTime).slice(0, 10) : '');
   };
 
+  const handleShowSearch = (event) => {
+    event.preventDefault();
+    setSubmittedKeyword(keyword.trim());
+    setCurrentPage(0);
+  };
+
   const clearShowSearch = () => {
     setKeyword('');
     setSubmittedKeyword('');
