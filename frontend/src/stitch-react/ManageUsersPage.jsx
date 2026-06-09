@@ -1,5 +1,4 @@
 import { useEffect, useMemo, useState } from 'react';
-import { Link } from 'react-router-dom';
 
 import {
   disableAdminUser,
@@ -8,6 +7,10 @@ import {
   getAdminUsers,
   updateAdminUser,
 } from '../services/adminUserService.js';
+import AdminActionBar from '../features/admin/components/AdminActionBar.jsx';
+import AdminLayout from '../features/admin/components/AdminLayout.jsx';
+import AdminPageHeader from '../features/admin/components/AdminPageHeader.jsx';
+import AdminStatCard from '../features/admin/components/AdminStatCard.jsx';
 
 const roles = ['USER', 'STAFF', 'MANAGER', 'ADMIN'];
 const statuses = ['ACTIVE', 'PENDING_VERIFICATION', 'INACTIVE', 'DISABLED'];
@@ -120,42 +123,6 @@ function FieldError({ children }) {
   }
 
   return <p className="mt-1 text-label-md font-bold text-error">{children}</p>;
-}
-
-function SidebarLink({ active, icon, label, to }) {
-  return (
-    <Link
-      className={[
-        'flex items-center gap-unit-md px-unit-lg py-unit-md transition-all',
-        active
-          ? 'border-l-4 border-primary-fixed bg-on-secondary-fixed-variant/30 text-primary-fixed'
-          : 'text-on-secondary-fixed-variant hover:bg-on-secondary-fixed-variant/20 hover:text-primary-fixed',
-      ].join(' ')}
-      to={to}
-    >
-      <span className="material-symbols-outlined">{icon}</span>
-      <span className="font-body-md text-body-md">{label}</span>
-    </Link>
-  );
-}
-
-function StatCard({ icon, label, value, tone = 'primary' }) {
-  const toneClass = {
-    primary: 'border-primary text-primary bg-primary/10',
-    secondary: 'border-secondary text-secondary bg-secondary/10',
-    tertiary: 'border-tertiary text-tertiary bg-tertiary/10',
-    error: 'border-error text-error bg-error/10',
-  }[tone];
-
-  return (
-    <div className={`glass-card rounded-lg border-l-4 p-unit-lg shadow-sm ${toneClass.split(' ')[0]}`}>
-      <div className="mb-unit-md flex items-start justify-between">
-        <span className={`material-symbols-outlined rounded-lg p-unit-sm ${toneClass.split(' ').slice(1).join(' ')}`}>{icon}</span>
-      </div>
-      <h3 className="font-label-lg text-label-lg text-on-surface-variant">{label}</h3>
-      <p className="mt-unit-xs font-headline-md text-headline-md text-on-surface">{value}</p>
-    </div>
-  );
 }
 
 function UserModal({
@@ -619,93 +586,38 @@ export default function ManageUsersPage() {
             border-radius: 10px;
         }`}</style>
 
-      <aside className="fixed left-0 top-0 z-50 flex h-full w-sidebar-width flex-col bg-on-secondary-fixed py-unit-lg shadow-lg">
-        <div className="mb-unit-xl px-unit-lg">
-          <h1 className="font-headline-md text-headline-md font-bold text-primary-fixed">AquaShow MS</h1>
-          <p className="font-label-md text-label-md text-primary-fixed-dim/70">Management System</p>
-        </div>
-        <nav className="flex flex-1 flex-col gap-unit-xs">
-          <SidebarLink icon="dashboard" label="Dashboard" to="/manager/dashboard" />
-          <SidebarLink icon="theater_comedy" label="Shows" to="/manager/shows" />
-          <SidebarLink icon="water_drop" label="Venues" to="/manager/venues" />
-          <SidebarLink icon="calendar_month" label="Schedules" to="/manager/schedules" />
-          <SidebarLink icon="event_seat" label="Bookings" to="/manager/bookings" />
-          <SidebarLink icon="analytics" label="Reports" to="/manager/reports" />
-          <SidebarLink active icon="group" label="Users" to="/admin/users" />
-          <SidebarLink icon="admin_panel_settings" label="Roles" to="/admin/roles" />
-        </nav>
-        <div className="mt-auto border-t border-on-secondary-fixed-variant/10 px-unit-lg pt-unit-lg">
-          <Link className="flex w-full items-center justify-center gap-unit-sm rounded-lg bg-primary-fixed py-unit-md font-label-lg text-label-lg text-on-primary-fixed transition-transform hover:scale-[1.02] active:scale-[0.98]" to="/manager/schedules">
-            <span className="material-symbols-outlined" style={{ fontVariationSettings: "'FILL' 1" }}>add_circle</span>
-            Quick Schedule
-          </Link>
-        </div>
-      </aside>
-
-      <div className="ml-sidebar-width flex min-h-screen flex-col">
-        <header className="sticky top-0 z-40 flex items-center justify-between border-b border-outline-variant/20 bg-surface/70 px-unit-lg py-unit-sm shadow-sm backdrop-blur-md">
-          <div className="flex flex-1 items-center gap-unit-lg">
-            <div className="relative w-full max-w-md">
-              <span className="material-symbols-outlined absolute left-unit-md top-1/2 -translate-y-1/2 text-on-surface-variant">search</span>
-              <input
-                className="w-full rounded-full border-none bg-surface-container-low py-unit-sm pl-unit-xl pr-unit-md font-body-sm text-body-sm transition-all focus:ring-2 focus:ring-primary/20"
-                name="keyword"
-                placeholder="Search by name, email, phone..."
-                type="search"
-                value={filters.keyword}
-                onChange={handleFilterChange}
-              />
-            </div>
-          </div>
-          <div className="flex items-center gap-unit-md">
-            <button className="relative rounded-full p-unit-sm transition-colors hover:bg-surface-container-high/50" type="button">
-              <span className="material-symbols-outlined">notifications</span>
-              <span className="absolute right-1 top-1 h-2 w-2 rounded-full bg-error" />
-            </button>
-            <button className="rounded-full p-unit-sm transition-colors hover:bg-surface-container-high/50" type="button">
-              <span className="material-symbols-outlined">help_outline</span>
-            </button>
-            <button className="rounded-full p-unit-sm transition-colors hover:bg-surface-container-high/50" type="button">
-              <span className="material-symbols-outlined">settings</span>
-            </button>
-            <div className="mx-unit-sm h-8 w-[1px] bg-outline-variant/30" />
-            <div className="text-right">
-              <p className="font-label-lg text-label-lg text-on-surface">System Admin</p>
-              <p className="font-label-md text-label-md text-on-surface-variant">Admin Access</p>
-            </div>
-          </div>
-        </header>
-
-        <main className="flex-1 p-unit-lg">
+      <AdminLayout
+        className="flex min-h-screen flex-col"
+        contentClassName="flex-1 p-unit-lg"
+        headerTitle="Manage Users"
+        headerDescription="Oversee account status and supported profile information."
+      >
           <div className="mx-auto max-w-[1440px]">
-            <div className="mb-unit-xl flex flex-col justify-between gap-unit-lg md:flex-row md:items-end">
-              <div>
-                <h2 className="font-headline-xl text-headline-xl text-on-surface">Manage Users</h2>
-                <p className="mt-unit-xs font-body-md text-body-md text-on-surface-variant">Oversee account status and supported profile information for the AquaShow ecosystem.</p>
-              </div>
-              <div className="flex flex-wrap gap-unit-md">
-                <div className="flex items-center rounded-xl border border-outline-variant/30 bg-surface-container-lowest p-unit-xs">
-                  <button className={`rounded-lg px-unit-md py-unit-sm font-label-lg text-label-lg transition-all ${filters.role === '' ? 'bg-primary-container text-on-primary-container' : 'text-on-surface-variant hover:bg-surface-container'}`} type="button" onClick={() => { setFilters((current) => ({ ...current, role: '' })); setCurrentPage(0); }}>
-                    All Users
-                  </button>
-                  <button className={`rounded-lg px-unit-md py-unit-sm font-label-lg text-label-lg transition-all ${filters.role === 'STAFF' ? 'bg-primary-container text-on-primary-container' : 'text-on-surface-variant hover:bg-surface-container'}`} type="button" onClick={() => { setFilters((current) => ({ ...current, role: 'STAFF' })); setCurrentPage(0); }}>
-                    Staff
-                  </button>
-                  <button className={`rounded-lg px-unit-md py-unit-sm font-label-lg text-label-lg transition-all ${filters.role === 'MANAGER' ? 'bg-primary-container text-on-primary-container' : 'text-on-surface-variant hover:bg-surface-container'}`} type="button" onClick={() => { setFilters((current) => ({ ...current, role: 'MANAGER' })); setCurrentPage(0); }}>
-                    Managers
-                  </button>
-                  <button className={`rounded-lg px-unit-md py-unit-sm font-label-lg text-label-lg transition-all ${filters.role === 'ADMIN' ? 'bg-primary-container text-on-primary-container' : 'text-on-surface-variant hover:bg-surface-container'}`} type="button" onClick={() => { setFilters((current) => ({ ...current, role: 'ADMIN' })); setCurrentPage(0); }}>
-                    Admins
-                  </button>
-                </div>
-              </div>
-            </div>
+            <AdminPageHeader
+              title="User Directory"
+              description="Manage administrator-owned user status and profile information."
+            />
+
+            <AdminActionBar>
+              <button className={`rounded-lg px-unit-md py-unit-sm font-label-lg text-label-lg transition-all ${filters.role === '' ? 'bg-primary-container text-on-primary-container' : 'text-on-surface-variant hover:bg-surface-container'}`} type="button" onClick={() => { setFilters((current) => ({ ...current, role: '' })); setCurrentPage(0); }}>
+                All Users
+              </button>
+              <button className={`rounded-lg px-unit-md py-unit-sm font-label-lg text-label-lg transition-all ${filters.role === 'STAFF' ? 'bg-primary-container text-on-primary-container' : 'text-on-surface-variant hover:bg-surface-container'}`} type="button" onClick={() => { setFilters((current) => ({ ...current, role: 'STAFF' })); setCurrentPage(0); }}>
+                Staff
+              </button>
+              <button className={`rounded-lg px-unit-md py-unit-sm font-label-lg text-label-lg transition-all ${filters.role === 'MANAGER' ? 'bg-primary-container text-on-primary-container' : 'text-on-surface-variant hover:bg-surface-container'}`} type="button" onClick={() => { setFilters((current) => ({ ...current, role: 'MANAGER' })); setCurrentPage(0); }}>
+                Managers
+              </button>
+              <button className={`rounded-lg px-unit-md py-unit-sm font-label-lg text-label-lg transition-all ${filters.role === 'ADMIN' ? 'bg-primary-container text-on-primary-container' : 'text-on-surface-variant hover:bg-surface-container'}`} type="button" onClick={() => { setFilters((current) => ({ ...current, role: 'ADMIN' })); setCurrentPage(0); }}>
+                Admins
+              </button>
+            </AdminActionBar>
 
             <div className="mb-unit-xl grid grid-cols-1 gap-unit-lg md:grid-cols-4">
-              <StatCard icon="group" label="Total Users" value={stats.total} />
-              <StatCard icon="verified_user" label="Active On Page" tone="secondary" value={stats.active} />
-              <StatCard icon="admin_panel_settings" label="Admins On Page" tone="tertiary" value={stats.admins} />
-              <StatCard icon="person_off" label="Disabled On Page" tone="error" value={stats.disabled} />
+              <AdminStatCard icon="group" label="Total Users" value={stats.total} />
+              <AdminStatCard icon="verified_user" label="Active On Page" tone="secondary" value={stats.active} />
+              <AdminStatCard icon="admin_panel_settings" label="Admins On Page" tone="tertiary" value={stats.admins} />
+              <AdminStatCard icon="person_off" label="Disabled On Page" tone="error" value={stats.disabled} />
             </div>
 
             {successMessage && (
@@ -876,8 +788,7 @@ export default function ManageUsersPage() {
               </div>
             </div>
           </div>
-        </main>
-      </div>
+      </AdminLayout>
 
       {selectedUser && (
         <UserModal

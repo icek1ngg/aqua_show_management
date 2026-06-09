@@ -1,14 +1,17 @@
 import { useEffect, useRef, useState } from 'react';
-import { Link, NavLink, useNavigate } from 'react-router-dom';
+import { Link, NavLink, useLocation, useNavigate } from 'react-router-dom';
 
 import { useAuth } from '../../../features/auth/AuthContext.jsx';
 import Logo from './Logo.jsx';
 import TicketSearchDrawer from './TicketSearchDrawer.jsx';
 
-const navigationLinks = [
-  { label: 'Home', to: '/' },
-  { label: 'Shows', to: '/shows' },
-  { label: 'Schedules', href: '/#schedules' },
+const sectionNavigationLinks = [
+  { label: 'Home', sectionId: 'home' },
+  { label: 'Shows', sectionId: 'shows' },
+  { label: 'Schedule', sectionId: 'schedule' },
+];
+
+const routeNavigationLinks = [
   { label: 'My Bookings', to: '/bookings/my' },
 ];
 
@@ -44,38 +47,39 @@ function hasRole(user, role) {
   return roles.includes(role);
 }
 
-function NavLinks({ onNavigate, user }) {
+function NavLinks({ onNavigate, onSectionNavigate, user }) {
   const links = hasRole(user, 'STAFF')
-    ? [...navigationLinks, { label: 'Check-in', to: '/staff/check-in' }]
-    : navigationLinks;
+    ? [...routeNavigationLinks, { label: 'Check-in', to: '/staff/check-in' }]
+    : routeNavigationLinks;
+
+  const buttonClassName = 'rounded-full px-3 py-2 text-sm font-semibold text-slate-600 transition hover:bg-cyan-50 hover:text-cyan-800';
 
   return (
     <>
+      {sectionNavigationLinks.map((link) => (
+        <button
+          className={buttonClassName}
+          key={link.label}
+          type="button"
+          onClick={() => onSectionNavigate(link.sectionId)}
+        >
+          {link.label}
+        </button>
+      ))}
       {links.map((link) => (
-        link.to ? (
-          <NavLink
-            className={({ isActive }) =>
-              [
-                'rounded-full px-3 py-2 text-sm font-semibold transition hover:bg-cyan-50 hover:text-cyan-800',
-                isActive ? 'bg-cyan-50 text-cyan-800' : 'text-slate-600',
-              ].join(' ')
-            }
-            key={link.label}
-            onClick={onNavigate}
-            to={link.to}
-          >
-            {link.label}
-          </NavLink>
-        ) : (
-          <a
-            className="rounded-full px-3 py-2 text-sm font-semibold text-slate-600 transition hover:bg-cyan-50 hover:text-cyan-800"
-            href={link.href}
-            key={link.label}
-            onClick={onNavigate}
-          >
-            {link.label}
-          </a>
-        )
+        <NavLink
+          className={({ isActive }) =>
+            [
+              'rounded-full px-3 py-2 text-sm font-semibold transition hover:bg-cyan-50 hover:text-cyan-800',
+              isActive ? 'bg-cyan-50 text-cyan-800' : 'text-slate-600',
+            ].join(' ')
+          }
+          key={link.label}
+          onClick={onNavigate}
+          to={link.to}
+        >
+          {link.label}
+        </NavLink>
       ))}
     </>
   );
@@ -167,6 +171,7 @@ function LoggedInActions({ user, onLogout }) {
 
 export default function Navbar() {
   const { isAuthenticated, loading, logout, user } = useAuth();
+  const location = useLocation();
   const navigate = useNavigate();
   const [isMobileOpen, setIsMobileOpen] = useState(false);
   const [isMobileUserMenuOpen, setIsMobileUserMenuOpen] = useState(false);
@@ -190,6 +195,25 @@ export default function Navbar() {
     setIsTicketDrawerOpen(true);
   };
   const closeTicketDrawer = () => setIsTicketDrawerOpen(false);
+  const isHomepageRoute = ['/', '/shows', '/public/shows'].includes(location.pathname);
+  const scrollToSection = (sectionId) => {
+    if (sectionId === 'home') {
+      window.scrollTo({ top: 0, behavior: 'smooth' });
+      return;
+    }
+
+    document.getElementById(sectionId)?.scrollIntoView({ behavior: 'smooth', block: 'start' });
+  };
+  const handleSectionNavigate = (sectionId) => {
+    closeMobileMenu();
+
+    if (isHomepageRoute) {
+      scrollToSection(sectionId);
+      return;
+    }
+
+    navigate('/', { state: { scrollTo: sectionId } });
+  };
   const handleLogout = async () => {
     await logout();
     setIsMobileOpen(false);
@@ -204,7 +228,7 @@ export default function Navbar() {
           <Logo />
 
           <nav className="hidden items-center gap-2 md:flex" aria-label="Primary navigation">
-            <NavLinks user={user} />
+            <NavLinks onSectionNavigate={handleSectionNavigate} user={user} />
           </nav>
 
           <div className="hidden items-center gap-4 md:flex">
@@ -234,7 +258,7 @@ export default function Navbar() {
         {isMobileOpen && (
           <div className="border-t border-cyan-100 bg-white/95 px-4 py-4 shadow-xl backdrop-blur-xl md:hidden">
             <nav className="flex flex-col gap-1" aria-label="Mobile navigation">
-              <NavLinks onNavigate={closeMobileMenu} user={user} />
+              <NavLinks onNavigate={closeMobileMenu} onSectionNavigate={handleSectionNavigate} user={user} />
             </nav>
 
             <div className="mt-4 flex flex-col gap-3 border-t border-cyan-100 pt-4">

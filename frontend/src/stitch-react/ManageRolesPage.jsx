@@ -1,8 +1,10 @@
 import { useEffect, useMemo, useState } from 'react';
-import { Link } from 'react-router-dom';
 
 import { getAdminUsers } from '../services/adminUserService.js';
 import { assignUserRole, getRoles, getUserRole } from '../services/adminRoleService.js';
+import AdminActionBar from '../features/admin/components/AdminActionBar.jsx';
+import AdminLayout from '../features/admin/components/AdminLayout.jsx';
+import AdminPageHeader from '../features/admin/components/AdminPageHeader.jsx';
 
 const roleOrder = ['USER', 'STAFF', 'MANAGER', 'ADMIN'];
 
@@ -77,23 +79,6 @@ function statusClass(status) {
   }
 
   return 'text-tertiary';
-}
-
-function SidebarLink({ active, icon, label, to }) {
-  return (
-    <Link
-      className={[
-        'flex items-center gap-unit-md px-unit-lg py-unit-md transition-all',
-        active
-          ? 'border-l-4 border-primary-fixed bg-on-secondary-fixed-variant/30 text-primary-fixed'
-          : 'text-on-secondary-fixed-variant hover:bg-on-secondary-fixed-variant/20 hover:text-primary-fixed',
-      ].join(' ')}
-      to={to}
-    >
-      <span className="material-symbols-outlined">{icon}</span>
-      <span className="font-body-md">{label}</span>
-    </Link>
-  );
 }
 
 function RoleCard({ role }) {
@@ -525,36 +510,27 @@ export default function ManageRolesPage() {
             font-variation-settings: 'FILL' 0, 'wght' 400, 'GRAD' 0, 'opsz' 24;
         }`}</style>
 
-      <aside className="fixed left-0 top-0 z-50 flex h-full w-sidebar-width flex-col bg-on-secondary-fixed py-unit-lg shadow-lg">
-        <div className="mb-unit-xl px-unit-lg">
-          <h1 className="font-headline-md text-headline-md font-bold text-primary-fixed">AquaShow MS</h1>
-          <p className="font-body-md text-body-md text-primary-fixed/70">Management System</p>
-        </div>
-        <nav className="flex-1 space-y-unit-xs">
-          <SidebarLink icon="dashboard" label="Dashboard" to="/manager/dashboard" />
-          <SidebarLink icon="theater_comedy" label="Shows" to="/manager/shows" />
-          <SidebarLink icon="water_drop" label="Venues" to="/manager/venues" />
-          <SidebarLink icon="calendar_month" label="Schedules" to="/manager/schedules" />
-          <SidebarLink icon="event_seat" label="Bookings" to="/manager/bookings" />
-          <SidebarLink icon="analytics" label="Reports" to="/manager/reports" />
-          <SidebarLink icon="group" label="Users" to="/admin/users" />
-          <SidebarLink active icon="admin_panel_settings" label="Roles" to="/admin/roles" />
-        </nav>
-        <div className="mt-auto px-unit-lg">
-          <Link className="block w-full rounded-lg bg-primary-fixed py-unit-md text-center font-label-lg text-on-primary-fixed transition-transform active:scale-[0.98]" to="/manager/schedules">
-            Quick Schedule
-          </Link>
-        </div>
-      </aside>
+      <AdminLayout
+        headerTitle="Manage Roles"
+        headerDescription="Assign and review administrator-owned access roles."
+      >
+        <div className="space-y-unit-lg">
+          <AdminPageHeader
+            title="Role Assignment"
+            description="Review roles and modify individual user access without manager workflow links."
+            actions={(
+              <button className="flex items-center gap-unit-sm rounded-full bg-primary px-unit-lg py-unit-md font-label-lg text-white shadow-md transition-all hover:opacity-90" type="button" onClick={() => openModal()}>
+                <span className="material-symbols-outlined">add</span>
+                Assign Role
+              </button>
+            )}
+          />
 
-      <main className="ml-sidebar-width min-h-screen">
-        <header className="sticky top-0 z-40 flex items-center justify-between border-b border-outline-variant/20 bg-surface/70 px-unit-lg py-unit-sm shadow-sm backdrop-blur-md">
-          <div className="flex flex-1 items-center gap-unit-lg">
-            <h2 className="font-headline-md text-headline-md font-extrabold text-primary">Manage Roles</h2>
+          <AdminActionBar>
             <div className="relative w-full max-w-md">
               <span className="material-symbols-outlined absolute left-unit-md top-1/2 -translate-y-1/2 text-on-surface-variant">search</span>
               <input
-                className="w-full rounded-full border-none bg-surface-container py-2 pl-unit-xl pr-unit-md text-body-sm focus:ring-2 focus:ring-primary"
+                className="w-full rounded-full border-none bg-surface py-2 pl-unit-xl pr-unit-md text-body-sm focus:ring-2 focus:ring-primary"
                 placeholder="Search users for role assignment..."
                 type="search"
                 value={keyword}
@@ -564,24 +540,7 @@ export default function ManageRolesPage() {
                 }}
               />
             </div>
-          </div>
-          <div className="flex items-center gap-unit-md">
-            <button className="rounded-full p-unit-sm transition-colors duration-150 hover:bg-surface-container-high/50 active:scale-95" type="button">
-              <span className="material-symbols-outlined text-on-surface-variant">notifications</span>
-            </button>
-            <button className="rounded-full p-unit-sm transition-colors duration-150 hover:bg-surface-container-high/50 active:scale-95" type="button">
-              <span className="material-symbols-outlined text-on-surface-variant">help_outline</span>
-            </button>
-            <button className="rounded-full p-unit-sm transition-colors duration-150 hover:bg-surface-container-high/50 active:scale-95" type="button">
-              <span className="material-symbols-outlined text-on-surface-variant">settings</span>
-            </button>
-            <div className="flex h-10 w-10 items-center justify-center rounded-full border-2 border-primary-container bg-primary/10 text-primary">
-              <span className="material-symbols-outlined">admin_panel_settings</span>
-            </div>
-          </div>
-        </header>
-
-        <div className="space-y-unit-lg p-unit-lg">
+          </AdminActionBar>
           <div className="flex items-center gap-unit-md rounded-lg border border-error/20 bg-error-container/20 p-unit-md text-on-error-container">
             <span className="material-symbols-outlined text-error">warning</span>
             <p className="font-label-lg">Role changes affect access permissions immediately for the selected user.</p>
@@ -625,10 +584,6 @@ export default function ManageRolesPage() {
                 <h4 className="font-headline-md text-on-surface">User Role Assignment</h4>
                 <p className="font-body-sm text-on-surface-variant">Modify individual user access by assigning one enum role.</p>
               </div>
-              <button className="flex items-center gap-unit-sm rounded-full bg-primary px-unit-lg py-unit-md font-label-lg text-white shadow-md transition-all hover:opacity-90" type="button" onClick={() => openModal()}>
-                <span className="material-symbols-outlined">add</span>
-                Assign Role
-              </button>
             </div>
 
             {userError && (
@@ -732,7 +687,7 @@ export default function ManageRolesPage() {
             </div>
           </section>
         </div>
-      </main>
+      </AdminLayout>
 
       {isModalOpen && (
         <RoleAssignmentModal

@@ -1,6 +1,7 @@
 import { Navigate, useLocation } from 'react-router-dom';
 
 import { useAuth } from './AuthContext.jsx';
+import { getRedirectPathByRole, getPrimaryUserRole } from './authRedirect.js';
 
 function getUserRoles(user) {
   const roleValues = [user?.role, ...(Array.isArray(user?.roles) ? user.roles : [])]
@@ -40,7 +41,7 @@ export default function ProtectedRoute({ allowedRoles, children }) {
     const canAccess = allowedRoles.some((role) => userRoles.includes(String(role).replace(/^ROLE_/, '').toUpperCase()));
 
     if (!canAccess) {
-      return <Navigate replace to="/" />;
+      return <Navigate replace to={getRedirectPathByRole(getPrimaryUserRole(user))} />;
     }
   }
 
