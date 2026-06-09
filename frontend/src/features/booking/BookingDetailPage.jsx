@@ -167,7 +167,9 @@ function StatusMessage({ booking, meta }) {
     const ticketCount = booking.tickets?.total || 0;
     return (
       <p className="mt-3 text-sm font-semibold leading-7 text-slate-600">
-        {ticketCount > 0 ? `${ticketCount} ticket QR code${ticketCount === 1 ? '' : 's'} generated.` : 'Ticket QR and email status are being finalized.'}
+        {ticketCount > 0
+          ? `${ticketCount} ticket QR code${ticketCount === 1 ? '' : 's'} generated.`
+          : 'Thanh toán đã thành công. Vé QR đang được chuẩn bị...'}
       </p>
     );
   }
@@ -545,10 +547,10 @@ export default function BookingDetailPage() {
                 <h4 className="text-[11px] font-black uppercase tracking-[0.24em] text-slate-400">Actions</h4>
                 <div className="mt-5 flex flex-col gap-3">
                   <ActionPanel booking={displayBooking} />
-                  {displayBooking.status === 'PAID' ? (
+                  {displayBooking.status === 'PAID' && Number(displayBooking.tickets?.total || 0) > 0 ? (
                     <Link
                       className="flex w-full items-center justify-center gap-2 rounded-full bg-emerald-600 px-6 py-4 font-bold text-white shadow-lg shadow-emerald-600/20 transition hover:bg-emerald-700 active:scale-[0.98]"
-                      to={`/payments/result?bookingId=${displayBooking.id}&status=success`}
+                      to={`/payments/result?bookingId=${displayBooking.id}`}
                     >
                       <span className="material-symbols-outlined text-xl" aria-hidden="true">
                         qr_code_2

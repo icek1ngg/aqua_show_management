@@ -7,37 +7,50 @@ import StaffLayout from '../../shared/layouts/StaffLayout.jsx';
 const resultStyles = {
   SUCCESS: {
     icon: 'verified',
-    title: 'Valid ticket',
+    title: 'Vé hợp lệ',
+    message: 'Cho phép vào cổng',
     className: 'border-emerald-200 bg-emerald-50 text-emerald-700',
   },
   ALREADY_USED: {
     icon: 'history',
-    title: 'Already used',
+    title: 'Vé đã được sử dụng',
+    message: 'Không cho phép vào cổng',
     className: 'border-yellow-200 bg-yellow-50 text-[#a43c12]',
   },
   EXPIRED: {
     icon: 'timer_off',
-    title: 'Expired ticket',
-    className: 'border-slate-200 bg-slate-50 text-slate-600',
+    title: 'Vé đã hết hạn',
+    message: 'Không cho phép vào cổng',
+    className: 'border-red-200 bg-red-50 text-red-700',
   },
   INVALID_QR: {
     icon: 'qr_code_scanner',
-    title: 'Invalid QR',
+    title: 'QR không hợp lệ',
+    message: 'Không tìm thấy vé hoặc mã QR không đúng',
     className: 'border-red-200 bg-red-50 text-red-700',
   },
   BOOKING_NOT_PAID: {
     icon: 'block',
-    title: 'Booking not paid',
+    title: 'Booking chưa thanh toán',
+    message: 'Không cho phép vào cổng',
     className: 'border-red-200 bg-red-50 text-red-700',
   },
   TICKET_NOT_FOUND: {
     icon: 'search_off',
-    title: 'Ticket not found',
+    title: 'QR không hợp lệ',
+    message: 'Không tìm thấy vé hoặc mã QR không đúng',
     className: 'border-red-200 bg-red-50 text-red-700',
   },
   INVALID_STATUS: {
     icon: 'block',
-    title: 'Invalid ticket status',
+    title: 'Trạng thái vé không hợp lệ',
+    message: 'Không cho phép vào cổng',
+    className: 'border-red-200 bg-red-50 text-red-700',
+  },
+  ERROR: {
+    icon: 'cloud_off',
+    title: 'Không thể xác thực vé',
+    message: 'Vui lòng thử quét lại.',
     className: 'border-red-200 bg-red-50 text-red-700',
   },
 };
@@ -46,19 +59,15 @@ const scannerStates = Object.freeze({
   IDLE: 'IDLE',
   STARTING_CAMERA: 'STARTING_CAMERA',
   SCANNING: 'SCANNING',
-  QR_DETECTED: 'QR_DETECTED',
-  VALIDATING: 'VALIDATING',
+  PROCESSING: 'PROCESSING',
   RESULT: 'RESULT',
   COOLDOWN: 'COOLDOWN',
-  PAUSED: 'PAUSED',
   ERROR: 'ERROR',
 });
 
 const scanIntervalMs = 180;
-const sameQrCooldownMs = 30000;
-const invalidQrCooldownMs = 5000;
-const resultDisplayMs = 1800;
-const resultCooldownMs = 200;
+const sameQrCooldownMs = 4000;
+const minimumProcessingMs = 1200;
 
 function formatDateTime(value) {
   return value ? new Intl.DateTimeFormat('en-US', { dateStyle: 'medium', timeStyle: 'short' }).format(new Date(value)) : 'Unavailable';
@@ -162,11 +171,11 @@ function getScannerStatus(scannerState, result) {
       return 'Camera starting...';
     case scannerStates.SCANNING:
       return 'Scanning...';
-    case scannerStates.QR_DETECTED:
-    case scannerStates.VALIDATING:
+    case scannerStates.PROCESSING:
       return 'QR detected. Validating...';
-    case scannerStates.RESULT:
     case scannerStates.COOLDOWN:
+      return 'Preparing the next scan...';
+    case scannerStates.RESULT:
       if (result?.result === 'SUCCESS') {
         return 'Ticket valid - Allow entry';
       }
@@ -174,8 +183,6 @@ function getScannerStatus(scannerState, result) {
         return 'Ticket already used';
       }
       return 'Invalid ticket - Deny entry';
-    case scannerStates.PAUSED:
-      return 'Paused - Scan next ticket when ready';
     case scannerStates.ERROR:
       return 'Scanner error';
     default:
@@ -269,6 +276,56 @@ function ResultPanel({ result }) {
   );
 }
 
+function ResultModal({ result, onScanNext }) {
+  if (!result) {
+    return null;
+  }
+
+  const style = resultStyles[result.result] || resultStyles.INVALID_QR;
+  return (
+    <div className="fixed inset-0 z-50 flex items-center justify-center bg-slate-950/70 p-4 backdrop-blur-sm" role="dialog" aria-modal="true" aria-labelledby="scan-result-title">
+      <section className={`max-h-[92vh] w-full max-w-xl overflow-y-auto rounded-[2rem] border p-6 shadow-2xl sm:p-8 ${style.className}`}>
+        <div className="text-center">
+          <span className="mx-auto flex h-20 w-20 items-center justify-center rounded-full bg-white/90 shadow-sm">
+            <span className="material-symbols-outlined !text-5xl" aria-hidden="true">{style.icon}</span>
+          </span>
+          <h2 id="scan-result-title" className="mt-5 text-3xl font-black sm:text-4xl">{style.title}</h2>
+          <p className="mt-3 text-lg font-black">{style.message}</p>
+          {result.result === 'ERROR' && result.detail ? <p className="mt-2 text-sm font-semibold opacity-80">{result.detail}</p> : null}
+        </div>
+
+        <dl className="mt-7 grid grid-cols-1 gap-3 rounded-2xl bg-white/85 p-5 text-slate-700 sm:grid-cols-2">
+          <div>
+            <dt className="text-xs font-black uppercase tracking-wider text-slate-400">Show</dt>
+            <dd className="mt-1 font-black">{result.show?.title || 'N/A'}</dd>
+          </div>
+          <div>
+            <dt className="text-xs font-black uppercase tracking-wider text-slate-400">Venue</dt>
+            <dd className="mt-1 font-black">{result.show?.venueName || 'N/A'}</dd>
+          </div>
+          <div>
+            <dt className="text-xs font-black uppercase tracking-wider text-slate-400">Booking status</dt>
+            <dd className="mt-1 font-black">{result.booking?.status || 'N/A'}</dd>
+          </div>
+          <div>
+            <dt className="text-xs font-black uppercase tracking-wider text-slate-400">Ticket status</dt>
+            <dd className="mt-1 font-black">{result.ticket?.status || 'N/A'}</dd>
+          </div>
+          <div className="sm:col-span-2">
+            <dt className="text-xs font-black uppercase tracking-wider text-slate-400">Check-in time</dt>
+            <dd className="mt-1 font-black">{formatDateTime(result.checkedInAt)}</dd>
+          </div>
+        </dl>
+
+        <button className="mt-7 flex min-h-14 w-full items-center justify-center gap-2 rounded-full bg-slate-950 px-6 py-4 text-lg font-black text-white transition hover:bg-slate-800" onClick={onScanNext} type="button">
+          <span className="material-symbols-outlined" aria-hidden="true">qr_code_scanner</span>
+          Scan Next
+        </button>
+      </section>
+    </div>
+  );
+}
+
 export default function StaffTicketValidationPage() {
   const [qrCode, setQrCode] = useState('');
   const [result, setResult] = useState(null);
@@ -289,7 +346,6 @@ export default function StaffTicketValidationPage() {
     lastApiResult: '',
     lastError: '',
   });
-  const [pauseAfterScan, setPauseAfterScan] = useState(false);
   const [capturedImage, setCapturedImage] = useState(null);
   const [flashActive, setFlashActive] = useState(false);
 
@@ -306,16 +362,10 @@ export default function StaffTicketValidationPage() {
   const lastDetectedQrRef = useRef('');
   const lastDetectedAtRef = useRef(0);
   const processedQrCacheRef = useRef(new Map());
-  const pauseAfterScanRef = useRef(pauseAfterScan);
-  const resultTimerRef = useRef(null);
   const cooldownTimerRef = useRef(null);
   const scannerStatus = getScannerStatus(scannerState, result);
   const cameraStarting = scannerState === scannerStates.STARTING_CAMERA;
   const showQrDebug = import.meta.env.DEV || import.meta.env.VITE_SHOW_QR_DEBUG === 'true';
-
-  useEffect(() => {
-    pauseAfterScanRef.current = pauseAfterScan;
-  }, [pauseAfterScan]);
 
   const transitionScanner = (nextState) => {
     scannerStateRef.current = nextState;
@@ -323,9 +373,7 @@ export default function StaffTicketValidationPage() {
   };
 
   const clearScannerTimers = () => {
-    window.clearTimeout(resultTimerRef.current);
     window.clearTimeout(cooldownTimerRef.current);
-    resultTimerRef.current = null;
     cooldownTimerRef.current = null;
   };
 
@@ -370,36 +418,25 @@ export default function StaffTicketValidationPage() {
 
   const resumeScanning = () => {
     clearScannerTimers();
+    setResult(null);
     setCapturedImage(null);
     setCameraError('');
     isDetectingRef.current = false;
     isValidatingRef.current = false;
-    transitionScanner(streamRef.current ? scannerStates.SCANNING : scannerStates.IDLE);
-  };
-
-  const scheduleAfterResult = () => {
-    transitionScanner(scannerStates.RESULT);
-    resultTimerRef.current = window.setTimeout(() => {
-      if (!scanLoopActiveRef.current) {
-        return;
-      }
-      if (pauseAfterScanRef.current) {
-        transitionScanner(scannerStates.PAUSED);
-        return;
-      }
+    if (streamRef.current) {
       transitionScanner(scannerStates.COOLDOWN);
       cooldownTimerRef.current = window.setTimeout(() => {
-        if (scanLoopActiveRef.current) {
-          setCameraError('');
+        if (scanLoopActiveRef.current && streamRef.current) {
           transitionScanner(scannerStates.SCANNING);
         }
-      }, resultCooldownMs);
-    }, resultDisplayMs);
+      }, 200);
+    } else {
+      transitionScanner(scannerStates.IDLE);
+    }
   };
 
   const rememberProcessedQr = (payload, resultCode) => {
-    const cooldownMs = ['SUCCESS', 'ALREADY_USED'].includes(resultCode) ? sameQrCooldownMs : invalidQrCooldownMs;
-    processedQrCacheRef.current.set(payload, Date.now() + cooldownMs);
+    processedQrCacheRef.current.set(payload, Date.now() + sameQrCooldownMs);
   };
 
   const applyValidation = async (payload, capturedImg = null, source = 'manual') => {
@@ -425,7 +462,8 @@ export default function StaffTicketValidationPage() {
     processedQrCacheRef.current.delete(normalizedQr);
 
     isValidatingRef.current = true;
-    transitionScanner(scannerStates.VALIDATING);
+    const processingStartedAt = Date.now();
+    transitionScanner(scannerStates.PROCESSING);
     setLoading(true);
     setError('');
     setCameraError('');
@@ -439,6 +477,10 @@ export default function StaffTicketValidationPage() {
 
     try {
       const validation = await validateQr(normalizedQr);
+      const remainingDelay = minimumProcessingMs - (Date.now() - processingStartedAt);
+      if (remainingDelay > 0) {
+        await new Promise((resolve) => window.setTimeout(resolve, remainingDelay));
+      }
       const validationWithImage = { ...validation, capturedImage: capturedImg };
       rememberProcessedQr(normalizedQr, validation.result);
       setResult(validationWithImage);
@@ -446,22 +488,28 @@ export default function StaffTicketValidationPage() {
       setQrCode('');
       setDebugInfo((current) => ({ ...current, lastApiResult: validation.result }));
       runValidationFeedback(validation.result);
-      if (scanLoopActiveRef.current) {
-        scheduleAfterResult();
-      } else {
-        transitionScanner(scannerStates.RESULT);
-      }
+      transitionScanner(scannerStates.RESULT);
     } catch (validationError) {
       const message = validationError.response?.data?.message || validationError.message || 'Unable to validate QR.';
+      const remainingDelay = minimumProcessingMs - (Date.now() - processingStartedAt);
+      if (remainingDelay > 0) {
+        await new Promise((resolve) => window.setTimeout(resolve, remainingDelay));
+      }
       rememberProcessedQr(normalizedQr, 'ERROR');
-      setError(message);
-      setCameraError(message);
+      const errorResult = {
+        result: 'ERROR',
+        message: 'Vui lòng thử quét lại.',
+        detail: message,
+        attemptedAt: new Date().toISOString(),
+        capturedImage: capturedImg,
+      };
+      setResult(errorResult);
+      setHistory((current) => [errorResult, ...current].slice(0, 8));
+      setError('');
+      setCameraError('');
       setDebugInfo((current) => ({ ...current, lastError: message }));
       runValidationFeedback('ERROR');
-      transitionScanner(scannerStates.ERROR);
-      if (scanLoopActiveRef.current) {
-        resultTimerRef.current = window.setTimeout(() => transitionScanner(scannerStates.SCANNING), resultDisplayMs);
-      }
+      transitionScanner(scannerStates.RESULT);
     } finally {
       setLoading(false);
       isValidatingRef.current = false;
@@ -588,33 +636,31 @@ export default function StaffTicketValidationPage() {
             const cachedUntil = normalizedQr ? processedQrCacheRef.current.get(normalizedQr) : 0;
 
             if (cachedUntil && cachedUntil > detectedAt) {
-              if (normalizedQr !== lastDetectedQrRef.current || detectedAt - lastDetectedAtRef.current > resultDisplayMs) {
+              if (normalizedQr !== lastDetectedQrRef.current || detectedAt - lastDetectedAtRef.current > sameQrCooldownMs) {
                 setCameraError('This QR was just scanned.');
                 lastDetectedQrRef.current = normalizedQr;
                 lastDetectedAtRef.current = detectedAt;
               }
             } else if (normalizedQr) {
               processedQrCacheRef.current.delete(normalizedQr);
-              transitionScanner(scannerStates.QR_DETECTED);
+              transitionScanner(scannerStates.PROCESSING);
               lastDetectedQrRef.current = normalizedQr;
               lastDetectedAtRef.current = detectedAt;
               setScannedPayload(normalizedQr);
               runDetectionFeedback();
 
               let capturedDataUrl = null;
-              if (pauseAfterScanRef.current) {
-                const canvas = canvasRef.current;
-                if (canvas) {
-                  canvas.width = video.videoWidth;
-                  canvas.height = video.videoHeight;
-                  const context = canvas.getContext('2d');
-                  if (context) {
-                    context.drawImage(video, 0, 0, canvas.width, canvas.height);
-                    capturedDataUrl = canvas.toDataURL('image/jpeg', 0.85);
-                    setCapturedImage(capturedDataUrl);
-                    setFlashActive(true);
-                    window.setTimeout(() => setFlashActive(false), 250);
-                  }
+              const canvas = canvasRef.current;
+              if (canvas) {
+                canvas.width = video.videoWidth;
+                canvas.height = video.videoHeight;
+                const context = canvas.getContext('2d');
+                if (context) {
+                  context.drawImage(video, 0, 0, canvas.width, canvas.height);
+                  capturedDataUrl = canvas.toDataURL('image/jpeg', 0.85);
+                  setCapturedImage(capturedDataUrl);
+                  setFlashActive(true);
+                  window.setTimeout(() => setFlashActive(false), 250);
                 }
               }
               await applyValidation(normalizedQr, capturedDataUrl, 'camera');
@@ -659,19 +705,7 @@ export default function StaffTicketValidationPage() {
                   <div>
                     <h2 className="text-xl font-black text-slate-950">Scan Ticket</h2>
                     <p className="mt-2 inline-flex rounded-full bg-slate-100 px-3 py-1 text-xs font-black text-slate-700">{scannerStatus}</p>
-                    
-                    <div className="mt-3 flex items-center">
-                      <label className="relative inline-flex items-center cursor-pointer select-none">
-                        <input
-                          type="checkbox"
-                          checked={pauseAfterScan}
-                          onChange={(e) => setPauseAfterScan(e.target.checked)}
-                          className="sr-only peer"
-                        />
-                        <div className="w-9 h-5 bg-slate-200 peer-focus:outline-none rounded-full peer peer-checked:after:translate-x-full rtl:peer-checked:after:-translate-x-full peer-checked:after:border-white after:content-[''] after:absolute after:top-[2px] after:start-[2px] after:bg-white after:border-slate-300 after:border after:rounded-full after:h-4 after:w-4 after:transition-all peer-checked:bg-cyan-700"></div>
-                        <span className="ms-2.5 text-xs font-bold text-slate-600">Pause after scan</span>
-                      </label>
-                    </div>
+                    <p className="mt-2 text-xs font-bold text-slate-500">Scanner pauses after every detection until you choose Scan Next.</p>
                   </div>
                   <div className="flex gap-3">
                     <button
@@ -709,15 +743,9 @@ export default function StaffTicketValidationPage() {
                           Captured frame
                         </div>
                       </div>
-                      
-                      <button
-                        type="button"
-                        onClick={resumeScanning}
-                        className="mt-6 inline-flex items-center gap-2 rounded-full bg-cyan-500 px-6 py-3 font-black text-white hover:bg-cyan-600 transition shadow-[0_4px_20px_rgba(6,182,212,0.4)]"
-                      >
-                        <span className="material-symbols-outlined">restart_alt</span>
-                        Scan next
-                      </button>
+                      <p className="mt-5 rounded-full bg-slate-950/70 px-5 py-2 text-sm font-black">
+                        {scannerState === scannerStates.PROCESSING ? 'Validating ticket...' : 'Scan paused'}
+                      </p>
                     </div>
                   )}
 
@@ -794,9 +822,8 @@ export default function StaffTicketValidationPage() {
                       const style = resultStyles[item.result] || resultStyles.INVALID_QR;
                       return (
                         <article
-                          className="rounded-2xl border border-cyan-100 p-4 hover:border-cyan-300 hover:bg-cyan-50/20 transition cursor-pointer flex gap-4"
-                          key={item.checkInLogId}
-                          onClick={() => setResult(item)}
+                          className="flex gap-4 rounded-2xl border border-cyan-100 p-4 transition hover:border-cyan-300 hover:bg-cyan-50/20"
+                          key={item.checkInLogId || `${item.result}-${item.checkedInAt || item.attemptedAt}`}
                         >
                           {item.capturedImage && (
                             <div className="relative h-16 w-16 flex-shrink-0 overflow-hidden rounded-xl border border-slate-100 bg-slate-950 shadow-sm">
@@ -806,7 +833,7 @@ export default function StaffTicketValidationPage() {
                           <div className="flex-1 min-w-0">
                             <div className="flex items-center justify-between gap-3">
                               <span className={`rounded-full px-3 py-0.5 text-xs font-black ${style.className}`}>{item.result}</span>
-                              <span className="text-[10px] font-bold text-slate-400">{formatDateTime(item.checkedInAt)}</span>
+                              <span className="text-[10px] font-bold text-slate-400">{formatDateTime(item.checkedInAt || item.attemptedAt)}</span>
                             </div>
                             <p className="mt-1.5 truncate text-sm font-black text-slate-800">{item.show?.title || item.message}</p>
                             <p className="mt-0.5 truncate text-xs font-semibold text-slate-500">{formatTicketReference(item.ticket)}</p>
@@ -821,6 +848,7 @@ export default function StaffTicketValidationPage() {
           </div>
         </div>
       </main>
+      <ResultModal result={scannerState === scannerStates.RESULT ? result : null} onScanNext={resumeScanning} />
     </StaffLayout>
   );
 }

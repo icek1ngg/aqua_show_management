@@ -203,7 +203,7 @@ export default function PaymentPage() {
   const [reconciling, setReconciling] = useState(false);
   const [reconcileMessage, setReconcileMessage] = useState('');
   const [error, setError] = useState('');
-  const hasRedirectedToTicketsRef = useRef(false);
+  const hasRedirectedToResultRef = useRef(false);
 
   async function refreshBooking({ showLoading = false } = {}) {
     if (showLoading) {
@@ -295,15 +295,15 @@ export default function PaymentPage() {
 
   useEffect(() => {
     const statusState = normalizeBookingPaymentStatus(booking, booking?.payment);
-    if (statusState.status !== 'PAID' || hasRedirectedToTicketsRef.current) {
+    if (statusState.status !== 'PAID' || hasRedirectedToResultRef.current) {
       return undefined;
     }
 
-    hasRedirectedToTicketsRef.current = true;
-    setReconcileMessage('Payment completed successfully. Redirecting to your tickets...');
+    hasRedirectedToResultRef.current = true;
+    setReconcileMessage('Payment confirmed. Opening the secure result page...');
     const timeoutId = window.setTimeout(() => {
-      navigate(`/payments/result?bookingId=${bookingId}&status=success`, { replace: true });
-    }, 1800);
+      navigate(`/payments/result?bookingId=${bookingId}`, { replace: true });
+    }, 800);
 
     return () => window.clearTimeout(timeoutId);
   }, [booking, bookingId, navigate]);
@@ -590,7 +590,7 @@ export default function PaymentPage() {
                   {isPaid ? (
                     <div className="mt-5 rounded-2xl border border-emerald-200 bg-emerald-50 p-4 text-center font-black text-emerald-700">
                       <span className="material-symbols-outlined">receipt_long</span>
-                      <p className="mt-2">Payment completed successfully. Redirecting to your tickets...</p>
+                      <p className="mt-2">Payment confirmed. Opening the result page...</p>
                     </div>
                   ) : null}
                 </div>
