@@ -1,5 +1,4 @@
 import { useEffect, useMemo, useState } from 'react';
-import { Link } from 'react-router-dom';
 
 import { getManagerShows } from '../services/managerShowService.js';
 import {
@@ -9,6 +8,10 @@ import {
   getSalesReport,
 } from '../services/reportService.js';
 import { getSchedules } from '../services/scheduleService.js';
+import ManagerActionBar from '../features/manager/components/ManagerActionBar.jsx';
+import ManagerLayout from '../features/manager/components/ManagerLayout.jsx';
+import ManagerPageHeader from '../features/manager/components/ManagerPageHeader.jsx';
+import ManagerStatCard from '../features/manager/components/ManagerStatCard.jsx';
 
 const emptyFilters = {
   fromDate: '',
@@ -92,46 +95,6 @@ function statusTone(status) {
   }
 
   return 'bg-error text-on-error';
-}
-
-function SidebarLink({ active, icon, label, to }) {
-  return (
-    <Link
-      className={[
-        'flex items-center gap-unit-md px-unit-lg py-unit-md transition-all',
-        active
-          ? 'border-l-4 border-primary-fixed bg-on-secondary-fixed-variant/30 text-primary-fixed sidebar-active-indicator'
-          : 'text-on-secondary-fixed-variant hover:bg-on-secondary-fixed-variant/20 hover:text-primary-fixed',
-      ].join(' ')}
-      to={to}
-    >
-      <span className="material-symbols-outlined">{icon}</span>
-      <span className={active ? 'font-body-md font-bold' : 'font-body-md'}>{label}</span>
-    </Link>
-  );
-}
-
-function MetricCard({ label, value, icon, tone = 'primary', helper }) {
-  const toneClass = {
-    primary: 'border-primary text-primary',
-    secondary: 'border-secondary text-secondary',
-    tertiary: 'border-tertiary text-tertiary',
-    neutral: 'border-outline text-on-surface',
-    error: 'border-error text-error',
-  }[tone];
-
-  return (
-    <div className={`glass-card rounded-lg border-l-4 p-unit-lg shadow-sm transition-transform hover:-translate-y-1 ${toneClass}`}>
-      <div className="flex items-start justify-between gap-unit-md">
-        <div>
-          <p className="mb-unit-sm font-label-md uppercase tracking-wider text-on-surface-variant">{label}</p>
-          <h3 className="font-headline-lg text-headline-lg">{value}</h3>
-        </div>
-        <span className="material-symbols-outlined text-[22px] opacity-80">{icon}</span>
-      </div>
-      {helper && <p className="mt-unit-xs text-label-md text-on-surface-variant">{helper}</p>}
-    </div>
-  );
 }
 
 function EmptySection({ icon = 'insights', message }) {
@@ -323,58 +286,17 @@ export default function ReportsAndAnalyticsPage() {
             box-shadow: 4px 0px 10px rgba(0, 105, 107, 0.2);
         }`}</style>
 
-      <aside className="fixed left-0 top-0 z-50 flex h-full w-sidebar-width flex-col bg-on-secondary-fixed py-unit-lg shadow-lg">
-        <div className="mb-unit-xl px-unit-lg">
-          <h1 className="font-headline-md text-headline-md font-bold text-primary-fixed">AquaShow MS</h1>
-          <p className="font-body-md text-body-sm text-on-secondary-fixed-variant opacity-70">Management System</p>
-        </div>
-        <nav className="flex-1 space-y-unit-xs">
-          <SidebarLink icon="dashboard" label="Dashboard" to="/manager/dashboard" />
-          <SidebarLink icon="theater_comedy" label="Shows" to="/manager/shows" />
-          <SidebarLink icon="water_drop" label="Venues" to="/manager/venues" />
-          <SidebarLink icon="calendar_month" label="Schedules" to="/manager/schedules" />
-          <SidebarLink icon="event_seat" label="Bookings" to="/manager/bookings" />
-          <SidebarLink active icon="analytics" label="Reports" to="/manager/reports" />
-          <SidebarLink icon="group" label="Users" to="/admin/users" />
-          <SidebarLink icon="admin_panel_settings" label="Roles" to="/admin/roles" />
-        </nav>
-        <div className="mt-auto px-unit-lg">
-          <Link className="block w-full rounded-lg bg-primary-container py-unit-md text-center font-label-lg text-on-primary-container transition-all hover:brightness-110" to="/manager/schedules">
-            Quick Schedule
-          </Link>
-          <div className="mt-unit-lg flex items-center gap-unit-md border-t border-on-secondary-fixed-variant/20 pt-unit-md">
-            <div className="flex h-10 w-10 items-center justify-center rounded-full bg-primary-fixed/10 text-primary-fixed">
-              <span className="material-symbols-outlined">admin_panel_settings</span>
-            </div>
-            <div>
-              <p className="font-label-lg text-primary-fixed">Manager</p>
-              <p className="text-[10px] uppercase tracking-widest text-on-secondary-fixed-variant">Reports Access</p>
-            </div>
-          </div>
-        </div>
-      </aside>
+      <ManagerLayout
+        contentClassName="mx-auto w-full max-w-[1600px] space-y-unit-lg p-unit-lg"
+        headerTitle="Reports & Analytics"
+        headerDescription="Booking, revenue, ticket, and check-in metrics"
+      >
+          <ManagerPageHeader
+            title="Reports Dashboard"
+            description="Analyze manager-owned booking, revenue, schedule, and attendance metrics."
+          />
 
-      <main className="ml-sidebar-width flex min-h-screen flex-col">
-        <header className="sticky top-0 z-40 flex items-center justify-between border-b border-outline-variant/20 bg-surface/70 px-unit-lg py-unit-sm shadow-sm backdrop-blur-md">
-          <div className="flex items-center gap-unit-lg">
-            <h2 className="font-headline-md text-headline-md font-extrabold text-primary">Reports &amp; Analytics</h2>
-            <div className="hidden text-body-sm text-on-surface-variant lg:block">Booking, revenue, ticket, and check-in metrics</div>
-          </div>
-          <div className="flex items-center gap-unit-md">
-            <button className="rounded-full p-2 text-on-surface-variant transition-colors hover:bg-surface-container-high/50" type="button">
-              <span className="material-symbols-outlined">notifications</span>
-            </button>
-            <button className="rounded-full p-2 text-on-surface-variant transition-colors hover:bg-surface-container-high/50" type="button">
-              <span className="material-symbols-outlined">help_outline</span>
-            </button>
-            <button className="rounded-full p-2 text-on-surface-variant transition-colors hover:bg-surface-container-high/50" type="button">
-              <span className="material-symbols-outlined">settings</span>
-            </button>
-          </div>
-        </header>
-
-        <section className="mx-auto w-full max-w-[1600px] space-y-unit-lg p-unit-lg">
-          <div className="glass-card flex flex-col gap-unit-md rounded-lg p-unit-md shadow-sm md:flex-row md:items-end">
+          <ManagerActionBar className="glass-card flex-col items-end shadow-sm md:flex-row">
             <div className="grid flex-1 grid-cols-1 gap-unit-md md:grid-cols-2 xl:grid-cols-4">
               <div className="flex flex-col gap-1">
                 <label className="text-label-md text-on-surface-variant" htmlFor="report-from-date">From Date</label>
@@ -444,7 +366,7 @@ export default function ReportsAndAnalyticsPage() {
                 Reset
               </button>
             </div>
-          </div>
+          </ManagerActionBar>
 
           {referenceError && (
             <div className="rounded-lg border border-error/20 bg-error/10 p-unit-md text-body-sm font-bold text-error">
@@ -474,12 +396,12 @@ export default function ReportsAndAnalyticsPage() {
           {!isLoading && !loadError && hasReports && (
             <>
               <div className="grid grid-cols-1 gap-unit-md md:grid-cols-3 lg:grid-cols-6">
-                <MetricCard icon="event_seat" label="Total Bookings" value={formatNumber(dashboard?.totalBookings)} />
-                <MetricCard icon="check_circle" label="Paid Bookings" tone="secondary" value={formatNumber(dashboard?.paidBookings)} />
-                <MetricCard icon="payments" label="Total Revenue" tone="tertiary" value={formatMoney(dashboard?.totalRevenue)} helper={`${formatNumber(sales?.totalTicketsSold ?? dashboard?.totalTicketsSold)} tickets sold`} />
-                <MetricCard icon="confirmation_number" label="Tickets Sold" tone="primary" value={formatNumber(dashboard?.totalTicketsSold)} />
-                <MetricCard icon="fact_check" label="Check-ins" tone="neutral" value={formatNumber(dashboard?.totalCheckIns)} helper={`Attendance ${formatPercent(dashboard?.attendanceRate)}`} />
-                <MetricCard icon="pending_actions" label="Pending / Failed / Expired" tone="error" value={`${formatNumber(totalPending)} / ${formatNumber(dashboard?.failedBookings)} / ${formatNumber(dashboard?.expiredBookings)}`} />
+                <ManagerStatCard icon="event_seat" label="Total Bookings" value={formatNumber(dashboard?.totalBookings)} />
+                <ManagerStatCard icon="check_circle" label="Paid Bookings" tone="secondary" value={formatNumber(dashboard?.paidBookings)} />
+                <ManagerStatCard icon="payments" label="Total Revenue" tone="tertiary" value={formatMoney(dashboard?.totalRevenue)} helper={`${formatNumber(sales?.totalTicketsSold ?? dashboard?.totalTicketsSold)} tickets sold`} />
+                <ManagerStatCard icon="confirmation_number" label="Tickets Sold" tone="primary" value={formatNumber(dashboard?.totalTicketsSold)} />
+                <ManagerStatCard icon="fact_check" label="Check-ins" tone="neutral" value={formatNumber(dashboard?.totalCheckIns)} helper={`Attendance ${formatPercent(dashboard?.attendanceRate)}`} />
+                <ManagerStatCard icon="pending_actions" label="Pending / Failed / Expired" tone="error" value={`${formatNumber(totalPending)} / ${formatNumber(dashboard?.failedBookings)} / ${formatNumber(dashboard?.expiredBookings)}`} />
               </div>
 
               <div className="grid grid-cols-1 gap-unit-lg lg:grid-cols-12">
@@ -579,7 +501,7 @@ export default function ReportsAndAnalyticsPage() {
               </section>
             </>
           )}
-        </section>
+
 
         <footer className="mt-auto flex flex-col items-center justify-between border-t border-outline-variant/20 px-unit-lg py-unit-md text-[12px] text-on-surface-variant md:flex-row">
           <p>© 2024 AquaShow Management System. Precision in every splash.</p>
@@ -589,7 +511,7 @@ export default function ReportsAndAnalyticsPage() {
             <a className="transition-colors hover:text-primary" href="mailto:support@aquashow.local">Support</a>
           </div>
         </footer>
-      </main>
+      </ManagerLayout>
     </div>
   );
 }

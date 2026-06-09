@@ -23,7 +23,6 @@ import java.util.UUID;
 
 @RestController
 @RequestMapping("/api/manager/venues")
-@PreAuthorize("hasAnyRole('ADMIN', 'MANAGER')")
 public class ManagerVenueController {
 
     private final VenueService venueService;
@@ -33,6 +32,7 @@ public class ManagerVenueController {
     }
 
     @GetMapping
+    @PreAuthorize("hasRole('MANAGER')")
     public ApiResponse<PageResponse<VenueResponse>> getVenues(
             @RequestParam(required = false) String keyword,
             @RequestParam(required = false) VenueStatus status,
@@ -43,27 +43,32 @@ public class ManagerVenueController {
     }
 
     @GetMapping("/{id}")
+    @PreAuthorize("hasRole('MANAGER')")
     public ApiResponse<VenueResponse> getVenue(@PathVariable UUID id) {
         return ApiResponse.success("Venue fetched successfully", venueService.getVenue(id));
     }
 
     @PostMapping
+    @PreAuthorize("denyAll()")
     public ApiResponse<VenueResponse> createVenue(@Valid @RequestBody CreateVenueRequest request) {
         return ApiResponse.success("Venue created successfully", venueService.createVenue(request));
     }
 
     @PutMapping("/{id}")
+    @PreAuthorize("denyAll()")
     public ApiResponse<VenueResponse> updateVenue(@PathVariable UUID id, @Valid @RequestBody UpdateVenueRequest request) {
         return ApiResponse.success("Venue updated successfully", venueService.updateVenue(id, request));
     }
 
     @PatchMapping("/{id}/activate")
+    @PreAuthorize("denyAll()")
     public ApiResponse<Void> activateVenue(@PathVariable UUID id) {
         venueService.activateVenue(id);
         return ApiResponse.success("Venue activated successfully");
     }
 
     @PatchMapping("/{id}/deactivate")
+    @PreAuthorize("denyAll()")
     public ApiResponse<Void> deactivateVenue(@PathVariable UUID id) {
         venueService.deactivateVenue(id);
         return ApiResponse.success("Venue deactivated successfully");

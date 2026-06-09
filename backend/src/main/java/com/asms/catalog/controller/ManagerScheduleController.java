@@ -25,7 +25,7 @@ import java.util.UUID;
 
 @RestController
 @RequestMapping("/api/manager/schedules")
-@PreAuthorize("hasAnyRole('ADMIN', 'MANAGER')")
+@PreAuthorize("hasRole('MANAGER')")
 public class ManagerScheduleController {
 
     private final ScheduleService scheduleService;

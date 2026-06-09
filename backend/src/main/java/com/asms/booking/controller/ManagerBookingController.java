@@ -19,7 +19,7 @@ import java.util.UUID;
 
 @RestController
 @RequestMapping("/api/manager/bookings")
-@PreAuthorize("hasAnyRole('ADMIN', 'MANAGER')")
+@PreAuthorize("hasRole('MANAGER')")
 public class ManagerBookingController {
 
     private final ManagerBookingService managerBookingService;

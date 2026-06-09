@@ -1,5 +1,4 @@
 import { useEffect, useMemo, useState } from 'react';
-import { Link } from 'react-router-dom';
 
 import { getManagerShows } from '../services/managerShowService.js';
 import {
@@ -10,6 +9,10 @@ import {
   updateSchedule,
 } from '../services/scheduleService.js';
 import { getVenues } from '../services/venueService.js';
+import ManagerActionBar from '../features/manager/components/ManagerActionBar.jsx';
+import ManagerLayout from '../features/manager/components/ManagerLayout.jsx';
+import ManagerPageHeader from '../features/manager/components/ManagerPageHeader.jsx';
+import ManagerStatCard from '../features/manager/components/ManagerStatCard.jsx';
 
 const emptyForm = {
   showId: '',
@@ -118,39 +121,6 @@ function FieldError({ children }) {
   }
 
   return <p className="mt-1 text-label-md font-bold text-error">{children}</p>;
-}
-
-function SidebarLink({ active, icon, label, to }) {
-  return (
-    <Link
-      className={[
-        'flex items-center gap-unit-md px-unit-lg py-unit-md transition-all',
-        active
-          ? 'border-l-4 border-primary-fixed bg-on-secondary-fixed-variant/30 text-primary-fixed'
-          : 'text-on-secondary-fixed-variant hover:bg-on-secondary-fixed-variant/20 hover:text-primary-fixed',
-      ].join(' ')}
-      to={to}
-    >
-      <span className="material-symbols-outlined">{icon}</span>
-      <span>{label}</span>
-    </Link>
-  );
-}
-
-function StatCard({ label, value, tone = 'primary' }) {
-  const toneClass = {
-    primary: 'border-primary text-primary',
-    secondary: 'border-secondary text-secondary',
-    tertiary: 'border-tertiary-container text-tertiary',
-    neutral: 'border-primary-container text-on-primary-container',
-  }[tone];
-
-  return (
-    <div className={`glass-card rounded-lg border-l-4 p-unit-lg ${toneClass}`}>
-      <p className="text-label-md text-on-surface-variant">{label}</p>
-      <h3 className="mt-1 text-headline-lg font-bold">{value}</h3>
-    </div>
-  );
 }
 
 function ScheduleFormModal({
@@ -644,46 +614,26 @@ export default function ManageSchedulesPage() {
     <div className="min-h-screen bg-background font-body-md text-on-background">
       <style>{".material-symbols-outlined {\r\n            font-variation-settings: 'FILL' 0, 'wght' 400, 'GRAD' 0, 'opsz' 24;\r\n        }\r\n        .glass-card {\r\n            background: rgba(255, 255, 255, 0.7);\r\n            backdrop-filter: blur(20px);\r\n            border: 1px solid rgba(255, 255, 255, 0.2);\r\n            box-shadow: 0 8px 32px 0 rgba(0, 105, 107, 0.08);\r\n        }"}</style>
 
-      <aside className="fixed left-0 top-0 z-50 flex h-full w-sidebar-width flex-col bg-on-secondary-fixed py-unit-lg shadow-lg">
-        <div className="mb-unit-xl px-unit-lg">
-          <h1 className="font-headline-md text-headline-md font-bold text-primary-fixed">AquaShow MS</h1>
-          <p className="font-body-sm text-body-sm text-on-secondary-fixed-variant opacity-70">Management System</p>
-        </div>
-        <nav className="flex-1 space-y-unit-xs">
-          <SidebarLink icon="dashboard" label="Dashboard" to="/manager/dashboard" />
-          <SidebarLink icon="theater_comedy" label="Shows" to="/manager/shows" />
-          <SidebarLink icon="water_drop" label="Venues" to="/manager/venues" />
-          <SidebarLink active icon="calendar_month" label="Schedules" to="/manager/schedules" />
-          <SidebarLink icon="event_seat" label="Bookings" to="/manager/bookings" />
-          <SidebarLink icon="analytics" label="Reports" to="/manager/reports" />
-          <SidebarLink icon="group" label="Users" to="/admin/users" />
-          <SidebarLink icon="admin_panel_settings" label="Roles" to="/admin/roles" />
-        </nav>
-        <div className="mt-auto px-unit-lg">
-          <button className="flex w-full items-center justify-center gap-unit-sm rounded-lg bg-primary-container py-unit-md font-label-lg text-on-primary-container transition-all hover:opacity-90 active:scale-[0.99]" type="button" onClick={openCreateForm}>
-            <span className="material-symbols-outlined">add</span>
-            New Schedule
-          </button>
-        </div>
-      </aside>
-
-      <main className="ml-sidebar-width flex min-h-screen flex-col">
-        <header className="sticky top-0 z-40 flex items-center justify-between border-b border-outline-variant/20 bg-surface/70 px-unit-lg py-unit-sm shadow-sm backdrop-blur-md">
-          <div className="flex items-center gap-unit-lg">
-            <h2 className="font-headline-md text-headline-md font-extrabold text-primary">Manage Show Schedules</h2>
-          </div>
-          <div className="flex items-center gap-unit-md">
-            <button className="rounded-full bg-primary px-unit-lg py-2 font-label-lg text-on-primary transition hover:shadow-md" type="button" onClick={openCreateForm}>
-              <span className="material-symbols-outlined mr-1 text-[18px]">add</span>
-              Create Schedule
-            </button>
-            <button className="rounded-full border border-outline-variant px-unit-md py-2 text-label-lg text-on-surface-variant hover:bg-surface-container-high" type="button" onClick={() => setReloadKey((key) => key + 1)}>
-              Refresh
-            </button>
-          </div>
-        </header>
-
-        <div className="space-y-unit-lg p-unit-lg">
+      <ManagerLayout
+        headerTitle="Manage Show Schedules"
+        headerDescription="Create and maintain schedule capacity, timing, venue, and pricing."
+      >
+        <div className="space-y-unit-lg">
+          <ManagerPageHeader
+            title="Schedule Operations"
+            description="Manage schedule availability without crossing into administrator user or role workflows."
+            actions={(
+              <>
+                <button className="rounded-full bg-primary px-unit-lg py-2 font-label-lg text-on-primary transition hover:shadow-md" type="button" onClick={openCreateForm}>
+                  <span className="material-symbols-outlined mr-1 text-[18px]">add</span>
+                  Create Schedule
+                </button>
+                <button className="rounded-full border border-outline-variant px-unit-md py-2 text-label-lg text-on-surface-variant hover:bg-surface-container-high" type="button" onClick={() => setReloadKey((key) => key + 1)}>
+                  Refresh
+                </button>
+              </>
+            )}
+          />
           {successMessage && (
             <div className="rounded-lg border border-primary/20 bg-primary-container/20 px-unit-lg py-3 font-label-lg text-primary">
               {successMessage}
@@ -695,7 +645,7 @@ export default function ManageSchedulesPage() {
             </div>
           )}
 
-          <div className="glass-card flex flex-wrap items-end gap-unit-md rounded-lg p-unit-md">
+          <ManagerActionBar className="items-end">
             <div className="min-w-[200px] flex-1 space-y-unit-xs">
               <label className="text-label-md uppercase text-on-surface-variant" htmlFor="filter-show">
                 Show
@@ -747,13 +697,13 @@ export default function ManageSchedulesPage() {
             <button className="rounded-lg border border-outline-variant px-unit-md py-unit-sm text-label-lg text-on-surface-variant hover:bg-surface-variant/30" type="button" onClick={clearFilters}>
               Clear
             </button>
-          </div>
+          </ManagerActionBar>
 
           <div className="grid grid-cols-1 gap-unit-lg md:grid-cols-4">
-            <StatCard label="Total Schedules" value={stats.total} />
-            <StatCard label="Active On Page" value={stats.active} tone="secondary" />
-            <StatCard label="Inactive On Page" value={stats.inactive} tone="tertiary" />
-            <StatCard label="Available Tickets" value={stats.availableTickets} tone="neutral" />
+            <ManagerStatCard label="Total Schedules" value={stats.total} />
+            <ManagerStatCard label="Active On Page" value={stats.active} tone="secondary" />
+            <ManagerStatCard label="Inactive On Page" value={stats.inactive} tone="tertiary" />
+            <ManagerStatCard label="Available Tickets" value={stats.availableTickets} tone="neutral" />
           </div>
 
           <div className="glass-card overflow-hidden rounded-lg">
@@ -867,7 +817,7 @@ export default function ManageSchedulesPage() {
             )}
           </div>
         </div>
-      </main>
+      </ManagerLayout>
 
       {formMode && (
         <ScheduleFormModal
