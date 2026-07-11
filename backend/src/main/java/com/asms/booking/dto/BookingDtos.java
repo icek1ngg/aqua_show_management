@@ -127,24 +127,6 @@ public final class BookingDtos {
     ) {
     }
 
-    public record BookingMessage(
-            UUID requestId,
-            String holdId,
-            UUID userId,
-            String userEmail,
-            String showId,
-            String scheduleId,
-            String showName,
-            LocalDate showDate,
-            String ticketType,
-            Integer quantity,
-            BigDecimal unitPrice,
-            BigDecimal totalAmount,
-            Instant expiresAt,
-            Instant createdAt
-    ) {
-    }
-
     public record DevSampleBookingRequest(
             @NotNull(message = "Amount is required")
             @Positive(message = "Amount must be positive")

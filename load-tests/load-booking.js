@@ -121,7 +121,7 @@ export function handleSummary(data) {
     '- With temporary inventory 100 and quantity 1, only about 100 holds should succeed for the same scheduleId/ticketType.',
     '- Remaining valid requests should return 409 Not enough tickets available.',
     '- A successful race-condition test means Redis held count and PostgreSQL booking count do not exceed inventory.',
-    '- RabbitMQ queue may return to 0 quickly because the consumer processes messages immediately.',
+    '- Successful requests persist PENDING_PAYMENT bookings synchronously after the Redis hold.',
     '',
   ].join('\n');
 
@@ -138,10 +138,6 @@ export function handleSummary(data) {
  * GET booking:held:sch_symphony_lights_8pm:STANDARD
  * HGETALL booking:hold:<holdId>
  * TTL booking:hold:<holdId>
- *
- * RabbitMQ UI:
- * http://localhost:15672
- * Queue: asms.booking.create.queue
  *
  * PostgreSQL:
  * select count(*)

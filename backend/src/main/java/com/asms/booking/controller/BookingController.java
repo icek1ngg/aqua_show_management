@@ -40,7 +40,7 @@ public class BookingController {
             @Valid @RequestBody CreateBookingRequest request
     ) {
         return ApiResponse.success(
-                "Booking request is being processed.",
+                "Booking created successfully.",
                 bookingService.createBooking(request, currentUserEmail(user))
         );
     }
