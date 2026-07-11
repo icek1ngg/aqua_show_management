@@ -34,8 +34,7 @@ Frontend:
 - Create booking API
 - Validate schedule, quantity, ticket limit, cut-off time
 - Redis temporary ticket holding
-- RabbitMQ booking message
-- BookingConsumer saves PENDING_PAYMENT booking
+- BookingService saves PENDING_PAYMENT booking synchronously
 
 ## Phase 5: Payment
 - Create PayOS payment link

@@ -14,7 +14,6 @@ import com.asms.booking.dto.BookingDtos.TicketSummary;
 import com.asms.booking.dto.TicketHoldDtos.HoldResult;
 import com.asms.booking.entity.Booking;
 import com.asms.booking.enums.BookingStatus;
-import com.asms.booking.messaging.RabbitMQBookingPublisher;
 import com.asms.booking.repository.BookingRepository;
 import com.asms.booking.service.BookingService;
 import com.asms.booking.service.RedisTicketHoldService;
@@ -71,7 +70,6 @@ public class BookingServiceImpl implements BookingService {
     private final UserRepository userRepository;
     private final ShowScheduleRepository scheduleRepository;
     private final RedisTicketHoldService redisTicketHoldService;
-    private final RabbitMQBookingPublisher bookingPublisher;
     private final PaymentRepository paymentRepository;
     private final TicketRepository ticketRepository;
     private final EmailNotificationRepository emailNotificationRepository;
@@ -82,7 +80,6 @@ public class BookingServiceImpl implements BookingService {
             UserRepository userRepository,
             ShowScheduleRepository scheduleRepository,
             RedisTicketHoldService redisTicketHoldService,
-            RabbitMQBookingPublisher bookingPublisher,
             PaymentRepository paymentRepository,
             TicketRepository ticketRepository,
             EmailNotificationRepository emailNotificationRepository,
@@ -92,7 +89,6 @@ public class BookingServiceImpl implements BookingService {
         this.userRepository = userRepository;
         this.scheduleRepository = scheduleRepository;
         this.redisTicketHoldService = redisTicketHoldService;
-        this.bookingPublisher = bookingPublisher;
         this.paymentRepository = paymentRepository;
         this.ticketRepository = ticketRepository;
         this.emailNotificationRepository = emailNotificationRepository;

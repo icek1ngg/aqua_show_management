@@ -1,7 +1,7 @@
 import { useEffect, useState } from 'react';
 import { useLocation, useNavigate, useSearchParams } from 'react-router-dom';
 
-import { createBooking, getBookingByHoldId } from '../../services/bookingService.js';
+import { createBooking } from '../../services/bookingService.js';
 import MainLayout from '../../shared/layouts/MainLayout.jsx';
 import {
   formatCurrency,
@@ -63,15 +63,6 @@ function formatDateString(dateStr) {
   } catch {
     return dateStr;
   }
-}
-
-const bookingPollIntervalMs = 1500;
-const bookingPollTimeoutMs = 20000;
-
-function sleep(ms) {
-  return new Promise((resolve) => {
-    window.setTimeout(resolve, ms);
-  });
 }
 
 function getBookingErrorMessage(error) {
@@ -155,7 +146,7 @@ export default function CreateBookingPage() {
   const [bookingError, setBookingError] = useState('');
   const [bookingStatusMessage, setBookingStatusMessage] = useState('');
   const [submitState, setSubmitState] = useState('idle');
-  const isBookingInProgress = submitState === 'creating' || submitState === 'processing';
+  const isBookingInProgress = submitState === 'creating';
 
   // Handle query parameter updates and synchronization
   useEffect(() => {
@@ -245,28 +236,6 @@ export default function CreateBookingPage() {
     updateQuantityParams(nextVal);
   };
 
-  const pollCreatedBooking = async (holdId) => {
-    const startedAt = Date.now();
-
-    while (Date.now() - startedAt < bookingPollTimeoutMs) {
-      await sleep(bookingPollIntervalMs);
-
-      try {
-        const booking = await getBookingByHoldId(holdId);
-        if (booking?.id) {
-          navigate(`/bookings/${booking.id}/payment`);
-          return true;
-        }
-      } catch (error) {
-        if (error?.response?.status === 401) {
-          throw error;
-        }
-      }
-    }
-
-    return false;
-  };
-
   const handleConfirmBooking = async () => {
     if (isBookingInProgress) {
       return;
@@ -309,19 +278,7 @@ export default function CreateBookingPage() {
         return;
       }
 
-      if (!result?.holdId) {
-        throw new Error('Booking reference was not returned.');
-      }
-
-      setSubmitState('processing');
-      setBookingStatusMessage('Booking request is being processed...');
-      const found = await pollCreatedBooking(result.holdId);
-
-      if (!found) {
-        setSubmitState('idle');
-        setBookingStatusMessage('');
-        setBookingError('Booking is still processing. Please make sure RabbitMQ is running, or check My Bookings later.');
-      }
+      throw new Error('Booking ID was not returned.');
     } catch (error) {
       setSubmitState('idle');
       setBookingStatusMessage('');
@@ -504,7 +461,7 @@ export default function CreateBookingPage() {
                     onClick={handleConfirmBooking}
                     type="button"
                   >
-                    {submitState === 'creating' ? 'Creating booking...' : submitState === 'processing' ? 'Processing booking...' : 'Confirm Booking'}
+                    {submitState === 'creating' ? 'Creating booking...' : 'Confirm Booking'}
                   </button>
                   <button
                     className="w-full text-center text-sm font-bold text-cyan-700 underline-offset-4 hover:underline cursor-pointer"

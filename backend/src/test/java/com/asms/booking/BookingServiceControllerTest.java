@@ -7,7 +7,6 @@ import com.asms.booking.dto.BookingDtos.PageBookingResponse;
 import com.asms.booking.dto.TicketHoldDtos.HoldResult;
 import com.asms.booking.entity.Booking;
 import com.asms.booking.enums.BookingStatus;
-import com.asms.booking.messaging.RabbitMQBookingPublisher;
 import com.asms.booking.repository.BookingRepository;
 import com.asms.booking.service.BookingService;
 import com.asms.booking.service.RedisTicketHoldService;
@@ -57,7 +56,6 @@ class BookingServiceControllerTest {
     private UserRepository userRepository;
     private ShowScheduleRepository scheduleRepository;
     private RedisTicketHoldService redisTicketHoldService;
-    private RabbitMQBookingPublisher bookingPublisher;
     private PaymentRepository paymentRepository;
     private TicketRepository ticketRepository;
     private EmailNotificationRepository emailNotificationRepository;
@@ -69,7 +67,6 @@ class BookingServiceControllerTest {
         userRepository = mock(UserRepository.class);
         scheduleRepository = mock(ShowScheduleRepository.class);
         redisTicketHoldService = mock(RedisTicketHoldService.class);
-        bookingPublisher = mock(RabbitMQBookingPublisher.class);
         paymentRepository = mock(PaymentRepository.class);
         ticketRepository = mock(TicketRepository.class);
         emailNotificationRepository = mock(EmailNotificationRepository.class);
@@ -81,7 +78,6 @@ class BookingServiceControllerTest {
                 userRepository,
                 scheduleRepository,
                 redisTicketHoldService,
-                bookingPublisher,
                 paymentRepository,
                 ticketRepository,
                 emailNotificationRepository,
@@ -118,7 +114,6 @@ class BookingServiceControllerTest {
         assertThat(bookingCaptor.getValue().getShowDate()).isEqualTo(schedule.getStartTime().toLocalDate());
         assertThat(bookingCaptor.getValue().getUnitPrice()).isEqualByComparingTo("2000");
         assertThat(bookingCaptor.getValue().getTotalAmount()).isEqualByComparingTo("4000");
-        verify(bookingPublisher, never()).publishCreateBooking(any());
     }
 
     @Test
@@ -184,7 +179,6 @@ class BookingServiceControllerTest {
                 .hasMessageContaining("Unknown ticket type");
 
         verify(redisTicketHoldService, never()).holdTickets(any(), any(), any(Integer.class), any());
-        verify(bookingPublisher, never()).publishCreateBooking(any());
     }
 
     @Test
@@ -224,7 +218,6 @@ class BookingServiceControllerTest {
                 .isInstanceOf(ConflictException.class)
                 .hasMessageContaining("Not enough tickets available");
 
-        verify(bookingPublisher, never()).publishCreateBooking(any());
     }
 
     @Test
