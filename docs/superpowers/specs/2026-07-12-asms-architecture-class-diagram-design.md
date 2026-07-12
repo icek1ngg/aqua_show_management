@@ -24,6 +24,12 @@ The diagram contains three infrastructure classes outside the ASMS System bounda
 - `Redis Cache` with the `CacheServer` stereotype.
 - `RabbitMQ Message Broker` with the `MessageBroker` stereotype.
 
+The diagram also contains three external-system classes matching the deployment diagram:
+
+- `PayOS Gateway` with the `ExternalService` stereotype.
+- `Gmail SMTP` with the `MailServer` stereotype.
+- `Google OAuth` with the `IdentityProvider` stereotype.
+
 ## Relationships and Multiplicities
 
 - Each client class has multiplicity `0..*` and connects to exactly `1` ASMS Web Application.
@@ -32,6 +38,9 @@ The diagram contains three infrastructure classes outside the ASMS System bounda
 - The ASMS Backend communicates with exactly `1` PostgreSQL Database.
 - The ASMS Backend communicates with exactly `1` Redis Cache.
 - The ASMS Backend communicates with exactly `1` RabbitMQ Message Broker.
+- The ASMS Backend communicates with `0..1` PayOS Gateway.
+- The ASMS Backend communicates with `0..1` Gmail SMTP service.
+- The ASMS Backend communicates with `0..1` Google OAuth provider.
 
 ## Presentation
 
@@ -39,13 +48,16 @@ The diagram contains three infrastructure classes outside the ASMS System bounda
 - Use the light-blue project color `#72C5E8`, black borders, and left-to-right layout.
 - Display stereotype text inside each class box.
 - Show the ASMS Web Application and ASMS Backend inside the larger ASMS System boundary.
-- Do not show attributes, operations, individual controllers, services, repositories, PayOS, Gmail, or Google OAuth.
+- Do not show attributes, operations, individual controllers, services, or repositories.
 - Keep Redis and RabbitMQ as high-level infrastructure classes because they are core runtime dependencies for ticket holds, caching, and asynchronous processing.
+- Keep PayOS, Gmail, and Google OAuth as external-system classes so the architecture class diagram stays consistent with the approved deployment diagram.
 
 ## Verification
 
 - Confirm that the diagram represents the single React SPA found in the router instead of inventing separate customer/admin websites.
 - Confirm all four application roles are represented.
 - Confirm PostgreSQL, Redis, and RabbitMQ are represented as separate infrastructure classes.
+- Confirm PayOS, Gmail, and Google OAuth are represented as external-system classes.
+- Confirm every logical node from the approved deployment diagram has a corresponding architecture class, except technology-only labels such as React, Vite, Java, and Spring Boot.
 - Confirm multiplicities match the approved high-level design.
 - Confirm the PlantUML source has matching `@startuml` and `@enduml` directives.
