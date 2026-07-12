@@ -55,6 +55,7 @@ export default {
         'electric-cyan': '#00ced1',
         'soft-turquoise': '#b7e7fb',
         'vin-orange': '#ffa557',
+        'brand-orange': '#ff6b00',
       },
       borderRadius: {
         DEFAULT: '1rem',
