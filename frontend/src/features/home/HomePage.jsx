@@ -88,7 +88,6 @@ function bookingUrlForShow(show, quantity = 1, ticketType = 'STANDARD') {
     ticketType,
   });
 }
-
 function normalizeSectionId(sectionId) {
   if (sectionId === 'schedules') {
     return 'schedule';
