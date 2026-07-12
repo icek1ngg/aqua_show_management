@@ -59,7 +59,7 @@ src/main/java/com/asms/
 - Each ticket can be checked in successfully only once.
 - Failed QR scan attempts should be saved in `check_in_logs`.
 - Redis is used for cache and temporary ticket holding.
-- RabbitMQ is used for asynchronous booking and ticket/email tasks.
+- RabbitMQ is used for post-payment ticket/email tasks.
 - Do not use RabbitMQ for show schedule management.
 - Show schedule management writes directly to PostgreSQL and clears Redis cache.
 
@@ -99,7 +99,7 @@ ADMIN
 ## Main Backend Feature Flow
 
 ### Create Booking
-User submits booking request -> Controller delegates to BookingService -> validate rules -> Redis holds tickets -> RabbitMQ publishes booking message -> BookingConsumer saves booking as `PENDING_PAYMENT`.
+User submits booking request -> Controller delegates to BookingService -> validate rules -> Redis holds tickets -> BookingService saves booking as `PENDING_PAYMENT`.
 
 ### Payment Callback
 PayOS sends callback -> PaymentCallbackController receives callback -> PaymentService verifies data -> update Payment and Booking -> clear Redis hold -> publish ticket/email task.

@@ -23,6 +23,24 @@ class BookingDtosValidationTest {
     }
 
     @Test
+    void createBookingRequestRequiresScheduleId() {
+        Object request = createBookingRequest(
+                "show-1",
+                "",
+                "Ocean Dreams",
+                LocalDate.now(),
+                "Standard Entry",
+                1
+        );
+
+        assertThat(validator.validate(request))
+                .anySatisfy(violation -> {
+                    assertThat(violation.getPropertyPath().toString()).isEqualTo("scheduleId");
+                    assertThat(violation.getMessage()).isEqualTo("Schedule ID is required");
+                });
+    }
+
+    @Test
     void createBookingRequestRejectsPastDateAndInvalidQuantity() {
         assertThat(fieldErrors(createBookingRequest(
                 "show-1",

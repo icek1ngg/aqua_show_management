@@ -1,11 +1,40 @@
 import apiClient from '../lib/apiClient.js';
+import { normalizeTicketType } from '../shared/utils/ticketPricing.js';
 
 function unwrapApiResponse(response) {
   return response.data?.data ?? response.data;
 }
 
+export function buildBookingUrl({
+  showId,
+  scheduleId,
+  showName,
+  showDate,
+  quantity = 1,
+  ticketType = 'STANDARD',
+}) {
+  const requiredValues = [showId, scheduleId, showName, showDate, quantity, ticketType];
+  if (requiredValues.some((value) => value === null || value === undefined || String(value).trim() === '')) {
+    return null;
+  }
+
+  const params = new URLSearchParams({
+    showId: String(showId),
+    scheduleId: String(scheduleId),
+    show: String(showName),
+    date: String(showDate),
+    quantity: String(quantity),
+    ticketType: normalizeTicketType(ticketType),
+  });
+
+  return `/bookings/create?${params.toString()}`;
+}
+
 export async function createBooking(payload) {
-  const response = await apiClient.post('/bookings', payload);
+  const response = await apiClient.post('/bookings', {
+    ...payload,
+    ticketType: normalizeTicketType(payload.ticketType),
+  });
   return unwrapApiResponse(response);
 }
 

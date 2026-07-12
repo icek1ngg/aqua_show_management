@@ -49,6 +49,7 @@ public final class BookingDtos {
 
     public record CreateBookingResponse(
             UUID requestId,
+            UUID bookingId,
             String holdId,
             BookingStatus status,
             String message,
@@ -123,24 +124,6 @@ public final class BookingDtos {
             int totalPages,
             boolean hasNext,
             boolean hasPrevious
-    ) {
-    }
-
-    public record BookingMessage(
-            UUID requestId,
-            String holdId,
-            UUID userId,
-            String userEmail,
-            String showId,
-            String scheduleId,
-            String showName,
-            LocalDate showDate,
-            String ticketType,
-            Integer quantity,
-            BigDecimal unitPrice,
-            BigDecimal totalAmount,
-            Instant expiresAt,
-            Instant createdAt
     ) {
     }
 

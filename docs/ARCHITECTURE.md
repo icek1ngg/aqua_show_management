@@ -15,7 +15,7 @@ Spring Boot Backend
 - Spring Boot Backend: REST API and business logic
 - PostgreSQL: main relational database
 - Redis: cache and temporary ticket holding
-- RabbitMQ: asynchronous booking and ticket/email processing
+- RabbitMQ: asynchronous post-payment ticket/email processing
 - PayOS: payment gateway
 - Gmail: email delivery
 - Google OAuth: Google authentication
@@ -37,7 +37,7 @@ Spring Boot Backend
 | Service Layer Pattern | Business rules in Service classes |
 | Repository Pattern | Spring Data JPA repositories |
 | DTO Pattern | Request/response data transfer |
-| Publisher-Consumer Pattern | RabbitMQ async processing |
+| Publisher-Consumer Pattern | RabbitMQ post-payment processing |
 | Adapter/Client Pattern | PayOS, Gmail, Google OAuth clients |
 | Global Exception Handler | Centralized API error handling |
 

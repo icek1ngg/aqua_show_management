@@ -4,6 +4,7 @@ import { Link, useLocation, useNavigate, useParams } from 'react-router-dom';
 import { getBookingDetail } from '../../services/bookingService.js';
 import MainLayout from '../../shared/layouts/MainLayout.jsx';
 import { normalizeBookingPaymentStatus } from '../../shared/utils/paymentStatus.js';
+import { formatCurrency, getTicketTypeLabel } from '../../shared/utils/ticketPricing.js';
 
 const fallbackImageUrl =
   'https://lh3.googleusercontent.com/aida/ADBb0ujt3y3oHep8ZyS33fWXSwjI8mG8aZHbNUcl0CdGivcGyeT3du82S-KhXF_z4dlPRBUlc4EswabU5EeIcZJqXipWtpjbttrQ0GOkGXD__Ue8EUNvilyj-UDsJCa1cZbn_l6pfjV_lg7TOdizUqPdcum_qmMFI-csEQojqIgtLoSEhUsOXh1HErJxLtr4lvL3loCl2YH0XpPXQu6PYmM-OELKDDyxmjnmTGP8Zxcj3pb5flEfrV4506pYqA';
@@ -56,19 +57,6 @@ const statusMeta = {
   },
 };
 
-function formatCurrency(value) {
-  const amount = Number(value);
-  if (Number.isNaN(amount)) {
-    return '0 ₫';
-  }
-
-  return new Intl.NumberFormat('vi-VN', {
-    style: 'currency',
-    currency: 'VND',
-    maximumFractionDigits: 0,
-  }).format(amount);
-}
-
 function formatDate(value) {
   if (!value) {
     return 'Not available';
@@ -116,7 +104,7 @@ function normalizeBooking(booking) {
     bookingCode: booking.bookingCode || booking.id,
     showName: booking.showName || 'AquaPulse Show',
     showDate: booking.showDate,
-    ticketType: booking.ticketType || 'Standard Entry',
+    ticketType: getTicketTypeLabel(booking.ticketType),
     quantity: booking.quantity ?? 0,
     unitPrice: booking.unitPrice,
     totalAmount: booking.totalAmount,
@@ -179,7 +167,9 @@ function StatusMessage({ booking, meta }) {
     const ticketCount = booking.tickets?.total || 0;
     return (
       <p className="mt-3 text-sm font-semibold leading-7 text-slate-600">
-        {ticketCount > 0 ? `${ticketCount} ticket QR code${ticketCount === 1 ? '' : 's'} generated.` : 'Ticket QR and email status are being finalized.'}
+        {ticketCount > 0
+          ? `${ticketCount} ticket QR code${ticketCount === 1 ? '' : 's'} generated.`
+          : 'Payment was successful. Your QR ticket is being prepared...'}
       </p>
     );
   }
@@ -389,20 +379,26 @@ export default function BookingDetailPage() {
 
   useEffect(() => {
     const normalizedStatus = normalizeBookingPaymentStatus(booking, booking?.payment);
-    if (normalizedStatus.status !== 'PAID' || normalizedStatus.bookingStatus === 'PAID') {
+    if (normalizedStatus.status !== 'PAID' || Number(booking?.tickets?.total || 0) > 0) {
       return undefined;
     }
 
-    const timeoutId = window.setTimeout(async () => {
+    let cancelled = false;
+    const intervalId = window.setInterval(async () => {
       try {
         const bookingDetail = await getBookingDetail(id);
-        setBooking(bookingDetail);
+        if (!cancelled) {
+          setBooking(bookingDetail);
+        }
       } catch {
-        // Keep the already displayed paid state; PostgreSQL is refetched again on page reload/focus.
+        // Keep the confirmed paid state and retry while the ticket generation task finishes.
       }
-    }, 1200);
+    }, 1500);
 
-    return () => window.clearTimeout(timeoutId);
+    return () => {
+      cancelled = true;
+      window.clearInterval(intervalId);
+    };
   }, [booking, id]);
 
   const displayBooking = useMemo(() => (booking ? normalizeBooking(booking) : null), [booking]);
@@ -557,10 +553,10 @@ export default function BookingDetailPage() {
                 <h4 className="text-[11px] font-black uppercase tracking-[0.24em] text-slate-400">Actions</h4>
                 <div className="mt-5 flex flex-col gap-3">
                   <ActionPanel booking={displayBooking} />
-                  {displayBooking.status === 'PAID' ? (
+                  {displayBooking.status === 'PAID' && Number(displayBooking.tickets?.total || 0) > 0 ? (
                     <Link
                       className="flex w-full items-center justify-center gap-2 rounded-full bg-emerald-600 px-6 py-4 font-bold text-white shadow-lg shadow-emerald-600/20 transition hover:bg-emerald-700 active:scale-[0.98]"
-                      to={`/payments/result?bookingId=${displayBooking.id}&status=success`}
+                      to={`/my-tickets?bookingId=${encodeURIComponent(displayBooking.id)}`}
                     >
                       <span className="material-symbols-outlined text-xl" aria-hidden="true">
                         qr_code_2

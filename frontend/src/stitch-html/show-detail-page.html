@@ -4,10 +4,9 @@
 <meta charset="utf-8"/>
 <meta content="width=device-width, initial-scale=1.0" name="viewport"/>
 <title>AquaPulse | Show Details</title>
-<!-- Google Fonts: Plus Jakarta Sans -->
-<link href="https://fonts.googleapis.com/css2?family=Plus+Jakarta+Sans:wght@400;600;700;800&amp;display=swap" rel="stylesheet"/>
+<!-- Google Fonts: Montserrat & Plus Jakarta Sans for Logo -->
+<link href="https://fonts.googleapis.com/css2?family=Montserrat:wght@400;500;600;700;800&amp;family=Plus+Jakarta+Sans:wght@400;500;600;700;800&amp;display=swap" rel="stylesheet"/>
 <!-- Material Symbols -->
-<link href="https://fonts.googleapis.com/css2?family=Material+Symbols+Outlined:wght,FILL@100..700,0..1&amp;display=swap" rel="stylesheet"/>
 <link href="https://fonts.googleapis.com/css2?family=Material+Symbols+Outlined:wght,FILL@100..700,0..1&amp;display=swap" rel="stylesheet"/>
 <!-- Tailwind CSS -->
 <script src="https://cdn.tailwindcss.com?plugins=forms,container-queries"></script>
@@ -17,57 +16,55 @@
             theme: {
                 extend: {
                     "colors": {
-                        "tertiary": "#904d00",
-                        "on-tertiary-container": "#723c00",
-                        "error-container": "#ffdad6",
-                        "on-primary-fixed": "#002020",
-                        "secondary-container": "#b7e7fb",
-                        "on-tertiary": "#ffffff",
-                        "outline": "#6b7a7a",
-                        "on-primary-container": "#005354",
-                        "error": "#ba1a1a",
-                        "on-secondary": "#ffffff",
-                        "on-error-container": "#93000a",
-                        "on-secondary-container": "#39697a",
-                        "surface-tint": "#00696b",
                         "tertiary-fixed": "#ffdcc3",
+                        "secondary-container": "#b7e7fb",
+                        "on-tertiary-fixed-variant": "#6e3900",
+                        "surface-variant": "#dae4e4",
                         "on-error": "#ffffff",
                         "on-surface-variant": "#3b4949",
-                        "tertiary-fixed-dim": "#ffb77d",
-                        "surface": "#f1fbfb",
-                        "on-primary": "#ffffff",
-                        "surface-variant": "#dae4e4",
-                        "surface-container-high": "#e0eaea",
-                        "tertiary-container": "#ffa557",
-                        "primary-fixed-dim": "#2ddbde",
-                        "on-tertiary-fixed": "#2f1500",
-                        "surface-container-lowest": "#ffffff",
-                        "on-primary-fixed-variant": "#004f51",
-                        "inverse-surface": "#293232",
-                        "primary-container": "#00ced1",
-                        "on-secondary-fixed": "#001f28",
-                        "primary": "#00696b",
-                        "surface-dim": "#d2dcdc",
-                        "primary-fixed": "#5af8fb",
                         "inverse-primary": "#2ddbde",
-                        "secondary": "#356476",
-                        "surface-container-highest": "#dae4e4",
-                        "background": "#f1fbfb",
-                        "on-background": "#141d1e",
-                        "surface-bright": "#f1fbfb",
-                        "surface-container": "#e6f0f0",
-                        "outline-variant": "#bac9c9",
-                        "on-surface": "#141d1e",
                         "secondary-fixed-dim": "#9ecee1",
-                        "inverse-on-surface": "#e9f3f3",
+                        "surface-container": "#e6f0f0",
+                        "on-primary-fixed-variant": "#004f51",
                         "surface-container-low": "#ecf6f6",
+                        "surface-container-highest": "#dae4e4",
+                        "surface-bright": "#f1fbfb",
+                        "on-error-container": "#93000a",
+                        "on-secondary-fixed": "#001f28",
+                        "primary-fixed-dim": "#2ddbde",
+                        "primary-fixed": "#5af8fb",
+                        "outline": "#6b7a7a",
+                        "tertiary-fixed-dim": "#ffb77d",
+                        "surface-dim": "#d2dcdc",
+                        "primary": "#00696b",
+                        "surface": "#f1fbfb",
+                        "surface-tint": "#00696b",
+                        "surface-container-lowest": "#ffffff",
                         "secondary-fixed": "#baeafe",
-                        "on-tertiary-fixed-variant": "#6e3900",
+                        "error-container": "#ffdad6",
                         "on-secondary-fixed-variant": "#194d5d",
-                        "deep-aqua": "#004f51",
-                        "electric-cyan": "#00ced1",
-                        "soft-turquoise": "#b7e7fb",
-                        "vin-orange": "#ffa557"
+                        "on-primary": "#ffffff",
+                        "on-primary-container": "#005354",
+                        "error": "#ba1a1a",
+                        "on-primary-fixed": "#002020",
+                        "on-tertiary": "#ffffff",
+                        "on-surface": "#141d1e",
+                        "on-background": "#141d1e",
+                        "inverse-surface": "#293232",
+                        "tertiary-container": "#ffa557",
+                        "primary-container": "#00ced1",
+                        "background": "#f1fbfb",
+                        "secondary": "#356476",
+                        "on-secondary-container": "#39697a",
+                        "surface-container-high": "#e0eaea",
+                        "tertiary": "#904d00",
+                        "on-secondary": "#ffffff",
+                        "on-tertiary-fixed": "#2f1500",
+                        "outline-variant": "#bac9c9",
+                        "on-tertiary-container": "#723c00",
+                        "inverse-on-surface": "#e9f3f3",
+                        "brand-orange": "#FF6B00",
+                        "royal-blue": "#00696b"
                     },
                     "borderRadius": {
                         "DEFAULT": "1rem",
@@ -76,232 +73,313 @@
                         "full": "9999px"
                     },
                     "spacing": {
-                        "unit-lg": "24px",
                         "sidebar-width": "280px",
-                        "unit-sm": "8px",
                         "margin-mobile": "16px",
-                        "margin-desktop": "40px",
-                        "unit-xs": "4px",
-                        "unit-xl": "32px",
-                        "gutter": "24px",
+                        "unit-lg": "24px",
                         "sidebar-collapsed": "80px",
                         "unit-md": "16px",
+                        "unit-xl": "32px",
+                        "margin-desktop": "40px",
+                        "unit-sm": "8px",
+                        "unit-xs": "4px",
+                        "gutter": "24px",
                         "container-max": "1280px"
                     },
                     "fontFamily": {
-                        "body-sm": ["Plus Jakarta Sans"],
-                        "label-lg": ["Plus Jakarta Sans"],
-                        "headline-2xl": ["Plus Jakarta Sans"],
-                        "body-md": ["Plus Jakarta Sans"],
-                        "headline-lg-mobile": ["Plus Jakarta Sans"],
-                        "body-lg": ["Plus Jakarta Sans"],
-                        "label-md": ["Plus Jakarta Sans"],
-                        "headline-lg": ["Plus Jakarta Sans"],
-                        "headline-md": ["Plus Jakarta Sans"],
-                        "headline-xl": ["Plus Jakarta Sans"]
-                    },
-                    "fontSize": {
-                        "body-sm": ["14px", {"lineHeight": "20px", "fontWeight": "400"}],
-                        "label-lg": ["14px", {"lineHeight": "20px", "letterSpacing": "0.05em", "fontWeight": "600"}],
-                        "headline-2xl": ["48px", {"lineHeight": "56px", "letterSpacing": "-0.02em", "fontWeight": "700"}],
-                        "body-md": ["16px", {"lineHeight": "24px", "fontWeight": "400"}],
-                        "headline-lg-mobile": ["24px", {"lineHeight": "32px", "fontWeight": "600"}],
-                        "body-lg": ["18px", {"lineHeight": "28px", "fontWeight": "400"}],
-                        "label-md": ["12px", {"lineHeight": "16px", "letterSpacing": "0.05em", "fontWeight": "600"}],
-                        "headline-lg": ["28px", {"lineHeight": "36px", "fontWeight": "600"}],
-                        "headline-md": ["24px", {"lineHeight": "32px", "fontWeight": "600"}],
-                        "headline-xl": ["36px", {"lineHeight": "44px", "letterSpacing": "-0.02em", "fontWeight": "700"}]
+                        "sans": ["Plus Jakarta Sans", "sans-serif"],
+                        "headline": ["Plus Jakarta Sans", "sans-serif"],
+                        "logo": ["Plus Jakarta Sans", "sans-serif"]
                     }
                 }
             }
         }
     </script>
 <style>
+        body { font-family: 'Plus Jakarta Sans', sans-serif; }
+        
         .glass-panel {
             background: rgba(255, 255, 255, 0.7);
-            backdrop-filter: blur(20px);
-            -webkit-backdrop-filter: blur(20px);
-            border: 1px solid rgba(255, 255, 255, 0.2);
+            backdrop-filter: blur(16px);
+            -webkit-backdrop-filter: blur(16px);
+            border: 1px solid rgba(255, 255, 255, 0.4);
         }
+        
+        .hero-gradient {
+            background: linear-gradient(180deg, rgba(0, 105, 107, 0.2) 0%, rgba(0, 0, 0, 0.7) 100%);
+        }
+
+        .portal-glow {
+            box-shadow: 0 0 30px rgba(0, 206, 209, 0.2);
+        }
+
+        .nav-link-active {
+            position: relative;
+            color: #00696b;
+        }
+        .nav-link-active::after {
+            content: '';
+            position: absolute;
+            bottom: -4px;
+            left: 0;
+            width: 100%;
+            height: 3px;
+            background: #00696b;
+            border-radius: 2px;
+        }
+
         .material-symbols-outlined {
             font-variation-settings: 'FILL' 0, 'wght' 400, 'GRAD' 0, 'opsz' 24;
             vertical-align: middle;
         }
-        .text-button { font-size: 14px; font-weight: 600; text-transform: none; }
-        .font-button { font-family: 'Plus Jakarta Sans', sans-serif; }
-        .text-label-bold { font-size: 12px; font-weight: 700; }
-        .font-label-bold { font-family: 'Plus Jakarta Sans', sans-serif; }
+
+        .slide-fade {
+            opacity: 0;
+            transition: opacity 1s ease-in-out;
+        }
+        .slide-fade.active {
+            opacity: 1;
+        }
         
-        .hero-gradient {
-            background: linear-gradient(180deg, rgba(0,0,0,0) 0%, rgba(0,0,0,0.7) 100%);
+        /* Lightbox styles */
+        #lightbox {
+            display: none;
+            position: fixed;
+            top: 0;
+            left: 0;
+            width: 100%;
+            height: 100%;
+            background: rgba(0, 0, 0, 0.95);
+            z-index: 1000;
+            justify-content: center;
+            align-items: center;
+            cursor: zoom-out;
+        }
+        #lightbox img {
+            max-width: 90%;
+            max-height: 90%;
+            object-fit: contain;
+            border-radius: 8px;
+            box-shadow: 0 0 50px rgba(0, 206, 209, 0.3);
         }
     </style>
 </head>
-<body class="bg-background text-on-background font-body-md min-h-screen selection:bg-primary-container selection:text-on-primary-container">
-<!-- TopNavBar -->
-<header class="fixed top-0 left-0 right-0 z-50 bg-surface/80 dark:bg-surface-container/80 backdrop-blur-xl shadow-[0px_4px_20px_rgba(0,206,209,0.08)] h-20">
+<body class="bg-background text-on-surface min-h-screen selection:bg-primary-container/30">
+<!-- Lightbox Modal -->
+<div id="lightbox" onclick="closeLightbox()">
+<button class="absolute top-6 right-6 text-white hover:text-primary transition-colors" onclick="closeLightbox()">
+<span class="material-symbols-outlined text-4xl">close</span>
+</button>
+<img alt="Full Screen View" id="lightbox-img" src=""/>
+</div>
+<!-- Header -->
+<header class="fixed top-0 left-0 right-0 z-50 bg-white/90 backdrop-blur-md shadow-sm h-20 transition-all duration-300" id="main-header">
 <nav class="flex justify-between items-center w-full px-margin-desktop max-w-container-max mx-auto h-full">
 <!-- Brand Logo -->
-<div class="text-headline-md font-headline-md font-extrabold text-primary dark:text-electric-cyan">
-                AquaPulse
-            </div>
-<!-- Navigation Links -->
-<div class="hidden md:flex items-center gap-8">
-<a class="text-on-surface-variant dark:text-outline-variant hover:text-primary transition-colors text-label-bold font-label-bold" href="#">Home</a>
-<a class="text-primary dark:text-electric-cyan border-b-2 border-primary dark:border-electric-cyan pb-1 text-label-bold font-label-bold" href="#">Shows</a>
-<a class="text-on-surface-variant dark:text-outline-variant hover:text-primary transition-colors text-label-bold font-label-bold" href="#">Schedules</a>
-<a class="text-on-surface-variant dark:text-outline-variant hover:text-primary transition-colors text-label-bold font-label-bold" href="#">My Bookings</a>
+<div class="text-2xl font-logo font-extrabold text-primary tracking-tight">
+            AquaPulse
+        </div>
+<!-- Navigation -->
+<div class="hidden md:flex items-center gap-10">
+<a class="text-sm font-semibold text-on-surface-variant hover:text-primary transition-colors" href="#">Home</a>
+<a class="text-sm font-semibold nav-link-active" href="#">Shows</a>
+<a class="text-sm font-semibold text-on-surface-variant hover:text-primary transition-colors" href="#">Schedules</a>
+<a class="text-sm font-semibold text-on-surface-variant hover:text-primary transition-colors" href="#">My Bookings</a>
 </div>
 <!-- Actions -->
-<div class="flex items-center gap-unit-md">
-<button class="hidden sm:block text-on-surface-variant text-button font-button hover:scale-105 transition-transform">Sign In</button>
-<button class="bg-primary text-on-primary px-6 py-2.5 rounded-full text-button font-button hover:scale-105 transition-transform active:scale-95">Book Now</button>
+<div class="flex items-center gap-6">
+<button class="hidden sm:block text-sm font-bold text-primary hover:text-brand-orange transition-colors">Sign In</button>
+<button class="bg-brand-orange text-white px-8 py-3 rounded-full text-sm font-bold shadow-lg hover:shadow-brand-orange/40 hover:-translate-y-0.5 transition-all active:scale-95">Book Now</button>
 </div>
 </nav>
 </header>
 <main class="pt-20">
-<!-- Hero Section -->
-<section class="relative w-full h-[614px] min-h-[500px] overflow-hidden">
-<div class="absolute inset-0 bg-cover bg-center transition-transform duration-700 hover:scale-105" data-alt="A grand water fountain show at night featuring towering jets of turquoise water illuminated by brilliant cyan and teal lights. Laser beams in emerald green and sapphire blue pierce the night sky, creating a complex web of light. A crowd of silhouettes watches in awe from the edge of the lagoon, with the soft glow of distant park architecture in the background. The atmosphere is magical and high-energy." style="background-image: url('https://lh3.googleusercontent.com/aida-public/AB6AXuANv7I9nTUaKmdiA6IfaIaY0YwJUIWoqM0X6m_tgMmcJ71PacmGbCJL7U7jN8rhBXSUuV7fovx9LDsAc6N5PhTyiCp6LssLe6FgDdZmMcwFIlWNhrmPMXPWNaNGaENraIJuHz9U8O5qXFdHXwD12d0tWFF6pkX61XHVJWiPscKVSeVXPJHPLntIinpKKiq48E_jrrE2A6BF6g5CVGhbzwWhTMCs07mHdwovKDWCZJwE9QP5SidUIrVjslByRhoxaZve3By201M-MkjJ');">
-</div>
+<!-- Hero Section with Slideshow -->
+<section class="relative w-full h-[65vh] min-h-[500px] overflow-hidden cursor-zoom-in" id="hero-slideshow" onclick="openLightbox()">
+<!-- Slides -->
+<div class="absolute inset-0 slide-fade active bg-cover bg-center" style="background-image: url('https://lh3.googleusercontent.com/aida-public/AB6AXuAFeYRb8WkcNVQn2b1wxiXnDpTIB3-X8eybricRUgfMxWVfemwimDD2m_G_GiZUhW_oUx8L2aM98YoUGaHihmAaEQqP0rm5iBI3SgODMA9PSd0NfnZtfx2VUcNOrSewM73gS500HW-XbrSUG3zdcNdC8So1mOYMSf6xlwzSi_2NT6bph-dzQzqAEnmZZpyFgL9wvluMYa1G1kdZYz21Dkj9Bo62tfTY4Is8GpWRAQkP_Snkfi9PJX5FN0eml38fvqfFWooX13Cp5nq7');"></div>
+<div class="absolute inset-0 slide-fade bg-cover bg-center" style="background-image: url('https://lh3.googleusercontent.com/aida-public/AB6AXuBO-bCRxh2UwsQxWXeJUJQuejBAWT31c892YxMXztuGu0Qiet3S5wmaOfgfsTn_SUPEWKv1X6fk9ozFjATdo_XwJcKrUzd71xcZ23D4tZ6ZfLoCndPt_59a3YYz2GVMhx8HcTh4y1COQv2ckVTX-Ev3Z51bAF_Wt_3tcuciZ2ncN6t3rYm5JSzfG1n1igwxynE0qtDFsI-0VUrQxpgdC8ljcDDjgcU38xlZM1Q9kwJP4n6qCjB5ol5BT-Giw4ZnuRXZsEhTZHuJwkHO');"></div>
+<div class="absolute inset-0 slide-fade bg-cover bg-center" style="background-image: url('https://lh3.googleusercontent.com/aida-public/AB6AXuDKH4HodTfmDcO_ukYHvV3We2Q-2-5SLttCRwvL1CHxFklUt2phbyk4eI8rW-F9i9D6p6tO5PjQ76MSUDCwcyfMf9Y6EZIBLp5rA8zMy0vK2w3KHTDrxtu1aYv0iekjR0uol3OLMKn4v8zbnacHaaDt2J2KTkhRPYEvP5a303MDwaudUvNvhiBGtqL7QTtl3PgB5MzXTvsxKVFzspE7KOCOXvzvvoXkIkME5dBTAIIAIJUl7kIhTuJ_GVGs5HlpAx8Mr6LdkF1vpBxz');"></div>
 <div class="absolute inset-0 hero-gradient"></div>
-<div class="absolute bottom-0 left-0 right-0 p-margin-desktop max-w-container-max mx-auto">
-<div class="flex flex-col gap-unit-sm mb-unit-lg">
-<nav class="flex items-center gap-unit-sm text-white/80 text-label-md font-label-md mb-2">
-<a class="hover:text-electric-cyan transition-colors" href="#">Shows</a>
+<div class="absolute bottom-0 left-0 right-0 p-margin-desktop max-w-container-max mx-auto pb-16 pointer-events-none">
+<div class="flex flex-col gap-4 pointer-events-auto">
+<nav class="flex items-center gap-2 text-white/90 text-xs font-bold tracking-widest uppercase">
+<a class="hover:text-primary-container transition-colors" href="#">Shows</a>
 <span class="material-symbols-outlined text-[14px]">chevron_right</span>
-<span class="text-white">Oceanic Dreams 4D</span>
+<span class="text-primary-container">Oceanic Dreams 4D</span>
 </nav>
-<div class="flex items-center gap-unit-md">
-<span class="bg-primary-container text-on-primary-container px-3 py-1 rounded-full text-label-md font-label-bold uppercase tracking-wider">Active</span>
-<div class="flex items-center gap-1 text-white/90 text-label-md font-label-md">
+<div class="flex items-center gap-4">
+<span class="bg-brand-orange text-white px-4 py-1.5 rounded-full text-[10px] font-black uppercase tracking-widest">Active Now</span>
+<div class="flex items-center gap-1.5 text-white/90 text-sm font-medium">
 <span class="material-symbols-outlined text-[18px]">schedule</span>
-                            60 mins
-                        </div>
+                        60 Minutes
+                    </div>
 </div>
-<h1 class="text-white font-headline-2xl text-headline-2xl md:text-[64px] leading-tight max-w-4xl">Oceanic Dreams 4D</h1>
+<h1 class="text-white font-black text-5xl md:text-7xl leading-tight max-w-4xl tracking-tight">
+                    Oceanic Dreams 4D
+                </h1>
+</div>
+</div>
+<!-- Slideshow Indicators -->
+<div class="absolute bottom-8 right-margin-desktop flex gap-2 z-10">
+<div class="w-8 h-1 bg-white/40 rounded-full overflow-hidden">
+<div class="h-full bg-white transition-all duration-500 indicator-bar" style="width: 100%"></div>
+</div>
+<div class="w-8 h-1 bg-white/40 rounded-full overflow-hidden">
+<div class="h-full bg-white transition-all duration-500 indicator-bar" style="width: 0%"></div>
+</div>
+<div class="w-8 h-1 bg-white/40 rounded-full overflow-hidden">
+<div class="h-full bg-white transition-all duration-500 indicator-bar" style="width: 0%"></div>
 </div>
 </div>
 </section>
 <!-- Content Container -->
 <section class="max-w-container-max mx-auto px-margin-desktop py-unit-xl">
-<div class="grid grid-cols-1 lg:grid-cols-12 gap-gutter">
-<!-- Left Column: Details -->
-<div class="lg:col-span-7 flex flex-col gap-unit-xl">
-<div class="glass-panel p-unit-lg rounded-xl shadow-sm">
-<h2 class="font-headline-md text-headline-md text-primary mb-unit-md">About the Show</h2>
-<p class="font-body-lg text-body-lg text-on-surface-variant leading-relaxed">
-                            Dive into a multi-sensory journey through the hidden wonders of the deep sea. "Oceanic Dreams 4D" combines state-of-the-art water projection technology with synchronized laser choreography and immersive surround sound. Witness the legendary tales of ancient sea guardians brought to life in a breathtaking display of fluid art and luminous aquatic modernism.
-                        </p>
-<div class="grid grid-cols-2 sm:grid-cols-3 gap-unit-md mt-unit-xl">
+<div class="flex flex-col gap-10">
+<!-- About Section (Expanded to Full Width) -->
+<div class="glass-panel p-unit-lg rounded-DEFAULT shadow-xl portal-glow w-full">
+<h2 class="text-2xl font-extrabold text-primary mb-6">About the Show</h2>
+<p class="text-base text-on-surface-variant leading-relaxed font-medium">
+                    Dive into a multi-sensory journey through the hidden wonders of the deep sea. "Oceanic Dreams 4D" combines state-of-the-art water projection technology with synchronized laser choreography and immersive surround sound. Witness the legendary tales of ancient sea guardians brought to life in a breathtaking display of fluid art and luminous aquatic modernism.
+                </p>
+<div class="grid grid-cols-2 sm:grid-cols-3 gap-6 mt-10">
 <div class="flex flex-col gap-1">
-<span class="text-label-md font-label-md text-outline">Category</span>
-<span class="font-body-md text-on-surface font-semibold">Interactive Arts</span>
-</div>
-<div class="flex flex-col gap-1">
-<span class="text-label-md font-label-md text-outline">Show Type</span>
-<span class="font-body-md text-on-surface font-semibold">4D Experience</span>
+<span class="text-[10px] font-black uppercase tracking-widest text-outline">Category</span>
+<span class="text-sm font-bold text-primary">Interactive Arts</span>
 </div>
 <div class="flex flex-col gap-1">
-<span class="text-label-md font-label-md text-outline">Audience</span>
-<span class="font-body-md text-on-surface font-semibold">All Ages</span>
+<span class="text-[10px] font-black uppercase tracking-widest text-outline">Show Type</span>
+<span class="text-sm font-bold text-primary">4D Experience</span>
+</div>
+<div class="flex flex-col gap-1">
+<span class="text-[10px] font-black uppercase tracking-widest text-outline">Audience</span>
+<span class="text-sm font-bold text-primary">All Ages</span>
 </div>
 </div>
 </div>
-<!-- Gallery / Visual Interest Section -->
-<div class="grid grid-cols-2 gap-unit-md">
-<div class="h-48 rounded-xl bg-cover bg-center overflow-hidden shadow-sm hover:shadow-md transition-shadow" data-alt="A close-up of vibrant water projections showing a stylized luminous jellyfish floating through a dark blue liquid environment. The water droplets act as tiny pixels, creating a shimmering, ethereal effect. The colors are dominated by electric cyan and deep violet, with soft glows illuminating the spray. Minimalist and professional marine entertainment aesthetic." style="background-image: url('https://lh3.googleusercontent.com/aida-public/AB6AXuAQbql89nZUPmszl9ZbgAUtDWVEnxn50iMXG6Q-fggqDinTout4wWGHrpJr5H4BGpxiK-yq4ncIcWcoO9ML9Q0R2sz__gfHNhG5N7eHQj2-RhygpowXExJatAyXDkj60P3b0C10kDdgwu8i0eVrMLcvOTDiqs5wjAye-czOskMnaAYB0iqRYtcuhNjSoZbZ6JxAkO2x5VTnYAItv8v0RcHi5_WfBWivTbO03O6IzCUxRizRmMVfa7P2SkCyfsGg_ecunpJhgjPST6P0')"></div>
-<div class="h-48 rounded-xl bg-cover bg-center overflow-hidden shadow-sm hover:shadow-md transition-shadow" data-alt="High-angle shot of a grand lagoon venue during a light show. Bright orange and teal spotlights cross over a massive pool of water, reflecting perfectly on the surface. The architecture around the pool is sleek and modern, with soft ambient lighting. The atmosphere is sophisticated, upscale, and festive, capturing the essence of premium marine entertainment." style="background-image: url('https://lh3.googleusercontent.com/aida-public/AB6AXuDy5lPXcFOXoG7Lj-m_Xk2nnox1JkGhYGVtUNpp-XPPJXt-LDCJzlJtV7G1tSBVTCy1zdTtn-otuj5cvtYDoSuTBdSLoF4rqHSVbuo5283rg8eeqqb-h7nNr-DZ4VwZ3uQ4ey82Fc0Y_yPf_vuh7V3d_o1ryz0Y0KLoE-_3Cm7eU8I_WZ1pOoCSTblC0EkwTCamIDo7k_cq5HaMpMOaACjX7yBe9_c5e67AUNn3Ts1KWD4CeKp8F13KYVDmUk_D20-2zIEzxf9Vjugc')"></div>
-</div>
-</div>
-<!-- Right Column: Schedules -->
-<div class="lg:col-span-5 flex flex-col gap-unit-lg">
-<div class="flex justify-between items-center">
-<h2 class="font-headline-md text-headline-md text-on-surface">Upcoming Times</h2>
-<button class="text-primary font-label-bold text-label-md flex items-center gap-1 hover:underline">
-                            View Calendar <span class="material-symbols-outlined text-[16px]">calendar_month</span>
+<!-- Two-Column Grid for Schedule and Summary -->
+<div class="grid grid-cols-1 lg:grid-cols-10 gap-10">
+<!-- Left Column: Upcoming Times (7/10) -->
+<div class="lg:col-span-7 flex flex-col gap-8">
+<div class="flex justify-between items-end">
+<h2 class="text-2xl font-extrabold text-primary">Upcoming Times</h2>
+<button class="text-brand-orange font-bold text-xs flex items-center gap-1.5 hover:underline uppercase tracking-wider">
+                            View Calendar <span class="material-symbols-outlined text-[18px]">calendar_today</span>
 </button>
 </div>
-<!-- Schedule Cards -->
-<div class="flex flex-col gap-unit-md">
+<div class="flex flex-col gap-6">
 <!-- Card 1 -->
-<div class="bg-surface-container-lowest border border-outline-variant/30 rounded-xl p-unit-md shadow-sm hover:shadow-md transition-all group">
-<div class="flex justify-between items-start mb-unit-md">
-<div class="flex flex-col">
-<span class="font-headline-md text-primary">19:30 — 20:30</span>
-<span class="text-label-md font-label-md text-on-surface-variant flex items-center gap-1">
-<span class="material-symbols-outlined text-[14px]">location_on</span> Grand Lagoon
+<div class="glass-panel rounded-DEFAULT p-6 shadow-md hover:shadow-xl transition-all group relative overflow-hidden">
+<div class="flex justify-between items-start mb-6">
+<div>
+<span class="block text-2xl font-black text-primary group-hover:text-brand-orange transition-colors">19:30 — 20:30</span>
+<span class="text-xs font-bold text-on-surface-variant flex items-center gap-1 mt-1 uppercase tracking-wide">
+<span class="material-symbols-outlined text-[16px] text-brand-orange">location_on</span> Grand Lagoon
                                     </span>
 </div>
 <div class="text-right">
-<span class="font-headline-md text-on-surface">$45.00</span>
-<span class="block text-label-md font-label-md text-outline">per ticket</span>
+<span class="text-2xl font-black text-on-surface">$45.00</span>
+<span class="block text-[10px] font-black text-outline uppercase tracking-widest mt-1">per ticket</span>
 </div>
 </div>
-<div class="flex items-center justify-between pt-unit-md border-t border-outline-variant/20">
-<div class="flex flex-col">
-<span class="text-label-md font-label-md text-outline">Available</span>
-<span class="text-body-md font-semibold text-secondary">124 Tickets left</span>
+<div class="flex items-center justify-between pt-6 border-t border-outline-variant/30">
+<div>
+<span class="text-[10px] font-black text-outline uppercase tracking-widest">Availability</span>
+<span class="block text-sm font-bold text-primary">124 Tickets Left</span>
 </div>
-<button class="bg-primary/50 text-on-primary px-6 py-2 rounded-full font-button text-button cursor-not-allowed opacity-80" disabled="">
-                                    Book Now
+<button class="bg-brand-orange text-white px-10 py-3 rounded-full text-sm font-black shadow-lg shadow-brand-orange/20 hover:scale-105 active:scale-95 transition-all">
+                                    SELECT
                                 </button>
 </div>
 </div>
 <!-- Card 2 -->
-<div class="bg-surface-container-lowest border border-outline-variant/30 rounded-xl p-unit-md shadow-sm hover:shadow-md transition-all group">
-<div class="flex justify-between items-start mb-unit-md">
-<div class="flex flex-col">
-<span class="font-headline-md text-primary">21:00 — 22:00</span>
-<span class="text-label-md font-label-md text-on-surface-variant flex items-center gap-1">
-<span class="material-symbols-outlined text-[14px]">location_on</span> Grand Lagoon
+<div class="glass-panel rounded-DEFAULT p-6 shadow-md hover:shadow-xl transition-all group relative overflow-hidden">
+<div class="flex justify-between items-start mb-6">
+<div>
+<span class="block text-2xl font-black text-primary group-hover:text-brand-orange transition-colors">21:00 — 22:00</span>
+<span class="text-xs font-bold text-on-surface-variant flex items-center gap-1 mt-1 uppercase tracking-wide">
+<span class="material-symbols-outlined text-[16px] text-brand-orange">location_on</span> Grand Lagoon
                                     </span>
 </div>
 <div class="text-right">
-<span class="font-headline-md text-on-surface">$55.00</span>
-<span class="block text-label-md font-label-md text-outline">per ticket</span>
+<span class="text-2xl font-black text-on-surface">$55.00</span>
+<span class="block text-[10px] font-black text-outline uppercase tracking-widest mt-1">per ticket</span>
 </div>
 </div>
-<div class="flex items-center justify-between pt-unit-md border-t border-outline-variant/20">
-<div class="flex flex-col">
-<span class="text-label-md font-label-md text-outline">Available</span>
-<span class="text-body-md font-semibold text-secondary">42 Tickets left</span>
+<div class="flex items-center justify-between pt-6 border-t border-outline-variant/30">
+<div>
+<span class="text-[10px] font-black text-outline uppercase tracking-widest">Availability</span>
+<span class="block text-sm font-bold text-primary">42 Tickets Left</span>
 </div>
-<button class="bg-primary/50 text-on-primary px-6 py-2 rounded-full font-button text-button cursor-not-allowed opacity-80" disabled="">
-                                    Book Now
+<button class="bg-brand-orange text-white px-10 py-3 rounded-full text-sm font-black shadow-lg shadow-brand-orange/20 hover:scale-105 active:scale-95 transition-all">
+                                    SELECT
                                 </button>
 </div>
 </div>
-<!-- Card 3 -->
-<div class="bg-surface-container-lowest border border-outline-variant/30 rounded-xl p-unit-md shadow-sm hover:shadow-md transition-all group opacity-60">
-<div class="flex justify-between items-start mb-unit-md">
-<div class="flex flex-col">
-<span class="font-headline-md text-outline">22:30 — 23:30</span>
-<span class="text-label-md font-label-md text-on-surface-variant flex items-center gap-1">
-<span class="material-symbols-outlined text-[14px]">location_on</span> Grand Lagoon
+<!-- Card 3: Sold Out -->
+<div class="glass-panel rounded-DEFAULT p-6 shadow-sm opacity-60 grayscale-[0.5]">
+<div class="flex justify-between items-start mb-6">
+<div>
+<span class="block text-2xl font-black text-outline">22:30 — 23:30</span>
+<span class="text-xs font-bold text-outline flex items-center gap-1 mt-1 uppercase tracking-wide">
+<span class="material-symbols-outlined text-[16px]">location_on</span> Grand Lagoon
                                     </span>
 </div>
 <div class="text-right">
-<span class="font-headline-md text-on-surface">$45.00</span>
-<span class="block text-label-md font-label-md text-outline">per ticket</span>
+<span class="text-2xl font-black text-outline">$45.00</span>
+<span class="block text-[10px] font-black text-outline uppercase tracking-widest mt-1">per ticket</span>
 </div>
 </div>
-<div class="flex items-center justify-between pt-unit-md border-t border-outline-variant/20">
-<div class="flex flex-col">
-<span class="text-label-md font-label-md text-error font-bold italic">SOLD OUT</span>
+<div class="flex items-center justify-between pt-6 border-t border-outline-variant/30">
+<div>
+<span class="text-sm font-black text-error uppercase tracking-widest">SOLD OUT</span>
 </div>
-<button class="bg-surface-variant text-on-surface-variant px-6 py-2 rounded-full font-button text-button cursor-not-allowed" disabled="">
-                                    Sold Out
+<button class="bg-outline-variant text-on-surface-variant px-10 py-3 rounded-full text-sm font-black cursor-not-allowed" disabled="">
+                                    SOLD OUT
                                 </button>
 </div>
 </div>
 </div>
-<!-- Advisory Info -->
-<div class="bg-secondary-container/30 rounded-xl p-unit-md flex gap-unit-md">
-<span class="material-symbols-outlined text-secondary" style="font-variation-settings: 'FILL' 1;">info</span>
+<!-- Info Advisory -->
+<div class="bg-primary/5 rounded-DEFAULT p-6 flex gap-4 border border-primary/10">
+<span class="material-symbols-outlined text-primary text-3xl" style="font-variation-settings: 'FILL' 1;">info</span>
 <div class="flex flex-col gap-1">
-<span class="font-label-bold text-secondary">Visitor Information</span>
-<p class="text-body-sm text-on-secondary-container">Please arrive 20 minutes before showtime. This performance features strobe lights and loud audio effects. Rain-or-shine event.</p>
+<span class="font-bold text-sm text-primary uppercase tracking-widest">Visitor Advisory</span>
+<p class="text-xs text-on-surface-variant leading-relaxed font-medium">Please arrive 20 minutes before showtime. This performance features strobe lights and loud audio effects. Rain-or-shine event.</p>
+</div>
+</div>
+</div>
+<!-- Right Column: Booking Summary (3/10) -->
+<div class="lg:col-span-3">
+<div class="glass-panel rounded-DEFAULT p-unit-lg shadow-xl sticky top-24 border-primary/20">
+<h3 class="text-xl font-extrabold text-primary mb-6 flex items-center gap-2">
+<span class="material-symbols-outlined">shopping_basket</span>
+                            Booking Summary
+                        </h3>
+<div class="flex flex-col gap-6">
+<div class="flex flex-col gap-1">
+<span class="text-[10px] font-black uppercase tracking-widest text-outline">Selected Show</span>
+<span class="text-base font-bold text-on-surface">Oceanic Dreams 4D</span>
+</div>
+<div class="flex flex-col gap-1">
+<span class="text-[10px] font-black uppercase tracking-widest text-outline">Selected Tickets</span>
+<div class="flex items-center justify-between mt-1">
+<span class="text-sm font-bold text-on-surface">2 Standard Tickets</span>
+<div class="flex items-center gap-2">
+<button class="w-6 h-6 rounded-full border border-outline-variant flex items-center justify-center hover:bg-secondary-container transition-colors"><span class="material-symbols-outlined text-sm">remove</span></button>
+<span class="text-sm font-bold">2</span>
+<button class="w-6 h-6 rounded-full border border-outline-variant flex items-center justify-center hover:bg-secondary-container transition-colors"><span class="material-symbols-outlined text-sm">add</span></button>
+</div>
+</div>
+</div>
+<div class="pt-6 border-t border-outline-variant/30 flex justify-between items-center">
+<span class="text-[10px] font-black uppercase tracking-widest text-outline">Total Price</span>
+<span class="text-2xl font-black text-primary">$90.00</span>
+</div>
+<button class="w-full bg-brand-orange text-white py-4 rounded-full text-sm font-black shadow-lg shadow-brand-orange/30 hover:shadow-brand-orange/50 hover:-translate-y-1 active:translate-y-0 transition-all flex items-center justify-center gap-2 mt-2">
+                            PROCEED TO BOOKING
+                            <span class="material-symbols-outlined text-[20px]">arrow_forward</span>
+</button>
+</div>
 </div>
 </div>
 </div>
@@ -309,55 +387,112 @@
 </section>
 </main>
 <!-- Footer -->
-<footer class="bg-deep-aqua dark:bg-on-primary-fixed-variant mt-20">
-<div class="w-full py-12 px-margin-desktop grid grid-cols-1 md:grid-cols-3 gap-gutter max-w-container-max mx-auto">
-<div class="flex flex-col gap-unit-md">
-<div class="text-headline-md font-headline-md text-on-primary font-extrabold">AquaPulse</div>
-<p class="text-soft-turquoise text-body-md pr-12">Redefining aquatic entertainment through luminous precision and fluid engineering.</p>
+<footer class="bg-primary text-white mt-20">
+<div class="w-full py-20 px-margin-desktop grid grid-cols-1 md:grid-cols-3 gap-16 max-w-container-max mx-auto">
+<div class="flex flex-col gap-6">
+<div class="text-3xl font-logo font-black tracking-tight">AquaPulse</div>
+<p class="text-white/70 text-sm leading-relaxed font-medium max-w-xs">
+                Redefining aquatic entertainment through luminous precision and fluid engineering. A portal to wonder at every show.
+            </p>
 </div>
-<div class="flex flex-col gap-unit-sm">
-<span class="text-on-primary font-label-bold text-label-bold uppercase tracking-widest mb-2">Explore</span>
-<nav class="flex flex-col gap-2">
-<a class="text-soft-turquoise hover:text-on-primary transition-colors hover:underline decoration-vin-orange" href="#">Shows</a>
-<a class="text-soft-turquoise hover:text-on-primary transition-colors hover:underline decoration-vin-orange" href="#">Schedules</a>
-<a class="text-soft-turquoise hover:text-on-primary transition-colors hover:underline decoration-vin-orange" href="#">Careers</a>
+<div class="flex flex-col gap-6">
+<span class="text-xs font-black uppercase tracking-widest text-brand-orange">Explore Wonders</span>
+<nav class="flex flex-col gap-4">
+<a class="text-sm font-bold hover:text-brand-orange transition-colors" href="#">The Shows</a>
+<a class="text-sm font-bold hover:text-brand-orange transition-colors" href="#">Daily Schedules</a>
+<a class="text-sm font-bold hover:text-brand-orange transition-colors" href="#">Global Locations</a>
 </nav>
 </div>
-<div class="flex flex-col gap-unit-sm">
-<span class="text-on-primary font-label-bold text-label-bold uppercase tracking-widest mb-2">Legal</span>
-<nav class="flex flex-col gap-2">
-<a class="text-soft-turquoise hover:text-on-primary transition-colors hover:underline decoration-vin-orange" href="#">Privacy Policy</a>
-<a class="text-soft-turquoise hover:text-on-primary transition-colors hover:underline decoration-vin-orange" href="#">Terms of Service</a>
-<a class="text-soft-turquoise hover:text-on-primary transition-colors hover:underline decoration-vin-orange" href="#">Water Safety</a>
+<div class="flex flex-col gap-6">
+<span class="text-xs font-black uppercase tracking-widest text-brand-orange">Safety &amp; Legal</span>
+<nav class="flex flex-col gap-4">
+<a class="text-sm font-bold hover:text-brand-orange transition-colors" href="#">Privacy Policy</a>
+<a class="text-sm font-bold hover:text-brand-orange transition-colors" href="#">Terms of Admission</a>
+<a class="text-sm font-bold hover:text-brand-orange transition-colors" href="#">Water Safety</a>
 </nav>
 </div>
 </div>
-<div class="border-t border-white/10 py-6 px-margin-desktop max-w-container-max mx-auto">
-<p class="text-soft-turquoise text-body-sm text-center">© 2024 AquaPulse Entertainment. All rights reserved.</p>
+<div class="border-t border-white/10 py-10 px-margin-desktop max-w-container-max mx-auto flex flex-col items-center gap-4">
+<div class="flex gap-6 mb-4">
+<a class="w-10 h-10 rounded-full bg-white/10 flex items-center justify-center hover:bg-brand-orange transition-colors" href="#">
+<span class="material-symbols-outlined text-[20px]">public</span>
+</a>
+<a class="w-10 h-10 rounded-full bg-white/10 flex items-center justify-center hover:bg-brand-orange transition-colors" href="#">
+<span class="material-symbols-outlined text-[20px]">photo_camera</span>
+</a>
+</div>
+<p class="text-white/40 text-[10px] font-bold uppercase tracking-[0.2em]">© 2024 AquaPulse Entertainment. High-Energy Aquatic Excellence.</p>
 </div>
 </footer>
 <script>
-        // Micro-interactions for glass panels
-        document.querySelectorAll('.glass-panel, .bg-surface-container-lowest').forEach(card => {
-            card.addEventListener('mouseenter', () => {
-                card.style.transform = 'translateY(-4px)';
-                card.style.transition = 'transform 0.3s cubic-bezier(0.34, 1.56, 0.64, 1)';
-            });
-            card.addEventListener('mouseleave', () => {
-                card.style.transform = 'translateY(0px)';
-            });
-        });
+    // Header Scroll Effect
+    window.addEventListener('scroll', () => {
+        const header = document.getElementById('main-header');
+        if (window.scrollY > 20) {
+            header.classList.add('shadow-lg', 'h-16');
+            header.classList.remove('h-20');
+        } else {
+            header.classList.remove('shadow-lg', 'h-16');
+            header.classList.add('h-20');
+        }
+    });
 
-        // Sticky Navbar background shift on scroll
-        window.addEventListener('scroll', () => {
-            const header = document.querySelector('header');
-            if (window.scrollY > 50) {
-                header.classList.add('shadow-md');
-                header.style.backgroundColor = 'rgba(241, 251, 251, 0.95)';
-            } else {
-                header.classList.remove('shadow-md');
-                header.style.backgroundColor = 'rgba(241, 251, 251, 0.8)';
+    // Slideshow Logic
+    let currentSlide = 0;
+    const slides = document.querySelectorAll('.slide-fade');
+    const indicatorBars = document.querySelectorAll('.indicator-bar');
+    const imageUrls = [
+        'https://lh3.googleusercontent.com/aida-public/AB6AXuAFeYRb8WkcNVQn2b1wxiXnDpTIB3-X8eybricRUgfMxWVfemwimDD2m_G_GiZUhW_oUx8L2aM98YoUGaHihmAaEQqP0rm5iBI3SgODMA9PSd0NfnZtfx2VUcNOrSewM73gS500HW-XbrSUG3zdcNdC8So1mOYMSf6xlwzSi_2NT6bph-dzQzqAEnmZZpyFgL9wvluMYa1G1kdZYz21Dkj9Bo62tfTY4Is8GpWRAQkP_Snkfi9PJX5FN0eml38fvqfFWooX13Cp5nq7',
+        'https://lh3.googleusercontent.com/aida-public/AB6AXuBO-bCRxh2UwsQxWXeJUJQuejBAWT31c892YxMXztuGu0Qiet3S5wmaOfgfsTn_SUPEWKv1X6fk9ozFjATdo_XwJcKrUzd71xcZ23D4tZ6ZfLoCndPt_59a3YYz2GVMhx8HcTh4y1COQv2ckVTX-Ev3Z51bAF_Wt_3tcuciZ2ncN6t3rYm5JSzfG1n1igwxynE0qtDFsI-0VUrQxpgdC8ljcDDjgcU38xlZM1Q9kwJP4n6qCjB5ol5BT-Giw4ZnuRXZsEhTZHuJwkHO',
+        'https://lh3.googleusercontent.com/aida-public/AB6AXuDKH4HodTfmDcO_ukYHvV3We2Q-2-5SLttCRwvL1CHxFklUt2phbyk4eI8rW-F9i9D6p6tO5PjQ76MSUDCwcyfMf9Y6EZIBLp5rA8zMy0vK2w3KHTDrxtu1aYv0iekjR0uol3OLMKn4v8zbnacHaaDt2J2KTkhRPYEvP5a303MDwaudUvNvhiBGtqL7QTtl3PgB5MzXTvsxKVFzspE7KOCOXvzvvoXkIkME5dBTAIIAIJUl7kIhTuJ_GVGs5HlpAx8Mr6LdkF1vpBxz'
+    ];
+
+    function showSlide(index) {
+        slides.forEach((slide, i) => {
+            slide.classList.remove('active');
+            indicatorBars[i].style.width = '0%';
+            if (i === index) {
+                slide.classList.add('active');
+                indicatorBars[i].style.width = '100%';
             }
         });
-    </script>
+    }
+
+    function nextSlide() {
+        currentSlide = (currentSlide + 1) % slides.length;
+        showSlide(currentSlide);
+    }
+
+    // Auto-play every 5 seconds
+    setInterval(nextSlide, 5000);
+
+    // Lightbox Functionality
+    const lightbox = document.getElementById('lightbox');
+    const lightboxImg = document.getElementById('lightbox-img');
+
+    function openLightbox() {
+        const activeImageUrl = imageUrls[currentSlide];
+        lightboxImg.src = activeImageUrl;
+        lightbox.style.display = 'flex';
+        document.body.style.overflow = 'hidden'; // Prevent scroll
+    }
+
+    function openSpecificLightbox(url) {
+        lightboxImg.src = url;
+        lightbox.style.display = 'flex';
+        document.body.style.overflow = 'hidden';
+    }
+
+    function closeLightbox() {
+        lightbox.style.display = 'none';
+        document.body.style.overflow = 'auto';
+    }
+
+    // Simple interaction animations
+    document.querySelectorAll('.glass-panel').forEach(panel => {
+        panel.addEventListener('mouseenter', () => {
+            panel.style.transition = 'all 0.4s cubic-bezier(0.175, 0.885, 0.32, 1.275)';
+        });
+    });
+</script>
 </body></html>

@@ -25,8 +25,7 @@ Guest/User views shows
 -> User creates booking
 -> System validates rules
 -> Redis temporarily holds tickets
--> RabbitMQ processes booking
--> Booking is saved as PENDING_PAYMENT
+-> BookingService saves booking as PENDING_PAYMENT
 -> User pays through PayOS
 -> PayOS sends callback
 -> System verifies callback

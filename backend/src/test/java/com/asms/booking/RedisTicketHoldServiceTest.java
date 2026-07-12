@@ -23,6 +23,7 @@ import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.ArgumentMatchers.anyList;
 import static org.mockito.ArgumentMatchers.anyString;
 import static org.mockito.Mockito.mock;
+import static org.mockito.Mockito.never;
 import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
 
@@ -62,6 +63,21 @@ class RedisTicketHoldServiceTest {
         assertThat(invoke(result, "holdId")).isEqualTo("hold-123");
         assertThat(invoke(result, "message")).isEqualTo("Tickets held successfully");
         assertThat(invoke(result, "expiresAt")).isEqualTo(Instant.parse("2026-05-31T15:15:00Z"));
+        verify(valueOperations, never()).setIfAbsent(anyString(), anyString());
+    }
+
+    @Test
+    void initializeInventorySetsDbSourcedAvailability() throws Exception {
+        invoke(
+                holdService,
+                "initializeInventory",
+                new Class<?>[]{String.class, String.class, int.class},
+                "schedule-1",
+                "STANDARD",
+                7
+        );
+
+        verify(valueOperations).set("booking:inventory:schedule-1", "7");
     }
 
     @Test

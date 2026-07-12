@@ -69,7 +69,7 @@ Create booking request:
 
 Expected flow:
 ```text
-Validate request -> Redis hold -> RabbitMQ publish -> BookingConsumer saves PENDING_PAYMENT booking
+Validate request -> Redis hold -> BookingService saves PENDING_PAYMENT booking
 ```
 
 ## Payment

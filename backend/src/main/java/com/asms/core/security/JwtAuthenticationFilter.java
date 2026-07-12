@@ -40,7 +40,11 @@ public class JwtAuthenticationFilter extends OncePerRequestFilter {
         }
 
         String token = authorizationHeader.substring(7);
-        if (shouldAuthenticateWithJwt() && jwtService.isValid(token)) {
+        // An explicit Bearer token must take precedence over an OAuth/session
+        // authentication that may still be present in the browser. Otherwise a
+        // stale JSESSIONID can cause a valid MANAGER token to be evaluated with
+        // the previous session user's authorities.
+        if (jwtService.isValid(token)) {
             String email = jwtService.extractSubject(token);
             userRepository.findByEmailIgnoreCase(email)
                     .filter(User::isEnabled)
@@ -58,8 +62,4 @@ public class JwtAuthenticationFilter extends OncePerRequestFilter {
         filterChain.doFilter(request, response);
     }
 
-    private boolean shouldAuthenticateWithJwt() {
-        var authentication = SecurityContextHolder.getContext().getAuthentication();
-        return authentication == null || !(authentication.getPrincipal() instanceof User);
-    }
 }

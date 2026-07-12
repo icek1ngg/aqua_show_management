@@ -21,7 +21,7 @@ Controller -> Service -> Repository -> Entity -> PostgreSQL
 
 Infrastructure:
 - Redis: show/schedule cache and temporary ticket holding
-- RabbitMQ: asynchronous booking processing and post-payment ticket/email tasks
+- RabbitMQ: post-payment ticket/email tasks
 - PayOS: payment link creation and callback verification
 - Gmail: email notifications
 - Google OAuth: Google login
@@ -50,7 +50,7 @@ Infrastructure:
 - Each Ticket can be checked in successfully only once.
 - Failed QR scan attempts should be saved in check_in_logs.
 - Redis temporary ticket hold must expire automatically.
-- RabbitMQ is used for booking processing and post-payment ticket/email tasks.
+- RabbitMQ is used for post-payment ticket/email tasks.
 - Do not use RabbitMQ for show schedule management.
 - Schedule management writes directly to PostgreSQL and clears Redis cache.
 

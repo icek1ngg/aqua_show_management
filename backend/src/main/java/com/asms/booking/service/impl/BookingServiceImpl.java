@@ -1,6 +1,5 @@
 package com.asms.booking.service.impl;
 
-import com.asms.booking.dto.BookingDtos.BookingMessage;
 import com.asms.booking.dto.BookingDtos.BookingResponse;
 import com.asms.booking.dto.BookingDtos.CreateBookingRequest;
 import com.asms.booking.dto.BookingDtos.CreateBookingResponse;
@@ -15,14 +14,15 @@ import com.asms.booking.dto.BookingDtos.TicketSummary;
 import com.asms.booking.dto.TicketHoldDtos.HoldResult;
 import com.asms.booking.entity.Booking;
 import com.asms.booking.enums.BookingStatus;
-import com.asms.booking.messaging.RabbitMQBookingPublisher;
 import com.asms.booking.repository.BookingRepository;
 import com.asms.booking.service.BookingService;
 import com.asms.booking.service.RedisTicketHoldService;
+import com.asms.catalog.entity.ShowSchedule;
+import com.asms.catalog.enums.ScheduleStatus;
+import com.asms.catalog.repository.ShowScheduleRepository;
 import com.asms.core.exception.BadRequestException;
 import com.asms.core.exception.ConflictException;
 import com.asms.core.exception.NotFoundException;
-import com.asms.core.exception.ServiceUnavailableException;
 import com.asms.core.exception.UnauthorizedException;
 import com.asms.identity.entity.User;
 import com.asms.identity.repository.UserRepository;
@@ -39,10 +39,15 @@ import org.springframework.beans.factory.annotation.Value;
 import org.springframework.data.domain.Page;
 import org.springframework.data.domain.PageRequest;
 import org.springframework.stereotype.Service;
+import org.springframework.transaction.annotation.Transactional;
+import org.springframework.transaction.support.TransactionSynchronization;
+import org.springframework.transaction.support.TransactionSynchronizationManager;
 
 import java.math.BigDecimal;
 import java.math.RoundingMode;
 import java.time.Instant;
+import java.time.LocalDate;
+import java.time.format.DateTimeFormatter;
 import java.util.List;
 import java.util.Locale;
 import java.util.UUID;
@@ -55,13 +60,16 @@ public class BookingServiceImpl implements BookingService {
     private static final BigDecimal STANDARD_PRICE = new BigDecimal("2000");
     private static final BigDecimal VIP_PRICE = new BigDecimal("5000");
     private static final BigDecimal FAMILY_PRICE = new BigDecimal("3000");
+    private static final int MAX_TICKETS_PER_BOOKING = 10;
+    private static final long BOOKING_CUTOFF_MINUTES = 30;
     private static final int DEFAULT_MY_BOOKINGS_PAGE_SIZE = 5;
     private static final int MAX_MY_BOOKINGS_PAGE_SIZE = 5;
+    private static final DateTimeFormatter BOOKING_CODE_DATE_FORMAT = DateTimeFormatter.BASIC_ISO_DATE;
 
     private final BookingRepository bookingRepository;
     private final UserRepository userRepository;
+    private final ShowScheduleRepository scheduleRepository;
     private final RedisTicketHoldService redisTicketHoldService;
-    private final RabbitMQBookingPublisher bookingPublisher;
     private final PaymentRepository paymentRepository;
     private final TicketRepository ticketRepository;
     private final EmailNotificationRepository emailNotificationRepository;
@@ -70,8 +78,8 @@ public class BookingServiceImpl implements BookingService {
     public BookingServiceImpl(
             BookingRepository bookingRepository,
             UserRepository userRepository,
+            ShowScheduleRepository scheduleRepository,
             RedisTicketHoldService redisTicketHoldService,
-            RabbitMQBookingPublisher bookingPublisher,
             PaymentRepository paymentRepository,
             TicketRepository ticketRepository,
             EmailNotificationRepository emailNotificationRepository,
@@ -79,8 +87,8 @@ public class BookingServiceImpl implements BookingService {
     ) {
         this.bookingRepository = bookingRepository;
         this.userRepository = userRepository;
+        this.scheduleRepository = scheduleRepository;
         this.redisTicketHoldService = redisTicketHoldService;
-        this.bookingPublisher = bookingPublisher;
         this.paymentRepository = paymentRepository;
         this.ticketRepository = ticketRepository;
         this.emailNotificationRepository = emailNotificationRepository;
@@ -88,6 +96,7 @@ public class BookingServiceImpl implements BookingService {
     }
 
     @Override
+    @Transactional
     public CreateBookingResponse createBooking(CreateBookingRequest request, String currentUserEmail) {
         log.info(
                 "Create booking request received: userEmail={}, showId={}, scheduleId={}, ticketType={}, quantity={}",
@@ -98,33 +107,39 @@ public class BookingServiceImpl implements BookingService {
                 request.quantity()
         );
         User user = resolveUser(currentUserEmail);
+        int quantity = validateQuantity(request.quantity());
         String ticketType = normalizeTicketType(request.ticketType());
-        BigDecimal unitPrice = priceFor(ticketType);
-        BigDecimal totalAmount = unitPrice.multiply(BigDecimal.valueOf(request.quantity()));
+        validateTicketType(ticketType);
+        ShowSchedule schedule = resolveBookableSchedule(request);
+        Instant now = Instant.now();
+        BigDecimal unitPrice = priceFor(ticketType).setScale(2, RoundingMode.HALF_UP);
+        BigDecimal totalAmount = unitPrice.multiply(BigDecimal.valueOf(quantity)).setScale(2, RoundingMode.HALF_UP);
+        int availableTickets = calculateAvailableTickets(schedule, now);
+        if (availableTickets < quantity) {
+            throw new ConflictException("Not enough tickets available.");
+        }
         log.info(
                 "Calculated booking price: ticketType={}, unitPrice={}, quantity={}, totalAmount={}",
                 ticketType,
                 unitPrice,
-                request.quantity(),
+                quantity,
                 totalAmount
         );
 
-        // TODO: Validate schedule existence after ShowSchedule module exists.
-        // TODO: Validate booking deadline after Schedule module exists.
-        // TODO: Validate real inventory after TicketInventory module exists.
+        redisTicketHoldService.initializeInventory(schedule.getId().toString(), ticketType, availableTickets);
         HoldResult hold = redisTicketHoldService.holdTickets(
-                request.scheduleId(),
+                schedule.getId().toString(),
                 ticketType,
-                request.quantity(),
+                quantity,
                 user.getId()
         );
         if (!hold.success()) {
             log.warn(
                     "Redis ticket hold rejected for booking request: userEmail={}, scheduleId={}, ticketType={}, quantity={}",
                     user.getEmail(),
-                    request.scheduleId(),
+                    schedule.getId(),
                     ticketType,
-                    request.quantity()
+                    quantity
             );
             throw new ConflictException("Not enough tickets available.");
         }
@@ -132,35 +147,33 @@ public class BookingServiceImpl implements BookingService {
                 "Redis ticket hold succeeded for booking request: holdId={}, userEmail={}, scheduleId={}, ticketType={}, quantity={}, expiresAt={}",
                 hold.holdId(),
                 user.getEmail(),
-                request.scheduleId(),
+                schedule.getId(),
                 ticketType,
-                request.quantity(),
+                quantity,
                 hold.expiresAt()
         );
+        releaseHoldIfTransactionRollsBack(hold.holdId());
 
         UUID requestId = UUID.randomUUID();
-        BookingMessage message = new BookingMessage(
-                requestId,
-                hold.holdId(),
-                user.getId(),
-                user.getEmail(),
-                request.showId(),
-                request.scheduleId(),
-                request.showName(),
-                request.showDate(),
-                ticketType,
-                request.quantity(),
-                unitPrice,
-                totalAmount,
-                hold.expiresAt(),
-                Instant.now()
-        );
-
+        Booking booking = Booking.create();
+        booking.setUser(user);
+        booking.setBookingCode(generateProductionBookingCode());
+        booking.setHoldId(hold.holdId());
+        booking.setShowId(schedule.getShow().getId().toString());
+        booking.setScheduleId(schedule.getId().toString());
+        booking.setShowName(schedule.getShow().getTitle());
+        booking.setShowDate(schedule.getStartTime().toLocalDate());
+        booking.setTicketType(ticketType);
+        booking.setQuantity(quantity);
+        booking.setUnitPrice(unitPrice);
+        booking.setTotalAmount(totalAmount);
+        booking.setStatus(BookingStatus.PENDING_PAYMENT);
+        booking.setExpiresAt(hold.expiresAt());
         try {
-            bookingPublisher.publishCreateBooking(message);
+            booking = bookingRepository.save(booking);
         } catch (RuntimeException exception) {
             log.error(
-                    "RabbitMQ publish failed after Redis hold. Releasing hold: requestId={}, holdId={}, userEmail={}",
+                    "Booking persistence failed after Redis hold. Releasing hold: requestId={}, holdId={}, userEmail={}",
                     requestId,
                     hold.holdId(),
                     user.getEmail(),
@@ -168,19 +181,20 @@ public class BookingServiceImpl implements BookingService {
             );
             redisTicketHoldService.releaseHold(hold.holdId());
             log.error(
-                    "Redis hold released after RabbitMQ publish failure: requestId={}, holdId={}, userEmail={}",
+                    "Redis hold released after booking persistence failure: requestId={}, holdId={}, userEmail={}",
                     requestId,
                     hold.holdId(),
                     user.getEmail()
             );
-            throw new ServiceUnavailableException("Booking service is temporarily unavailable");
+            throw exception;
         }
 
         return new CreateBookingResponse(
                 requestId,
+                booking.getId(),
                 hold.holdId(),
-                BookingStatus.PROCESSING,
-                "Booking request is being processed.",
+                BookingStatus.PENDING_PAYMENT,
+                "Booking created and awaiting payment.",
                 hold.expiresAt()
         );
     }
@@ -237,7 +251,7 @@ public class BookingServiceImpl implements BookingService {
 
         Booking booking = Booking.create();
         booking.setUser(user);
-        booking.setBookingCode(generateBookingCode());
+        booking.setBookingCode(generateDevBookingCode());
         booking.setHoldId("ASMS-DEV-HOLD-" + UUID.randomUUID());
         booking.setShowId("SHOW-DEMO-AQUA");
         booking.setScheduleId("SCHEDULE-DEMO-AQUA");
@@ -309,7 +323,13 @@ public class BookingServiceImpl implements BookingService {
         if (normalized.equals("VIP ENTRY")) {
             return "VIP";
         }
+        if (normalized.equals("VIP EXPERIENCE")) {
+            return "VIP";
+        }
         if (normalized.equals("FAMILY PACKAGE")) {
+            return "FAMILY";
+        }
+        if (normalized.equals("FAMILY PASS")) {
             return "FAMILY";
         }
         return normalized;
@@ -337,6 +357,74 @@ public class BookingServiceImpl implements BookingService {
         );
     }
 
+    private void validateTicketType(String ticketType) {
+        priceFor(ticketType);
+    }
+
+    private int validateQuantity(Integer quantity) {
+        if (quantity == null || quantity <= 0) {
+            throw new BadRequestException("Quantity must be at least 1");
+        }
+        if (quantity > MAX_TICKETS_PER_BOOKING) {
+            throw new BadRequestException("Quantity must not exceed 10");
+        }
+        return quantity;
+    }
+
+    private ShowSchedule resolveBookableSchedule(CreateBookingRequest request) {
+        UUID scheduleId = parseUuid(request.scheduleId(), "Schedule ID is invalid");
+        ShowSchedule schedule = scheduleRepository.findById(scheduleId)
+                .orElseThrow(() -> new NotFoundException("Schedule not found"));
+
+        if (schedule.getStatus() != ScheduleStatus.ACTIVE) {
+            throw new BadRequestException("Schedule is not bookable");
+        }
+        Instant startsAt = schedule.getStartTime().atZone(java.time.ZoneId.systemDefault()).toInstant();
+        if (!startsAt.isAfter(Instant.now().plusSeconds(BOOKING_CUTOFF_MINUTES * 60))) {
+            throw new BadRequestException("Bookings must be created at least 30 minutes before show start");
+        }
+        if (request.showId() != null && !request.showId().isBlank()) {
+            UUID requestedShowId = parseUuid(request.showId(), "Show ID is invalid");
+            if (!schedule.getShow().getId().equals(requestedShowId)) {
+                throw new BadRequestException("Schedule does not belong to requested show");
+            }
+        }
+        return schedule;
+    }
+
+    private UUID parseUuid(String value, String message) {
+        try {
+            return UUID.fromString(value);
+        } catch (RuntimeException exception) {
+            throw new BadRequestException(message);
+        }
+    }
+
+    private int calculateAvailableTickets(ShowSchedule schedule, Instant now) {
+        String scheduleId = schedule.getId().toString();
+        long paidQuantity = bookingRepository.countPaidTicketsByScheduleId(scheduleId);
+        long pendingQuantity = bookingRepository.countNonExpiredPendingTicketsByScheduleId(scheduleId, now);
+        long available = (long) schedule.getCapacity() - paidQuantity - pendingQuantity;
+        if (available > Integer.MAX_VALUE) {
+            return Integer.MAX_VALUE;
+        }
+        return (int) Math.max(available, 0);
+    }
+
+    private void releaseHoldIfTransactionRollsBack(String holdId) {
+        if (!TransactionSynchronizationManager.isSynchronizationActive()) {
+            return;
+        }
+        TransactionSynchronizationManager.registerSynchronization(new TransactionSynchronization() {
+            @Override
+            public void afterCompletion(int status) {
+                if (status == STATUS_ROLLED_BACK) {
+                    redisTicketHoldService.releaseHold(holdId);
+                }
+            }
+        });
+    }
+
     private DevSampleBookingResponse toDevSampleResponse(Booking booking) {
         String frontendUrl = frontendBaseUrl == null || frontendBaseUrl.isBlank()
                 ? "http://localhost:5173"
@@ -356,12 +444,24 @@ public class BookingServiceImpl implements BookingService {
         return amount.setScale(2, RoundingMode.HALF_UP);
     }
 
-    private String generateBookingCode() {
+    private String generateProductionBookingCode() {
+        String bookingCode;
+        do {
+            bookingCode = "AQB" + LocalDate.now().format(BOOKING_CODE_DATE_FORMAT) + randomSuffix();
+        } while (bookingRepository.existsByBookingCode(bookingCode));
+        return bookingCode;
+    }
+
+    private String generateDevBookingCode() {
         String bookingCode;
         do {
             bookingCode = "AQBDEV" + Instant.now().toEpochMilli() + ThreadLocalRandom.current().nextInt(100, 999);
         } while (bookingRepository.existsByBookingCode(bookingCode));
         return bookingCode;
+    }
+
+    private String randomSuffix() {
+        return UUID.randomUUID().toString().replace("-", "").substring(0, 6).toUpperCase(Locale.ROOT);
     }
 
     private PaymentSummary toPaymentSummary(Booking booking) {

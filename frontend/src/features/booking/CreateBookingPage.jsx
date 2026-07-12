@@ -1,8 +1,14 @@
 import { useEffect, useState } from 'react';
 import { useLocation, useNavigate, useSearchParams } from 'react-router-dom';
 
-import { createBooking, getBookingByHoldId } from '../../services/bookingService.js';
+import { createBooking } from '../../services/bookingService.js';
 import MainLayout from '../../shared/layouts/MainLayout.jsx';
+import {
+  formatCurrency,
+  getTicketTypeLabel,
+  getTicketTypePrice,
+  normalizeTicketType,
+} from '../../shared/utils/ticketPricing.js';
 
 // TEMPORARY / FRONTEND-ONLY mock database of show options
 const showDatabase = {
@@ -10,7 +16,6 @@ const showDatabase = {
     name: 'Symphony of Lights',
     category: 'Water Show',
     badge: 'Popular',
-    pricePerTicket: 2000,
     maxQuantity: 10,
     time: '08:00 PM - 09:30 PM',
     venue: 'Aqua Plaza',
@@ -21,7 +26,6 @@ const showDatabase = {
     name: 'Ocean Dreams',
     category: 'Marine Show',
     badge: 'Trending',
-    pricePerTicket: 2000,
     maxQuantity: 10,
     time: '02:00 PM - 03:30 PM',
     venue: 'Marine Amphitheater',
@@ -32,7 +36,6 @@ const showDatabase = {
     name: 'Aqua Parade',
     category: 'Float Parade',
     badge: 'Festive',
-    pricePerTicket: 2000,
     maxQuantity: 10,
     time: '04:30 PM - 05:30 PM',
     venue: 'Canal Street',
@@ -43,7 +46,6 @@ const showDatabase = {
     name: 'Mermaid Splash',
     category: 'Underwater Theater',
     badge: 'Magical',
-    pricePerTicket: 2000,
     maxQuantity: 10,
     time: '11:00 AM - 12:30 PM',
     venue: 'Deep Ocean Tank',
@@ -51,14 +53,6 @@ const showDatabase = {
     imageUrl: 'https://lh3.googleusercontent.com/aida-public/AB6AXuCAs3NVAK7aoUYuYTZX3AmIWjo37TVxp8y6qJgQ9aCIxerTaTrUNtCZg6IkvjGYTrm8NkWAmMk9EYSAS0zHX-Ybuchms5PmzM8GSFwWEwlI4Yo9RrGTNwDjP0uBNcrI0GEVscCdtCQdMPXEMe6JZqLjxpYxC0m-dniRVU5w8F3YNuK1ONb9aqNtSQ8JjTFMnaKVdluoElQViAQ2wGLue9tKyOx3JFBWEQNJawzk2cibhFjqAkAmwOrkKMOymHdXyYfPgbQ1y6XgQQ',
   }
 };
-
-function formatCurrency(amount) {
-  return new Intl.NumberFormat('vi-VN', {
-    style: 'currency',
-    currency: 'VND',
-    maximumFractionDigits: 0,
-  }).format(Number(amount || 0));
-}
 
 function formatDateString(dateStr) {
   if (!dateStr) return 'Not selected';
@@ -69,15 +63,6 @@ function formatDateString(dateStr) {
   } catch {
     return dateStr;
   }
-}
-
-const bookingPollIntervalMs = 1500;
-const bookingPollTimeoutMs = 20000;
-
-function sleep(ms) {
-  return new Promise((resolve) => {
-    window.setTimeout(resolve, ms);
-  });
 }
 
 function getBookingErrorMessage(error) {
@@ -103,6 +88,44 @@ function getBookingErrorMessage(error) {
   return responseData?.message || 'Could not create booking. Please try again.';
 }
 
+function isUuid(value) {
+  return /^[0-9a-f]{8}(?:-[0-9a-f]{4}){3}-[0-9a-f]{12}$/i.test(value || '');
+}
+
+function validateBookingPayload(payload) {
+  if (!payload.scheduleId || !isUuid(payload.scheduleId)) {
+    return 'Please select a show schedule again.';
+  }
+  if (!payload.showId || !isUuid(payload.showId)) {
+    return 'Please select a show again.';
+  }
+  if (!payload.showName || !payload.showDate || !payload.ticketType) {
+    return 'Show, date, and ticket type are required.';
+  }
+  if (!Number.isInteger(payload.quantity) || payload.quantity < 1 || payload.quantity > 10) {
+    return 'Quantity must be a number from 1 to 10.';
+  }
+  return '';
+}
+
+function getMissingBookingParams({
+  showId,
+  scheduleId,
+  showName,
+  showDate,
+  quantity,
+  ticketType,
+}) {
+  return [
+    !showId && 'showId',
+    !scheduleId && 'scheduleId',
+    !showName && 'show',
+    !showDate && 'date',
+    (!Number.isInteger(quantity) || quantity < 1) && 'quantity',
+    !ticketType && 'ticketType',
+  ].filter(Boolean);
+}
+
 export default function CreateBookingPage() {
   const [searchParams, setSearchParams] = useSearchParams();
   const navigate = useNavigate();
@@ -114,14 +137,16 @@ export default function CreateBookingPage() {
   const showNameParam = searchParams.get('show');
   const dateParam = searchParams.get('date');
   const quantityParam = Number(searchParams.get('quantity'));
-  const ticketTypeParam = searchParams.get('ticketType') || 'Standard Entry';
+  const ticketTypeQueryParam = searchParams.get('ticketType');
+  const ticketTypeParam = normalizeTicketType(ticketTypeQueryParam || 'STANDARD');
+  const ticketTypeLabel = getTicketTypeLabel(ticketTypeParam);
 
   // State management
   const [quantity, setQuantity] = useState(1);
   const [bookingError, setBookingError] = useState('');
   const [bookingStatusMessage, setBookingStatusMessage] = useState('');
   const [submitState, setSubmitState] = useState('idle');
-  const isBookingInProgress = submitState === 'creating' || submitState === 'processing';
+  const isBookingInProgress = submitState === 'creating';
 
   // Handle query parameter updates and synchronization
   useEffect(() => {
@@ -131,7 +156,19 @@ export default function CreateBookingPage() {
   }, [quantityParam]);
 
   // Check if required params are missing
-  const isParamsMissing = !showIdParam || !scheduleIdParam || !showNameParam || !dateParam || isNaN(quantityParam) || quantityParam < 1;
+  const isScheduleMissing = !scheduleIdParam;
+  const missingParams = getMissingBookingParams({
+    showId: showIdParam,
+    scheduleId: scheduleIdParam,
+    showName: showNameParam,
+    showDate: dateParam,
+    quantity: quantityParam,
+    ticketType: ticketTypeQueryParam,
+  });
+  const isParamsMissing = missingParams.length > 0;
+  const missingParamsDetail = import.meta.env.DEV && missingParams.length > 0
+    ? ` Missing parameters: ${missingParams.join(', ')}.`
+    : '';
 
   if (isParamsMissing) {
     return (
@@ -142,7 +179,9 @@ export default function CreateBookingPage() {
           </div>
           <h1 className="text-4xl font-black tracking-tight text-slate-950">Select Tickets to Continue</h1>
           <p className="mt-4 text-base text-slate-600 max-w-md">
-            Please search for a show, date, and ticket quantity using the Ticket Search Drawer to start your booking.
+            {isScheduleMissing
+              ? `Please select a show schedule again.${missingParamsDetail}`
+              : `Please search for a show, date, and ticket quantity using the Ticket Search Drawer to start your booking.${missingParamsDetail}`}
           </p>
           <div className="mt-8 flex flex-col justify-center gap-4 sm:flex-row w-full sm:w-auto px-4">
             <button
@@ -165,18 +204,13 @@ export default function CreateBookingPage() {
   }
 
   // Load show details from mock database
-  const showData = showDatabase[showNameParam] || showDatabase['Symphony of Lights'];
+  const showData = {
+    ...(showDatabase[showNameParam] || showDatabase['Symphony of Lights']),
+    name: showNameParam,
+  };
 
-  // Calculate ticket pricing based on ticketType
-  // TEMPORARY: Front-end price estimation only. Not trusted for backend transactions.
-  let calculatedPricePerTicket = showData.pricePerTicket;
-  if (ticketTypeParam === 'VIP Entry') {
-    calculatedPricePerTicket = 5000;
-  } else if (ticketTypeParam === 'Family Package') {
-    calculatedPricePerTicket = 3000;
-  }
-
-  const totalAmount = quantity * calculatedPricePerTicket;
+  const previewPricePerTicket = getTicketTypePrice(ticketTypeParam);
+  const previewTotalAmount = quantity * previewPricePerTicket;
 
   const updateQuantityParams = (nextQuantity) => {
     setSearchParams((prevParams) => {
@@ -202,28 +236,6 @@ export default function CreateBookingPage() {
     updateQuantityParams(nextVal);
   };
 
-  const pollCreatedBooking = async (holdId) => {
-    const startedAt = Date.now();
-
-    while (Date.now() - startedAt < bookingPollTimeoutMs) {
-      await sleep(bookingPollIntervalMs);
-
-      try {
-        const booking = await getBookingByHoldId(holdId);
-        if (booking?.id) {
-          navigate(`/bookings/${booking.id}/payment`);
-          return true;
-        }
-      } catch (error) {
-        if (error?.response?.status === 401) {
-          throw error;
-        }
-      }
-    }
-
-    return false;
-  };
-
   const handleConfirmBooking = async () => {
     if (isBookingInProgress) {
       return;
@@ -231,21 +243,6 @@ export default function CreateBookingPage() {
 
     setBookingError('');
     setBookingStatusMessage('');
-
-    if (!showIdParam || !scheduleIdParam) {
-      setBookingError('Selected show schedule is required. Please search for tickets again.');
-      return;
-    }
-
-    if (!showNameParam || !dateParam) {
-      setBookingError('Selected show and date are required.');
-      return;
-    }
-
-    if (!Number.isInteger(quantity) || quantity < 1 || quantity > showData.maxQuantity) {
-      setBookingError(`Quantity must be a number from 1 to ${showData.maxQuantity}.`);
-      return;
-    }
 
     const payload = {
       showId: showIdParam,
@@ -255,25 +252,33 @@ export default function CreateBookingPage() {
       ticketType: ticketTypeParam,
       quantity,
     };
+    const payloadError = validateBookingPayload(payload);
+    if (payloadError) {
+      setBookingError(payloadError);
+      return;
+    }
+
+    if (import.meta.env.DEV) {
+      console.debug('[booking] validated create payload', {
+        showId: payload.showId,
+        scheduleId: payload.scheduleId,
+        showDate: payload.showDate,
+        ticketType: payload.ticketType,
+        quantity: payload.quantity,
+      });
+    }
 
     try {
       setSubmitState('creating');
       setBookingStatusMessage('Creating booking...');
       const result = await createBooking(payload);
 
-      if (!result?.holdId) {
-        throw new Error('Booking hold was not returned.');
+      if (result?.bookingId) {
+        navigate(`/bookings/${result.bookingId}/payment`);
+        return;
       }
 
-      setSubmitState('processing');
-      setBookingStatusMessage('Booking request is being processed...');
-      const found = await pollCreatedBooking(result.holdId);
-
-      if (!found) {
-        setSubmitState('idle');
-        setBookingStatusMessage('');
-        setBookingError('Your booking is still processing. Please check My Bookings shortly.');
-      }
+      throw new Error('Booking ID was not returned.');
     } catch (error) {
       setSubmitState('idle');
       setBookingStatusMessage('');
@@ -361,10 +366,10 @@ export default function CreateBookingPage() {
             <section className="rounded-[2rem] border border-cyan-100 bg-white p-6 shadow-[0_12px_32px_rgba(0,105,107,0.1)] md:p-8">
               <div className="flex flex-col items-center justify-between gap-6 md:flex-row">
                 <div>
-                  <h2 className="mb-1 text-2xl font-black text-slate-950">{ticketTypeParam}</h2>
-                  <p className="text-slate-600">Includes admission and digital show guide (Estimates only).</p>
+                  <h2 className="mb-1 text-2xl font-black text-slate-950">{ticketTypeLabel}</h2>
+                  <p className="text-slate-600">Preview only. The final amount is confirmed by AquaPulse after booking creation.</p>
                   <p className="mt-2 text-2xl font-black text-cyan-700">
-                    {formatCurrency(calculatedPricePerTicket)} <span className="text-base font-normal text-slate-500">/ ticket</span>
+                    {formatCurrency(previewPricePerTicket)} <span className="text-base font-normal text-slate-500">/ ticket</span>
                   </p>
                 </div>
 
@@ -410,7 +415,7 @@ export default function CreateBookingPage() {
                       <p className="font-bold text-slate-950">{showData.name}</p>
                       <p className="text-sm text-slate-500">{formatDateString(dateParam)}, {showData.time.split(' ')[0]} {showData.time.split(' ')[1]}</p>
                     </div>
-                    <p className="font-bold text-slate-950">{formatCurrency(calculatedPricePerTicket)}</p>
+                    <p className="font-bold text-slate-950">{formatCurrency(previewPricePerTicket)}</p>
                   </div>
                   <div className="flex items-center justify-between border-y border-cyan-100 py-4">
                     <p className="text-slate-500">Quantity</p>
@@ -418,7 +423,7 @@ export default function CreateBookingPage() {
                   </div>
                   <div className="flex items-center justify-between">
                     <p className="text-2xl font-black text-cyan-700">Total Amount</p>
-                    <p className="text-2xl font-black text-cyan-700">{formatCurrency(totalAmount)}</p>
+                    <p className="text-2xl font-black text-cyan-700">{formatCurrency(previewTotalAmount)}</p>
                   </div>
                 </div>
 
@@ -456,7 +461,7 @@ export default function CreateBookingPage() {
                     onClick={handleConfirmBooking}
                     type="button"
                   >
-                    {submitState === 'creating' ? 'Creating booking...' : submitState === 'processing' ? 'Processing booking...' : 'Confirm Booking'}
+                    {submitState === 'creating' ? 'Creating booking...' : 'Confirm Booking'}
                   </button>
                   <button
                     className="w-full text-center text-sm font-bold text-cyan-700 underline-offset-4 hover:underline cursor-pointer"

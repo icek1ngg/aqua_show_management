@@ -13,6 +13,7 @@ import CreateBookingPage from '../features/booking/CreateBookingPage.jsx';
 import MockPayosCheckoutPage from '../features/payment/MockPayosCheckoutPage.jsx';
 import PaymentPage from '../features/payment/PaymentPage.jsx';
 import PaymentResultPage from '../features/payment/PaymentResultPage.jsx';
+import MyTicketsPage from '../features/ticketing/MyTicketsPage.jsx';
 import HomePage from '../features/home/HomePage.jsx';
 import EditProfilePage from '../features/profile/EditProfilePage.jsx';
 import ProfilePage from '../features/profile/ProfilePage.jsx';
@@ -113,6 +114,14 @@ export const router = createBrowserRouter([
         element: (
           <ProtectedRoute>
             <PaymentResultPage />
+          </ProtectedRoute>
+        ),
+      },
+      {
+        path: 'my-tickets',
+        element: (
+          <ProtectedRoute>
+            <MyTicketsPage />
           </ProtectedRoute>
         ),
       },

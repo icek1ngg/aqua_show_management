@@ -6,6 +6,7 @@ import com.asms.identity.entity.User;
 import org.springframework.data.domain.Page;
 import org.springframework.data.domain.Pageable;
 import org.springframework.data.jpa.repository.JpaRepository;
+import org.springframework.data.jpa.repository.JpaSpecificationExecutor;
 import org.springframework.data.jpa.repository.Query;
 import org.springframework.data.repository.query.Param;
 
@@ -14,7 +15,7 @@ import java.util.List;
 import java.util.Optional;
 import java.util.UUID;
 
-public interface BookingRepository extends JpaRepository<Booking, UUID> {
+public interface BookingRepository extends JpaRepository<Booking, UUID>, JpaSpecificationExecutor<Booking> {
 
     Optional<Booking> findByIdAndUser(UUID id, User user);
 
@@ -35,6 +36,14 @@ public interface BookingRepository extends JpaRepository<Booking, UUID> {
             where b.scheduleId = :scheduleId and b.status = com.asms.booking.enums.BookingStatus.PAID
             """)
     long countPaidTicketsByScheduleId(@Param("scheduleId") String scheduleId);
+
+    @Query("""
+            select coalesce(sum(b.quantity), 0) from Booking b
+            where b.scheduleId = :scheduleId
+              and b.status = com.asms.booking.enums.BookingStatus.PENDING_PAYMENT
+              and b.expiresAt > :now
+            """)
+    long countNonExpiredPendingTicketsByScheduleId(@Param("scheduleId") String scheduleId, @Param("now") Instant now);
 
     @Query("""
             select b from Booking b
