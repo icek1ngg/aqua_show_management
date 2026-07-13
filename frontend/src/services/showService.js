@@ -25,6 +25,11 @@ export async function getShowSchedules(showId) {
   return unwrap(response);
 }
 
+/**
+ * Fetches the authoritative booking snapshot for a schedule, including show and
+ * venue details, per-type prices/capacities, and hold-adjusted availability.
+ * @param {string} scheduleId
+ */
 export async function getSchedule(scheduleId) {
   const response = await apiClient.get(`/schedules/${scheduleId}`);
   return unwrap(response);

@@ -52,6 +52,31 @@ public final class CatalogDtos {
     ) {
     }
 
+    public record BookingScheduleResponse(
+            UUID scheduleId,
+            UUID showId,
+            String showTitle,
+            String showDescription,
+            String showImageUrl,
+            ScheduleStatus status,
+            LocalDateTime startTime,
+            LocalDateTime endTime,
+            UUID venueId,
+            String venueName,
+            String venueLocation,
+            BigDecimal standardBasePrice,
+            BigDecimal standardPrice,
+            BigDecimal vipPrice,
+            BigDecimal familyPrice,
+            Integer standardCapacity,
+            Integer vipCapacity,
+            Integer familyCapacity,
+            Integer standardAvailableTickets,
+            Integer vipAvailableTickets,
+            Integer familyAvailableTickets
+    ) {
+    }
+
     public record CreateShowRequest(
             @NotBlank(message = "Title is required")
             @Size(max = 150, message = "Title must not exceed 150 characters")
