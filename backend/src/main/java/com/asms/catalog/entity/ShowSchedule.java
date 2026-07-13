@@ -2,6 +2,7 @@ package com.asms.catalog.entity;
 
 import com.asms.booking.enums.TicketType;
 import com.asms.catalog.enums.ScheduleStatus;
+import com.asms.core.exception.BadRequestException;
 import com.asms.core.exception.ConflictException;
 import jakarta.persistence.Column;
 import jakarta.persistence.Entity;
@@ -262,14 +263,17 @@ public class ShowSchedule {
     }
 
     public void decrementAvailable(TicketType type, int quantity) {
-        int next = availableFor(type) - quantity;
+        if (quantity <= 0) {
+            throw new BadRequestException("Quantity must be greater than 0");
+        }
+        long next = (long) availableFor(type) - quantity;
         if (next < 0) {
             throw new ConflictException("Not enough tickets available");
         }
         switch (type) {
-            case STANDARD -> standardAvailableTickets = next;
-            case VIP -> vipAvailableTickets = next;
-            case FAMILY -> familyAvailableTickets = next;
+            case STANDARD -> standardAvailableTickets = (int) next;
+            case VIP -> vipAvailableTickets = (int) next;
+            case FAMILY -> familyAvailableTickets = (int) next;
         }
         syncLegacyColumns();
     }

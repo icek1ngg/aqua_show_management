@@ -101,7 +101,8 @@ public class ScheduleService {
 
     @Transactional
     public ScheduleManagementResponse updateSchedule(UUID id, UpdateScheduleRequest request) {
-        ShowSchedule schedule = scheduleRepository.findById(id).orElseThrow(() -> new NotFoundException("Schedule not found"));
+        ShowSchedule schedule = scheduleRepository.findByIdForUpdate(id)
+                .orElseThrow(() -> new NotFoundException("Schedule not found"));
         Venue venue = schedule.getVenue();
         if (request.venueId() != null) {
             venue = venueRepository.findByIdAndStatus(request.venueId(), VenueStatus.ACTIVE)
@@ -121,13 +122,16 @@ public class ScheduleService {
 
         validateSchedule(schedule.getId(), venue, startTime, endTime);
         validateTicketCapacities(venue, standardCapacity, vipCapacity, familyCapacity);
-        validateCapacityAgainstPaidTickets(schedule.getId(), TicketType.STANDARD, standardCapacity);
-        validateCapacityAgainstPaidTickets(schedule.getId(), TicketType.VIP, vipCapacity);
-        validateCapacityAgainstPaidTickets(schedule.getId(), TicketType.FAMILY, familyCapacity);
+        long paidStandard = paidTickets(schedule.getId(), TicketType.STANDARD);
+        long paidVip = paidTickets(schedule.getId(), TicketType.VIP);
+        long paidFamily = paidTickets(schedule.getId(), TicketType.FAMILY);
+        validateCapacityAgainstPaidTickets(TicketType.STANDARD, standardCapacity, paidStandard);
+        validateCapacityAgainstPaidTickets(TicketType.VIP, vipCapacity, paidVip);
+        validateCapacityAgainstPaidTickets(TicketType.FAMILY, familyCapacity, paidFamily);
 
-        int soldStandard = schedule.getStandardCapacity() - schedule.getStandardAvailableTickets();
-        int soldVip = schedule.getVipCapacity() - schedule.getVipAvailableTickets();
-        int soldFamily = schedule.getFamilyCapacity() - schedule.getFamilyAvailableTickets();
+        int soldStandard = soldTickets(schedule.getStandardCapacity(), schedule.getStandardAvailableTickets(), paidStandard);
+        int soldVip = soldTickets(schedule.getVipCapacity(), schedule.getVipAvailableTickets(), paidVip);
+        int soldFamily = soldTickets(schedule.getFamilyCapacity(), schedule.getFamilyAvailableTickets(), paidFamily);
         validateCapacityAgainstSoldTickets(TicketType.STANDARD, standardCapacity, soldStandard);
         validateCapacityAgainstSoldTickets(TicketType.VIP, vipCapacity, soldVip);
         validateCapacityAgainstSoldTickets(TicketType.FAMILY, familyCapacity, soldFamily);
@@ -158,7 +162,8 @@ public class ScheduleService {
 
     @Transactional
     public void deactivateSchedule(UUID id) {
-        ShowSchedule schedule = scheduleRepository.findById(id).orElseThrow(() -> new NotFoundException("Schedule not found"));
+        ShowSchedule schedule = scheduleRepository.findByIdForUpdate(id)
+                .orElseThrow(() -> new NotFoundException("Schedule not found"));
         if (bookingRepository.countByScheduleIdAndStatus(schedule.getId().toString(), BookingStatus.PAID) > 0) {
             throw new ConflictException("Cannot deactivate a schedule with paid bookings");
         }
@@ -167,7 +172,8 @@ public class ScheduleService {
     }
 
     private void setStatus(UUID id, ScheduleStatus status) {
-        ShowSchedule schedule = scheduleRepository.findById(id).orElseThrow(() -> new NotFoundException("Schedule not found"));
+        ShowSchedule schedule = scheduleRepository.findByIdForUpdate(id)
+                .orElseThrow(() -> new NotFoundException("Schedule not found"));
         schedule.setStatus(status);
         cacheService.invalidateScheduleCache(schedule.getShow().getId(), schedule.getId());
     }
@@ -200,14 +206,21 @@ public class ScheduleService {
         }
     }
 
-    private void validateCapacityAgainstPaidTickets(UUID scheduleId, TicketType type, int capacity) {
-        long paidTickets = scheduleRepository.countPaidTicketsByScheduleIdAndTicketType(
+    private long paidTickets(UUID scheduleId, TicketType type) {
+        return scheduleRepository.countPaidTicketsByScheduleIdAndTicketType(
                 scheduleId.toString(),
                 type.name()
         );
+    }
+
+    private void validateCapacityAgainstPaidTickets(TicketType type, int capacity, long paidTickets) {
         if (capacity < paidTickets) {
             throw new BadRequestException(typeLabel(type) + " capacity cannot be lower than paid ticket quantity");
         }
+    }
+
+    private int soldTickets(int capacity, int availableTickets, long paidTickets) {
+        return (int) Math.max((long) capacity - availableTickets, paidTickets);
     }
 
     private void validateCapacityAgainstSoldTickets(TicketType type, int capacity, int soldTickets) {

@@ -30,6 +30,7 @@ import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.assertThatThrownBy;
 import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.Mockito.mock;
+import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
 
 class ScheduleCapacityServiceTest {
@@ -113,12 +114,24 @@ class ScheduleCapacityServiceTest {
     }
 
     @Test
+    void rejectsNonPositiveDecrementQuantity() {
+        ShowSchedule schedule = schedule(70, 20, 10);
+
+        assertThatThrownBy(() -> schedule.decrementAvailable(TicketType.STANDARD, 0))
+                .isInstanceOf(BadRequestException.class)
+                .hasMessage("Quantity must be greater than 0");
+        assertThatThrownBy(() -> schedule.decrementAvailable(TicketType.STANDARD, Integer.MIN_VALUE))
+                .isInstanceOf(BadRequestException.class)
+                .hasMessage("Quantity must be greater than 0");
+    }
+
+    @Test
     void updateSchedulePreservesSoldQuantityForEachTicketType() {
         ShowSchedule schedule = schedule(70, 20, 10);
         schedule.decrementAvailable(TicketType.STANDARD, 5);
         schedule.decrementAvailable(TicketType.VIP, 2);
         schedule.decrementAvailable(TicketType.FAMILY, 1);
-        when(scheduleRepository.findById(schedule.getId())).thenReturn(Optional.of(schedule));
+        when(scheduleRepository.findByIdForUpdate(schedule.getId())).thenReturn(Optional.of(schedule));
         when(scheduleRepository.countPaidTicketsByScheduleIdAndTicketType(schedule.getId().toString(), "STANDARD")).thenReturn(5L);
         when(scheduleRepository.countPaidTicketsByScheduleIdAndTicketType(schedule.getId().toString(), "VIP")).thenReturn(2L);
         when(scheduleRepository.countPaidTicketsByScheduleIdAndTicketType(schedule.getId().toString(), "FAMILY")).thenReturn(1L);
@@ -133,10 +146,24 @@ class ScheduleCapacityServiceTest {
     }
 
     @Test
+    void updateScheduleLocksRowAndPreservesPaidQuantityNotYetReflectedInAvailability() {
+        ShowSchedule schedule = schedule(70, 20, 10);
+        when(scheduleRepository.findByIdForUpdate(schedule.getId())).thenReturn(Optional.of(schedule));
+        when(scheduleRepository.countPaidTicketsByScheduleIdAndTicketType(schedule.getId().toString(), "VIP"))
+                .thenReturn(4L);
+        UpdateScheduleRequest request = new UpdateScheduleRequest(null, null, null, 70, 20, 10, null, null);
+
+        ScheduleManagementResponse result = service.updateSchedule(schedule.getId(), request);
+
+        assertThat(result.vipAvailableTickets()).isEqualTo(16);
+        verify(scheduleRepository).findByIdForUpdate(schedule.getId());
+    }
+
+    @Test
     void rejectsUpdatedTypeCapacityBelowAlreadySoldQuantity() {
         ShowSchedule schedule = schedule(70, 20, 10);
         schedule.decrementAvailable(TicketType.VIP, 4);
-        when(scheduleRepository.findById(schedule.getId())).thenReturn(Optional.of(schedule));
+        when(scheduleRepository.findByIdForUpdate(schedule.getId())).thenReturn(Optional.of(schedule));
         UpdateScheduleRequest request = new UpdateScheduleRequest(null, null, null, null, 3, null, null, null);
 
         assertThatThrownBy(() -> service.updateSchedule(schedule.getId(), request))
@@ -172,8 +199,8 @@ class ScheduleCapacityServiceTest {
 
         assertThat(schema).contains(
                 "ADD COLUMN IF NOT EXISTS standard_capacity integer",
-                "standard_capacity = COALESCE(standard_capacity, capacity)",
-                "standard_available_tickets = COALESCE(standard_available_tickets, available_tickets)",
+                "standard_capacity = capacity - paid_vip - paid_family",
+                "standard_available_tickets = available_tickets",
                 "standard_price = COALESCE(standard_price, price)",
                 "ALTER COLUMN standard_capacity SET NOT NULL",
                 "ALTER COLUMN vip_capacity SET NOT NULL",
@@ -182,6 +209,44 @@ class ScheduleCapacityServiceTest {
                 "ALTER COLUMN vip_available_tickets SET NOT NULL",
                 "ALTER COLUMN family_available_tickets SET NOT NULL",
                 "ALTER COLUMN standard_price SET NOT NULL"
+        );
+    }
+
+    @Test
+    void migrationReconcilesPaidTypesAndSerializesBookingMutations() throws Exception {
+        String schema = Files.readString(Path.of("src/main/resources/schema.sql"));
+
+        assertThat(schema).contains(
+                "status = 'PAID'",
+                "paid_standard",
+                "paid_vip",
+                "paid_family",
+                "capacity migration cannot preserve legacy totals",
+                "FOR UPDATE",
+                "GET DIAGNOSTICS changed_rows = ROW_COUNT",
+                "CREATE TRIGGER",
+                "BEFORE INSERT OR UPDATE OF status, quantity, ticket_type, schedule_id OR DELETE"
+        );
+        assertThat(schema).doesNotContain("vip_capacity = COALESCE(vip_capacity, 0)");
+    }
+
+    @Test
+    void migrationRunsBeforeHibernateValidationAndRepeatsAfterSchemaCreation() throws Exception {
+        String application = Files.readString(Path.of("src/main/resources/application.yml"));
+        String initializer = Files.readString(Path.of(
+                "src/main/java/com/asms/catalog/service/ScheduleSchemaInitializer.java"
+        ));
+
+        assertThat(application).contains(
+                "defer-datasource-initialization: false",
+                "separator: ^^^"
+        );
+        assertThat(initializer).contains(
+                "InitializingBean",
+                "afterPropertiesSet()",
+                "ResourceDatabasePopulator",
+                "setSeparator(\"^^^\")",
+                "schema.sql"
         );
     }
 
