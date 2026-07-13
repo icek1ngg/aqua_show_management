@@ -4,11 +4,13 @@ export const ticketTypeOptions = [
   { value: 'FAMILY', label: 'Family Package' },
 ];
 
-const ticketTypePrices = {
-  STANDARD: 2000,
-  VIP: 5000,
-  FAMILY: 3000,
+const ticketTypeMultipliers = {
+  STANDARD: 1,
+  VIP: 2.5,
+  FAMILY: 1.5,
 };
+
+const legacyStandardPrice = 2000;
 
 const ticketTypeAliases = {
   'STANDARD ENTRY': 'STANDARD',
@@ -33,15 +35,19 @@ export function getTicketTypeLabel(value) {
   return ticketTypeOptions.find((option) => option.value === normalized)?.label || value || 'Standard Entry';
 }
 
-export function getTicketTypePrice(value) {
-  return ticketTypePrices[normalizeTicketType(value)] ?? ticketTypePrices.STANDARD;
+export function getTicketTypePrice(standardPrice, value) {
+  // Transitional compatibility for CreateBookingPage; remove when Task 11 makes it schedule-backed.
+  if (arguments.length === 1) {
+    const legacyMultiplier = ticketTypeMultipliers[normalizeTicketType(standardPrice)];
+    return legacyMultiplier ? legacyStandardPrice * legacyMultiplier : 0;
+  }
+
+  const base = Number(standardPrice);
+  const multiplier = ticketTypeMultipliers[normalizeTicketType(value)];
+  return Number.isFinite(base) && multiplier ? base * multiplier : 0;
 }
 
 export function formatCurrency(value) {
-  const amount = Number(value);
-  return new Intl.NumberFormat('vi-VN', {
-    style: 'currency',
-    currency: 'VND',
-    maximumFractionDigits: 0,
-  }).format(Number.isFinite(amount) ? amount : 0);
+  const amount = Math.round(Number(value) || 0);
+  return `${new Intl.NumberFormat('de-DE', { maximumFractionDigits: 0 }).format(amount)} VND`;
 }

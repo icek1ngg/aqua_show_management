@@ -6,7 +6,8 @@
   "scripts": {
     "dev": "vite --host localhost --port 5173",
     "build": "vite build",
-    "preview": "vite preview --host localhost --port 5173"
+    "preview": "vite preview --host localhost --port 5173",
+    "test": "node --test"
   },
   "dependencies": {
     "axios": "^1.7.7",
