@@ -41,25 +41,25 @@ public class ShowSchedule {
     @Column(nullable = false)
     private LocalDateTime endTime;
 
-    @Column(name = "standard_capacity")
+    @Column(name = "standard_capacity", nullable = false)
     private Integer standardCapacity;
 
-    @Column(name = "vip_capacity")
+    @Column(name = "vip_capacity", nullable = false)
     private Integer vipCapacity;
 
-    @Column(name = "family_capacity")
+    @Column(name = "family_capacity", nullable = false)
     private Integer familyCapacity;
 
-    @Column(name = "standard_available_tickets")
+    @Column(name = "standard_available_tickets", nullable = false)
     private Integer standardAvailableTickets;
 
-    @Column(name = "vip_available_tickets")
+    @Column(name = "vip_available_tickets", nullable = false)
     private Integer vipAvailableTickets;
 
-    @Column(name = "family_available_tickets")
+    @Column(name = "family_available_tickets", nullable = false)
     private Integer familyAvailableTickets;
 
-    @Column(name = "standard_price", precision = 12, scale = 2)
+    @Column(name = "standard_price", nullable = false, precision = 12, scale = 2)
     private BigDecimal standardPrice;
 
     // Retained as write-only compatibility columns until the legacy schema can be removed.

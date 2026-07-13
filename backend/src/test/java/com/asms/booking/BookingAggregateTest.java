@@ -14,8 +14,6 @@ import com.asms.identity.entity.User;
 import org.junit.jupiter.api.Test;
 
 import java.math.BigDecimal;
-import java.nio.file.Files;
-import java.nio.file.Path;
 import java.time.Instant;
 import java.time.LocalDateTime;
 import java.util.List;
@@ -68,24 +66,4 @@ class BookingAggregateTest {
         assertThat(Booking.class.getDeclaredField("idempotencyKey")).isNotNull();
     }
 
-    @Test
-    void migrationBackfillsLegacyBookingsAndUsesANewSerializedVersion() throws Exception {
-        String schema = Files.readString(Path.of("src/main/resources/schema.sql"));
-
-        assertThat(schema).contains(
-                "hashtextextended('2026_07_14_booking_aggregate_v1', 0)",
-                "CREATE TABLE IF NOT EXISTS booking_items",
-                "md5(b.id::text || ':legacy')::uuid",
-                "ADD COLUMN IF NOT EXISTS idempotency_key",
-                "ADD COLUMN IF NOT EXISTS total_quantity",
-                "to_regclass('booking_items') IS NOT NULL",
-                "attname = 'schedule_id'",
-                "CREATE UNIQUE INDEX IF NOT EXISTS bookings_idempotency_key_uq",
-                "Booking aggregate migration found a partial legacy booking schema",
-                "ticket_type IN ('STANDARD', 'VIP', 'FAMILY')",
-                "ALTER COLUMN %I DROP NOT NULL",
-                "CREATE TRIGGER asms_sync_paid_booking_item_inventory",
-                "VALUES ('2026_07_14_booking_aggregate_v1')"
-        );
-    }
 }
