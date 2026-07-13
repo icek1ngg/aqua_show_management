@@ -1,20 +1,25 @@
 package com.asms.booking.dto;
 
 import com.asms.booking.enums.BookingStatus;
+import com.asms.booking.enums.TicketType;
 import com.asms.notification.enums.EmailNotificationStatus;
 import com.asms.notification.enums.EmailNotificationType;
 import com.asms.payment.enums.PaymentStatus;
 import com.asms.ticketing.enums.TicketStatus;
+import jakarta.validation.Valid;
 import jakarta.validation.constraints.FutureOrPresent;
 import jakarta.validation.constraints.Max;
 import jakarta.validation.constraints.Min;
 import jakarta.validation.constraints.NotBlank;
+import jakarta.validation.constraints.NotEmpty;
 import jakarta.validation.constraints.NotNull;
 import jakarta.validation.constraints.Positive;
+import jakarta.validation.constraints.Size;
 
 import java.math.BigDecimal;
 import java.time.Instant;
 import java.time.LocalDate;
+import java.time.LocalDateTime;
 import java.util.List;
 import java.util.UUID;
 
@@ -23,7 +28,28 @@ public final class BookingDtos {
     private BookingDtos() {
     }
 
+    public record CreateBookingItemRequest(
+            @NotBlank(message = "Schedule ID is required")
+            String scheduleId,
+
+            @NotBlank(message = "Ticket type is required")
+            String ticketType,
+
+            @NotNull(message = "Quantity is required")
+            @Min(value = 1, message = "Quantity must be at least 1")
+            @Max(value = 10, message = "Quantity must not exceed 10")
+            Integer quantity
+    ) {
+    }
+
     public record CreateBookingRequest(
+            @NotBlank(message = "Idempotency key is required")
+            String idempotencyKey,
+
+            @NotEmpty(message = "At least one booking item is required")
+            @Size(max = 20, message = "Booking must not contain more than 20 items")
+            List<@Valid CreateBookingItemRequest> items,
+
             @NotBlank(message = "Show ID is required")
             String showId,
 
@@ -45,6 +71,38 @@ public final class BookingDtos {
             @Max(value = 10, message = "Quantity must not exceed 10")
             Integer quantity
     ) {
+        public CreateBookingRequest(String idempotencyKey, List<CreateBookingItemRequest> items) {
+            this(
+                    idempotencyKey,
+                    items,
+                    "aggregate",
+                    "aggregate",
+                    "aggregate",
+                    LocalDate.now(),
+                    "STANDARD",
+                    1
+            );
+        }
+
+        public CreateBookingRequest(
+                String showId,
+                String scheduleId,
+                String showName,
+                LocalDate showDate,
+                String ticketType,
+                Integer quantity
+        ) {
+            this(
+                    "legacy:" + UUID.randomUUID(),
+                    List.of(new CreateBookingItemRequest(scheduleId, ticketType, quantity)),
+                    showId,
+                    scheduleId,
+                    showName,
+                    showDate,
+                    ticketType,
+                    quantity
+            );
+        }
     }
 
     public record CreateBookingResponse(
@@ -74,7 +132,66 @@ public final class BookingDtos {
             Instant expiresAt,
             PaymentSummary payment,
             TicketSummary tickets,
-            EmailNotificationSummary emailNotification
+            EmailNotificationSummary emailNotification,
+            List<BookingItemResponse> items,
+            Integer totalQuantity
+    ) {
+        public BookingResponse(
+                UUID id,
+                String bookingCode,
+                String holdId,
+                String showId,
+                String scheduleId,
+                String showName,
+                LocalDate showDate,
+                String ticketType,
+                Integer quantity,
+                BigDecimal unitPrice,
+                BigDecimal totalAmount,
+                BookingStatus status,
+                Instant createdAt,
+                Instant expiresAt,
+                PaymentSummary payment,
+                TicketSummary tickets,
+                EmailNotificationSummary emailNotification
+        ) {
+            this(
+                    id,
+                    bookingCode,
+                    holdId,
+                    showId,
+                    scheduleId,
+                    showName,
+                    showDate,
+                    ticketType,
+                    quantity,
+                    unitPrice,
+                    totalAmount,
+                    status,
+                    createdAt,
+                    expiresAt,
+                    payment,
+                    tickets,
+                    emailNotification,
+                    List.of(),
+                    quantity
+            );
+        }
+    }
+
+    public record BookingItemResponse(
+            UUID id,
+            String showId,
+            String scheduleId,
+            String showName,
+            String imageUrl,
+            LocalDateTime startTime,
+            LocalDateTime endTime,
+            String venueName,
+            TicketType ticketType,
+            Integer quantity,
+            BigDecimal unitPrice,
+            BigDecimal lineTotal
     ) {
     }
 

@@ -182,6 +182,7 @@ public class DevDataSeeder {
             Booking booking = Booking.create();
             booking.setUser(visitor);
             booking.setBookingCode("AQB" + Math.abs(holdId.hashCode()));
+            booking.setIdempotencyKey("dev-seed:" + holdId);
             booking.setHoldId(holdId);
             booking.setShowId("SHOW-DEMO-AQUA");
             booking.setScheduleId("SCHEDULE-DEMO-AQUA");

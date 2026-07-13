@@ -1,6 +1,7 @@
 package com.asms.booking.service.impl;
 
 import com.asms.booking.dto.BookingDtos.BookingResponse;
+import com.asms.booking.dto.BookingDtos.BookingItemResponse;
 import com.asms.booking.dto.BookingDtos.CreateBookingRequest;
 import com.asms.booking.dto.BookingDtos.CreateBookingResponse;
 import com.asms.booking.dto.BookingDtos.DevSampleBookingBatchRequest;
@@ -353,7 +354,26 @@ public class BookingServiceImpl implements BookingService {
                 booking.getExpiresAt(),
                 toPaymentSummary(booking),
                 toTicketSummary(booking),
-                toEmailNotificationSummary(booking)
+                toEmailNotificationSummary(booking),
+                booking.getItems().stream().map(this::toBookingItemResponse).toList(),
+                booking.getTotalQuantity()
+        );
+    }
+
+    private BookingItemResponse toBookingItemResponse(com.asms.booking.entity.BookingItem item) {
+        return new BookingItemResponse(
+                item.getId(),
+                item.getShowId(),
+                item.getScheduleId(),
+                item.getShowName(),
+                item.getImageUrl(),
+                item.getStartTime(),
+                item.getEndTime(),
+                item.getVenueName(),
+                item.getTicketType(),
+                item.getQuantity(),
+                item.getUnitPrice(),
+                item.getLineTotal()
         );
     }
 

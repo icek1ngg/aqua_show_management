@@ -47,10 +47,10 @@ public interface ShowScheduleRepository extends JpaRepository<ShowSchedule, UUID
     Optional<ShowSchedule> findByIdForUpdate(@Param("id") UUID id);
 
     @Query("""
-            select coalesce(sum(b.quantity), 0) from Booking b
-            where b.scheduleId = :scheduleId
-              and b.ticketType = :ticketType
-              and b.status = com.asms.booking.enums.BookingStatus.PAID
+            select coalesce(sum(i.quantity), 0) from BookingItem i
+            where i.scheduleId = :scheduleId
+              and str(i.ticketType) = :ticketType
+              and i.booking.status = com.asms.booking.enums.BookingStatus.PAID
             """)
     long countPaidTicketsByScheduleIdAndTicketType(
             @Param("scheduleId") String scheduleId,

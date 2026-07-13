@@ -27,28 +27,32 @@ public interface BookingRepository extends JpaRepository<Booking, UUID>, JpaSpec
 
     boolean existsByBookingCode(String bookingCode);
 
-    Optional<Booking> findByHoldId(String holdId);
+    Optional<Booking> findByIdempotencyKey(String idempotencyKey);
 
-    long countByScheduleIdAndStatus(String scheduleId, BookingStatus status);
+    @Query("select distinct b from Booking b join b.items i where i.holdId = :holdId")
+    Optional<Booking> findByHoldId(@Param("holdId") String holdId);
+
+    @Query("select count(distinct b) from Booking b join b.items i where i.scheduleId = :scheduleId and b.status = :status")
+    long countByScheduleIdAndStatus(@Param("scheduleId") String scheduleId, @Param("status") BookingStatus status);
 
     @Query("""
-            select coalesce(sum(b.quantity), 0) from Booking b
-            where b.scheduleId = :scheduleId and b.status = com.asms.booking.enums.BookingStatus.PAID
+            select coalesce(sum(i.quantity), 0) from Booking b join b.items i
+            where i.scheduleId = :scheduleId and b.status = com.asms.booking.enums.BookingStatus.PAID
             """)
     long countPaidTicketsByScheduleId(@Param("scheduleId") String scheduleId);
 
     @Query("""
-            select coalesce(sum(b.quantity), 0) from Booking b
-            where b.scheduleId = :scheduleId
+            select coalesce(sum(i.quantity), 0) from Booking b join b.items i
+            where i.scheduleId = :scheduleId
               and b.status = com.asms.booking.enums.BookingStatus.PENDING_PAYMENT
               and b.expiresAt > :now
             """)
     long countNonExpiredPendingTicketsByScheduleId(@Param("scheduleId") String scheduleId, @Param("now") Instant now);
 
     @Query("""
-            select b from Booking b
-            where (:showId is null or b.showId = :showId)
-              and (:scheduleId is null or b.scheduleId = :scheduleId)
+            select distinct b from Booking b join b.items i
+            where (:showId is null or i.showId = :showId)
+              and (:scheduleId is null or i.scheduleId = :scheduleId)
               and (:status is null or b.status = :status)
               and (:fromTime is null or b.createdAt >= :fromTime)
               and (:toTime is null or b.createdAt <= :toTime)

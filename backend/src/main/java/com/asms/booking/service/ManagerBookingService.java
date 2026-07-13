@@ -16,7 +16,6 @@ import com.asms.ticketing.entity.Ticket;
 import com.asms.ticketing.repository.TicketRepository;
 import org.springframework.data.domain.Page;
 import org.springframework.data.domain.PageRequest;
-import org.springframework.data.jpa.domain.Specification;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
@@ -50,28 +49,14 @@ public class ManagerBookingService {
             int page,
             int size
     ) {
-        Specification<Booking> filters = (root, query, builder) -> builder.conjunction();
         String normalizedShowId = normalize(showId);
         String normalizedScheduleId = normalize(scheduleId);
-
-        if (normalizedShowId != null) {
-            filters = filters.and((root, query, builder) -> builder.equal(root.<String>get("showId"), normalizedShowId));
-        }
-        if (normalizedScheduleId != null) {
-            filters = filters.and((root, query, builder) -> builder.equal(root.<String>get("scheduleId"), normalizedScheduleId));
-        }
-        if (status != null) {
-            filters = filters.and((root, query, builder) -> builder.equal(root.<BookingStatus>get("status"), status));
-        }
-        if (fromTime != null) {
-            filters = filters.and((root, query, builder) -> builder.greaterThanOrEqualTo(root.<Instant>get("createdAt"), fromTime));
-        }
-        if (toTime != null) {
-            filters = filters.and((root, query, builder) -> builder.lessThanOrEqualTo(root.<Instant>get("createdAt"), toTime));
-        }
-
-        Page<Booking> bookings = bookingRepository.findAll(
-                filters,
+        Page<Booking> bookings = bookingRepository.searchForManager(
+                normalizedShowId,
+                normalizedScheduleId,
+                status,
+                fromTime,
+                toTime,
                 PageRequest.of(Math.max(page, 0), sanitizeSize(size)).withSort(org.springframework.data.domain.Sort.by(org.springframework.data.domain.Sort.Direction.DESC, "createdAt"))
         );
         return PageResponse.from(bookings, bookings.getContent().stream().map(this::toResponse).toList());
