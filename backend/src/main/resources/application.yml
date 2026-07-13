@@ -21,6 +21,7 @@ spring:
     driver-class-name: org.postgresql.Driver
 
   jpa:
+    defer-datasource-initialization: true
     hibernate:
       ddl-auto: "${JPA_DDL_AUTO:update}"
     open-in-view: false
@@ -28,6 +29,10 @@ spring:
     properties:
       hibernate:
         format_sql: "${JPA_FORMAT_SQL:true}"
+
+  sql:
+    init:
+      mode: always
 
   data:
     redis:

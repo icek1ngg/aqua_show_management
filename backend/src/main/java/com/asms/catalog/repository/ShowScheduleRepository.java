@@ -39,5 +39,16 @@ public interface ShowScheduleRepository extends JpaRepository<ShowSchedule, UUID
             @Param("excludeId") UUID excludeId
     );
 
+    @Query("""
+            select coalesce(sum(b.quantity), 0) from Booking b
+            where b.scheduleId = :scheduleId
+              and b.ticketType = :ticketType
+              and b.status = com.asms.booking.enums.BookingStatus.PAID
+            """)
+    long countPaidTicketsByScheduleIdAndTicketType(
+            @Param("scheduleId") String scheduleId,
+            @Param("ticketType") String ticketType
+    );
+
     Page<ShowSchedule> findAll(org.springframework.data.jpa.domain.Specification<ShowSchedule> specification, Pageable pageable);
 }

@@ -49,8 +49,8 @@ final class CatalogMapper {
                 schedule.getStartTime(),
                 schedule.getEndTime(),
                 venueName(schedule),
-                schedule.getAvailableTickets(),
-                schedule.getPrice()
+                schedule.getTotalAvailableTickets(),
+                schedule.getStandardPrice()
         );
     }
 
@@ -76,9 +76,15 @@ final class CatalogMapper {
                 venue == null ? null : venue.getName(),
                 schedule.getStartTime(),
                 schedule.getEndTime(),
-                schedule.getCapacity(),
-                schedule.getAvailableTickets(),
-                schedule.getPrice(),
+                schedule.getStandardCapacity(),
+                schedule.getVipCapacity(),
+                schedule.getFamilyCapacity(),
+                schedule.getTotalCapacity(),
+                schedule.getStandardAvailableTickets(),
+                schedule.getVipAvailableTickets(),
+                schedule.getFamilyAvailableTickets(),
+                schedule.getTotalAvailableTickets(),
+                schedule.getStandardPrice(),
                 schedule.getStatus(),
                 schedule.getCreatedAt(),
                 schedule.getUpdatedAt()
