@@ -12,8 +12,8 @@ test('derives ticket prices from the schedule Standard price', () => {
   assert.equal(getTicketTypePrice(2500, 'FAMILY'), 3750);
 });
 
-test('temporarily preserves legacy one-argument booking preview prices', () => {
-  assert.equal(getTicketTypePrice('STANDARD'), 2000);
-  assert.equal(getTicketTypePrice('VIP'), 5000);
-  assert.equal(getTicketTypePrice('FAMILY'), 3000);
+test('does not invent a ticket price without a schedule Standard price', () => {
+  assert.equal(getTicketTypePrice('STANDARD'), 0);
+  assert.equal(getTicketTypePrice('VIP'), 0);
+  assert.equal(getTicketTypePrice('FAMILY'), 0);
 });

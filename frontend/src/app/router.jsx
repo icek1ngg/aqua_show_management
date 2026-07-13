@@ -91,11 +91,7 @@ export const router = createBrowserRouter([
       },
       {
         path: 'bookings/create',
-        element: (
-          <ProtectedRoute>
-            <CreateBookingPage />
-          </ProtectedRoute>
-        ),
+        element: <CreateBookingPage />,
       },
       {
         path: 'bookings/:bookingId/payment',

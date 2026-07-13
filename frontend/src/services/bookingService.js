@@ -8,7 +8,9 @@ function unwrapApiResponse(response) {
 export async function createBooking(payload) {
   const response = await apiClient.post('/bookings', {
     ...payload,
-    ticketType: normalizeTicketType(payload.ticketType),
+    items: Array.isArray(payload.items)
+      ? payload.items.map((item) => ({ ...item, ticketType: normalizeTicketType(item.ticketType) }))
+      : [],
   });
   return unwrapApiResponse(response);
 }

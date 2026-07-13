@@ -10,8 +10,6 @@ const ticketTypeMultipliers = {
   FAMILY: 1.5,
 };
 
-const legacyStandardPrice = 2000;
-
 const ticketTypeAliases = {
   'STANDARD ENTRY': 'STANDARD',
   'VIP ENTRY': 'VIP',
@@ -36,12 +34,6 @@ export function getTicketTypeLabel(value) {
 }
 
 export function getTicketTypePrice(standardPrice, value) {
-  // Transitional compatibility for CreateBookingPage; remove when Task 11 makes it schedule-backed.
-  if (arguments.length === 1) {
-    const legacyMultiplier = ticketTypeMultipliers[normalizeTicketType(standardPrice)];
-    return legacyMultiplier ? legacyStandardPrice * legacyMultiplier : 0;
-  }
-
   const base = Number(standardPrice);
   const multiplier = ticketTypeMultipliers[normalizeTicketType(value)];
   return Number.isFinite(base) && multiplier ? base * multiplier : 0;
