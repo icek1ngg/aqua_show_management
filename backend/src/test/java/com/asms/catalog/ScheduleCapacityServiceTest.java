@@ -14,11 +14,15 @@ import com.asms.catalog.repository.ShowRepository;
 import com.asms.catalog.repository.ShowScheduleRepository;
 import com.asms.catalog.repository.VenueRepository;
 import com.asms.catalog.service.CatalogCacheService;
+import com.asms.catalog.service.ScheduleSchemaInitializer;
+import com.asms.catalog.service.ScheduleSchemaMigration;
 import com.asms.catalog.service.ScheduleService;
 import com.asms.core.exception.BadRequestException;
 import com.asms.core.exception.ConflictException;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
+
+import jakarta.persistence.EntityManagerFactory;
 
 import java.math.BigDecimal;
 import java.nio.file.Files;
@@ -30,6 +34,8 @@ import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.assertThatThrownBy;
 import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.Mockito.mock;
+import static org.mockito.Mockito.never;
+import static org.mockito.Mockito.times;
 import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
 
@@ -231,6 +237,23 @@ class ScheduleCapacityServiceTest {
     }
 
     @Test
+    void migrationRejectsMissingSchedulesMalformedTypesAndNonPositiveQuantities() throws Exception {
+        String schema = Files.readString(Path.of("src/main/resources/schema.sql"));
+
+        assertThat(schema).contains(
+                "paid_unknown_count",
+                "COUNT(*) FILTER",
+                "COALESCE(UPPER(TRIM(ticket_type)), '') NOT LIKE",
+                "paid_nonpositive_count",
+                "quantity <= 0",
+                "bookings_quantity_positive",
+                "CHECK (quantity > 0)",
+                "matched_schedule_count <> 1",
+                "Paid booking schedule not found"
+        );
+    }
+
+    @Test
     void migrationRunsBeforeHibernateValidationAndRepeatsAfterSchemaCreation() throws Exception {
         String application = Files.readString(Path.of("src/main/resources/application.yml"));
         String initializer = Files.readString(Path.of(
@@ -244,9 +267,57 @@ class ScheduleCapacityServiceTest {
         assertThat(initializer).contains(
                 "InitializingBean",
                 "afterPropertiesSet()",
-                "ResourceDatabasePopulator",
-                "setSeparator(\"^^^\")",
-                "schema.sql"
+                "migration.isRequired()",
+                "migration.migrate()"
+        );
+    }
+
+    @Test
+    void oldSchemaStartupSkipsPostHibernateMigrationAfterPreJpaMarker() {
+        ScheduleSchemaMigration migration = mock(ScheduleSchemaMigration.class);
+        when(migration.isRequired()).thenReturn(false);
+        ScheduleSchemaInitializer initializer = new ScheduleSchemaInitializer(
+                migration,
+                mock(EntityManagerFactory.class)
+        );
+
+        initializer.afterPropertiesSet();
+
+        verify(migration).isRequired();
+        verify(migration, never()).migrate();
+    }
+
+    @Test
+    void freshSchemaStartupRunsPostHibernateMigrationExactlyOnce() {
+        ScheduleSchemaMigration migration = mock(ScheduleSchemaMigration.class);
+        when(migration.isRequired()).thenReturn(true);
+        ScheduleSchemaInitializer initializer = new ScheduleSchemaInitializer(
+                migration,
+                mock(EntityManagerFactory.class)
+        );
+
+        initializer.afterPropertiesSet();
+
+        verify(migration).isRequired();
+        verify(migration, times(1)).migrate();
+    }
+
+    @Test
+    void migrationUsesSingleVersionMarkerAcrossPreAndPostJpaPasses() throws Exception {
+        String schema = Files.readString(Path.of("src/main/resources/schema.sql"));
+        String migration = Files.readString(Path.of(
+                "src/main/java/com/asms/catalog/service/ScheduleSchemaMigration.java"
+        ));
+
+        assertThat(schema).contains(
+                "CREATE TABLE IF NOT EXISTS asms_schema_migrations",
+                "2026_07_14_schedule_capacity_v3",
+                "INSERT INTO asms_schema_migrations"
+        );
+        assertThat(migration).contains(
+                "2026_07_14_schedule_capacity_v3",
+                "isRequired()",
+                "migrate()"
         );
     }
 

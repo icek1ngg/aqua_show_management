@@ -1,16 +1,24 @@
+CREATE TABLE IF NOT EXISTS asms_schema_migrations (
+  version varchar(100) PRIMARY KEY,
+  applied_at timestamp NOT NULL DEFAULT CURRENT_TIMESTAMP
+)^^^
+
 DO $asms_migration$
 DECLARE
   schedule_row record;
   paid_standard bigint;
   paid_vip bigint;
   paid_family bigint;
-  paid_unknown bigint;
+  paid_unknown_count bigint;
+  paid_nonpositive_count bigint;
   legacy_sold bigint;
 BEGIN
-  -- On a brand-new database Hibernate creates the tables after this pre-JPA pass.
-  -- ScheduleSchemaInitializer repeats this script after Hibernate so the same migration
-  -- and trigger installation also happen on that first startup.
-  IF to_regclass('show_schedules') IS NULL THEN
+  -- The pre-JPA pass handles upgrades. On a fresh database it leaves the version
+  -- unapplied so the conditional post-Hibernate initializer can run this once.
+  IF to_regclass('show_schedules') IS NULL OR EXISTS (
+    SELECT 1 FROM asms_schema_migrations
+    WHERE version = '2026_07_14_schedule_capacity_v3'
+  ) THEN
     RETURN;
   END IF;
 
@@ -22,35 +30,54 @@ BEGIN
   ALTER TABLE show_schedules ADD COLUMN IF NOT EXISTS family_available_tickets integer;
   ALTER TABLE show_schedules ADD COLUMN IF NOT EXISTS standard_price numeric(12,2);
 
+  IF to_regclass('bookings') IS NOT NULL THEN
+    SELECT COUNT(*) FILTER (WHERE quantity <= 0)
+    INTO paid_nonpositive_count
+    FROM bookings;
+
+    IF paid_nonpositive_count > 0 THEN
+      RAISE EXCEPTION 'Schedule capacity migration rejects booking quantity <= 0';
+    END IF;
+
+    IF NOT EXISTS (
+      SELECT 1 FROM pg_constraint
+      WHERE conname = 'bookings_quantity_positive'
+        AND conrelid = 'bookings'::regclass
+    ) THEN
+      ALTER TABLE bookings
+        ADD CONSTRAINT bookings_quantity_positive CHECK (quantity > 0);
+    END IF;
+  END IF;
+
   FOR schedule_row IN SELECT * FROM show_schedules ORDER BY id FOR UPDATE LOOP
     paid_standard := 0;
     paid_vip := 0;
     paid_family := 0;
-    paid_unknown := 0;
+    paid_unknown_count := 0;
 
     IF to_regclass('bookings') IS NOT NULL THEN
       SELECT
         COALESCE(SUM(quantity) FILTER (
-          WHERE UPPER(TRIM(ticket_type)) LIKE 'STANDARD%'
+          WHERE quantity > 0 AND UPPER(TRIM(ticket_type)) LIKE 'STANDARD%'
         ), 0),
         COALESCE(SUM(quantity) FILTER (
-          WHERE UPPER(TRIM(ticket_type)) LIKE 'VIP%'
+          WHERE quantity > 0 AND UPPER(TRIM(ticket_type)) LIKE 'VIP%'
         ), 0),
         COALESCE(SUM(quantity) FILTER (
-          WHERE UPPER(TRIM(ticket_type)) LIKE 'FAMILY%'
+          WHERE quantity > 0 AND UPPER(TRIM(ticket_type)) LIKE 'FAMILY%'
         ), 0),
-        COALESCE(SUM(quantity) FILTER (
-          WHERE UPPER(TRIM(ticket_type)) NOT LIKE 'STANDARD%'
-            AND UPPER(TRIM(ticket_type)) NOT LIKE 'VIP%'
-            AND UPPER(TRIM(ticket_type)) NOT LIKE 'FAMILY%'
-        ), 0)
-      INTO paid_standard, paid_vip, paid_family, paid_unknown
+        COUNT(*) FILTER (
+          WHERE COALESCE(UPPER(TRIM(ticket_type)), '') NOT LIKE 'STANDARD%'
+            AND COALESCE(UPPER(TRIM(ticket_type)), '') NOT LIKE 'VIP%'
+            AND COALESCE(UPPER(TRIM(ticket_type)), '') NOT LIKE 'FAMILY%'
+        )
+      INTO paid_standard, paid_vip, paid_family, paid_unknown_count
       FROM bookings
       WHERE schedule_id = schedule_row.id::text
         AND status = 'PAID';
     END IF;
 
-    IF paid_unknown > 0 THEN
+    IF paid_unknown_count > 0 THEN
       RAISE EXCEPTION
         'Schedule capacity migration cannot classify paid ticket types for schedule %',
         schedule_row.id;
@@ -71,9 +98,6 @@ BEGIN
         schedule_row.id, paid_standard + paid_vip + paid_family, legacy_sold;
     END IF;
 
-    -- Initialize legacy rows, and repair the previous standard-only backfill when it
-    -- cannot represent the paid distribution. Available inventory stays aggregate-
-    -- compatible: VIP/Family start fully sold and legacy availability stays STANDARD.
     IF schedule_row.standard_capacity IS NULL
        OR schedule_row.vip_capacity IS NULL
        OR schedule_row.family_capacity IS NULL
@@ -120,104 +144,136 @@ BEGIN
 END
 $asms_migration$^^^
 
-CREATE OR REPLACE FUNCTION asms_lock_and_sync_paid_schedule_inventory()
-RETURNS trigger
-LANGUAGE plpgsql
-AS $asms_trigger_function$
-DECLARE
-  old_schedule_id text;
-  new_schedule_id text;
-  old_ticket_type text;
-  new_ticket_type text;
-  matched_schedule boolean;
-  changed_rows integer;
+DO $asms_function_install$
 BEGIN
-  old_schedule_id := CASE WHEN TG_OP = 'INSERT' THEN NULL ELSE OLD.schedule_id END;
-  new_schedule_id := CASE WHEN TG_OP = 'DELETE' THEN NULL ELSE NEW.schedule_id END;
-
-  -- Lock in deterministic UUID order. Schedule management uses the same row lock,
-  -- so validation and paid transitions cannot observe and overwrite stale inventory.
-  PERFORM 1
-  FROM show_schedules
-  WHERE id::text IN (old_schedule_id, new_schedule_id)
-  ORDER BY id
-  FOR UPDATE;
-
-  IF TG_OP <> 'INSERT' AND OLD.status = 'PAID' THEN
-    old_ticket_type := CASE
-      WHEN UPPER(TRIM(OLD.ticket_type)) LIKE 'STANDARD%' THEN 'STANDARD'
-      WHEN UPPER(TRIM(OLD.ticket_type)) LIKE 'VIP%' THEN 'VIP'
-      WHEN UPPER(TRIM(OLD.ticket_type)) LIKE 'FAMILY%' THEN 'FAMILY'
-      ELSE NULL
-    END;
-    IF old_ticket_type IS NULL THEN
-      RAISE EXCEPTION 'Unknown paid ticket type %', OLD.ticket_type;
-    END IF;
-
-    UPDATE show_schedules SET
-      standard_available_tickets = standard_available_tickets
-        + CASE WHEN old_ticket_type = 'STANDARD' THEN OLD.quantity ELSE 0 END,
-      vip_available_tickets = vip_available_tickets
-        + CASE WHEN old_ticket_type = 'VIP' THEN OLD.quantity ELSE 0 END,
-      family_available_tickets = family_available_tickets
-        + CASE WHEN old_ticket_type = 'FAMILY' THEN OLD.quantity ELSE 0 END,
-      available_tickets = available_tickets + OLD.quantity
-    WHERE id::text = old_schedule_id
-      AND available_tickets + OLD.quantity <= capacity
-      AND standard_available_tickets + CASE WHEN old_ticket_type = 'STANDARD' THEN OLD.quantity ELSE 0 END <= standard_capacity
-      AND vip_available_tickets + CASE WHEN old_ticket_type = 'VIP' THEN OLD.quantity ELSE 0 END <= vip_capacity
-      AND family_available_tickets + CASE WHEN old_ticket_type = 'FAMILY' THEN OLD.quantity ELSE 0 END <= family_capacity;
-
-    GET DIAGNOSTICS changed_rows = ROW_COUNT;
-
-    SELECT EXISTS (SELECT 1 FROM show_schedules WHERE id::text = old_schedule_id)
-    INTO matched_schedule;
-    IF matched_schedule AND changed_rows = 0 THEN
-      RAISE EXCEPTION 'Cannot release inconsistent paid inventory for schedule %', old_schedule_id;
-    END IF;
+  IF to_regclass('show_schedules') IS NULL
+     OR to_regclass('bookings') IS NULL
+     OR EXISTS (
+       SELECT 1 FROM asms_schema_migrations
+       WHERE version = '2026_07_14_schedule_capacity_v3'
+     ) THEN
+    RETURN;
   END IF;
 
-  IF TG_OP <> 'DELETE' AND NEW.status = 'PAID' THEN
-    new_ticket_type := CASE
-      WHEN UPPER(TRIM(NEW.ticket_type)) LIKE 'STANDARD%' THEN 'STANDARD'
-      WHEN UPPER(TRIM(NEW.ticket_type)) LIKE 'VIP%' THEN 'VIP'
-      WHEN UPPER(TRIM(NEW.ticket_type)) LIKE 'FAMILY%' THEN 'FAMILY'
-      ELSE NULL
-    END;
-    IF new_ticket_type IS NULL THEN
-      RAISE EXCEPTION 'Unknown paid ticket type %', NEW.ticket_type;
-    END IF;
+  EXECUTE $create_function$
+    CREATE OR REPLACE FUNCTION asms_lock_and_sync_paid_schedule_inventory()
+    RETURNS trigger
+    LANGUAGE plpgsql
+    AS $asms_trigger_function$
+    DECLARE
+      old_schedule_id text;
+      new_schedule_id text;
+      old_ticket_type text;
+      new_ticket_type text;
+      matched_schedule_count integer;
+      changed_rows integer;
+    BEGIN
+      old_schedule_id := CASE WHEN TG_OP = 'INSERT' THEN NULL ELSE OLD.schedule_id END;
+      new_schedule_id := CASE WHEN TG_OP = 'DELETE' THEN NULL ELSE NEW.schedule_id END;
 
-    UPDATE show_schedules SET
-      standard_available_tickets = standard_available_tickets
-        - CASE WHEN new_ticket_type = 'STANDARD' THEN NEW.quantity ELSE 0 END,
-      vip_available_tickets = vip_available_tickets
-        - CASE WHEN new_ticket_type = 'VIP' THEN NEW.quantity ELSE 0 END,
-      family_available_tickets = family_available_tickets
-        - CASE WHEN new_ticket_type = 'FAMILY' THEN NEW.quantity ELSE 0 END,
-      available_tickets = available_tickets - NEW.quantity
-    WHERE id::text = new_schedule_id
-      AND available_tickets >= NEW.quantity
-      AND standard_available_tickets >= CASE WHEN new_ticket_type = 'STANDARD' THEN NEW.quantity ELSE 0 END
-      AND vip_available_tickets >= CASE WHEN new_ticket_type = 'VIP' THEN NEW.quantity ELSE 0 END
-      AND family_available_tickets >= CASE WHEN new_ticket_type = 'FAMILY' THEN NEW.quantity ELSE 0 END;
+      PERFORM 1
+      FROM show_schedules
+      WHERE id::text IN (old_schedule_id, new_schedule_id)
+      ORDER BY id
+      FOR UPDATE;
 
-    GET DIAGNOSTICS changed_rows = ROW_COUNT;
+      IF TG_OP <> 'INSERT' AND OLD.status = 'PAID' THEN
+        IF OLD.quantity <= 0 THEN
+          RAISE EXCEPTION 'Booking quantity must be greater than 0';
+        END IF;
 
-    SELECT EXISTS (SELECT 1 FROM show_schedules WHERE id::text = new_schedule_id)
-    INTO matched_schedule;
-    IF matched_schedule AND changed_rows = 0 THEN
-      RAISE EXCEPTION 'Not enough tickets available for paid booking on schedule %', new_schedule_id;
-    END IF;
-  END IF;
+        SELECT COUNT(*) INTO matched_schedule_count
+        FROM show_schedules WHERE id::text = old_schedule_id;
+        IF matched_schedule_count <> 1 THEN
+          RAISE EXCEPTION 'Paid booking schedule not found: %', old_schedule_id;
+        END IF;
 
-  RETURN CASE WHEN TG_OP = 'DELETE' THEN OLD ELSE NEW END;
+        old_ticket_type := CASE
+          WHEN UPPER(TRIM(OLD.ticket_type)) LIKE 'STANDARD%' THEN 'STANDARD'
+          WHEN UPPER(TRIM(OLD.ticket_type)) LIKE 'VIP%' THEN 'VIP'
+          WHEN UPPER(TRIM(OLD.ticket_type)) LIKE 'FAMILY%' THEN 'FAMILY'
+          ELSE NULL
+        END;
+        IF old_ticket_type IS NULL THEN
+          RAISE EXCEPTION 'Unknown paid ticket type %', OLD.ticket_type;
+        END IF;
+
+        UPDATE show_schedules SET
+          standard_available_tickets = standard_available_tickets
+            + CASE WHEN old_ticket_type = 'STANDARD' THEN OLD.quantity ELSE 0 END,
+          vip_available_tickets = vip_available_tickets
+            + CASE WHEN old_ticket_type = 'VIP' THEN OLD.quantity ELSE 0 END,
+          family_available_tickets = family_available_tickets
+            + CASE WHEN old_ticket_type = 'FAMILY' THEN OLD.quantity ELSE 0 END,
+          available_tickets = available_tickets + OLD.quantity
+        WHERE id::text = old_schedule_id
+          AND available_tickets + OLD.quantity <= capacity
+          AND standard_available_tickets + CASE WHEN old_ticket_type = 'STANDARD' THEN OLD.quantity ELSE 0 END <= standard_capacity
+          AND vip_available_tickets + CASE WHEN old_ticket_type = 'VIP' THEN OLD.quantity ELSE 0 END <= vip_capacity
+          AND family_available_tickets + CASE WHEN old_ticket_type = 'FAMILY' THEN OLD.quantity ELSE 0 END <= family_capacity;
+
+        GET DIAGNOSTICS changed_rows = ROW_COUNT;
+        IF changed_rows = 0 THEN
+          RAISE EXCEPTION 'Cannot release inconsistent paid inventory for schedule %', old_schedule_id;
+        END IF;
+      END IF;
+
+      IF TG_OP <> 'DELETE' AND NEW.status = 'PAID' THEN
+        IF NEW.quantity <= 0 THEN
+          RAISE EXCEPTION 'Booking quantity must be greater than 0';
+        END IF;
+
+        SELECT COUNT(*) INTO matched_schedule_count
+        FROM show_schedules WHERE id::text = new_schedule_id;
+        IF matched_schedule_count <> 1 THEN
+          RAISE EXCEPTION 'Paid booking schedule not found: %', new_schedule_id;
+        END IF;
+
+        new_ticket_type := CASE
+          WHEN UPPER(TRIM(NEW.ticket_type)) LIKE 'STANDARD%' THEN 'STANDARD'
+          WHEN UPPER(TRIM(NEW.ticket_type)) LIKE 'VIP%' THEN 'VIP'
+          WHEN UPPER(TRIM(NEW.ticket_type)) LIKE 'FAMILY%' THEN 'FAMILY'
+          ELSE NULL
+        END;
+        IF new_ticket_type IS NULL THEN
+          RAISE EXCEPTION 'Unknown paid ticket type %', NEW.ticket_type;
+        END IF;
+
+        UPDATE show_schedules SET
+          standard_available_tickets = standard_available_tickets
+            - CASE WHEN new_ticket_type = 'STANDARD' THEN NEW.quantity ELSE 0 END,
+          vip_available_tickets = vip_available_tickets
+            - CASE WHEN new_ticket_type = 'VIP' THEN NEW.quantity ELSE 0 END,
+          family_available_tickets = family_available_tickets
+            - CASE WHEN new_ticket_type = 'FAMILY' THEN NEW.quantity ELSE 0 END,
+          available_tickets = available_tickets - NEW.quantity
+        WHERE id::text = new_schedule_id
+          AND available_tickets >= NEW.quantity
+          AND standard_available_tickets >= CASE WHEN new_ticket_type = 'STANDARD' THEN NEW.quantity ELSE 0 END
+          AND vip_available_tickets >= CASE WHEN new_ticket_type = 'VIP' THEN NEW.quantity ELSE 0 END
+          AND family_available_tickets >= CASE WHEN new_ticket_type = 'FAMILY' THEN NEW.quantity ELSE 0 END;
+
+        GET DIAGNOSTICS changed_rows = ROW_COUNT;
+        IF changed_rows = 0 THEN
+          RAISE EXCEPTION 'Not enough tickets available for paid booking on schedule %', new_schedule_id;
+        END IF;
+      END IF;
+
+      RETURN CASE WHEN TG_OP = 'DELETE' THEN OLD ELSE NEW END;
+    END
+    $asms_trigger_function$
+  $create_function$;
 END
-$asms_trigger_function$^^^
+$asms_function_install$^^^
 
 DO $asms_trigger_install$
 BEGIN
-  IF to_regclass('show_schedules') IS NULL OR to_regclass('bookings') IS NULL THEN
+  IF to_regclass('show_schedules') IS NULL
+     OR to_regclass('bookings') IS NULL
+     OR EXISTS (
+       SELECT 1 FROM asms_schema_migrations
+       WHERE version = '2026_07_14_schedule_capacity_v3'
+     ) THEN
     RETURN;
   END IF;
 
@@ -229,5 +285,8 @@ BEGIN
     FOR EACH ROW
     EXECUTE FUNCTION asms_lock_and_sync_paid_schedule_inventory()
   $create_trigger$;
+
+  INSERT INTO asms_schema_migrations(version)
+  VALUES ('2026_07_14_schedule_capacity_v3');
 END
 $asms_trigger_install$^^^
