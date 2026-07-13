@@ -7,6 +7,7 @@ import ManagerActionBar from '../features/manager/components/ManagerActionBar.js
 import ManagerLayout from '../features/manager/components/ManagerLayout.jsx';
 import ManagerPageHeader from '../features/manager/components/ManagerPageHeader.jsx';
 import ManagerStatCard from '../features/manager/components/ManagerStatCard.jsx';
+import { formatCurrency, getTicketTypeLabel } from '../shared/utils/ticketPricing.js';
 
 const bookingStatuses = ['PROCESSING', 'PENDING_PAYMENT', 'PAID', 'EXPIRED', 'FAILED'];
 
@@ -54,19 +55,7 @@ function formatDateTime(value) {
   });
 }
 
-function formatMoney(value) {
-  const amount = Number(value);
-
-  if (!Number.isFinite(amount)) {
-    return 'TBA';
-  }
-
-  return new Intl.NumberFormat('en-US', {
-    style: 'currency',
-    currency: 'USD',
-    maximumFractionDigits: amount % 1 === 0 ? 0 : 2,
-  }).format(amount);
-}
+const formatMoney = formatCurrency;
 
 function toInstantParam(value) {
   if (!value) {
@@ -116,6 +105,7 @@ function BookingDetailPanel({ bookingId, detail, isLoading, error, onClose, onRe
   const booking = detail?.booking;
   const payment = detail?.payment;
   const tickets = Array.isArray(detail?.tickets) ? detail.tickets : [];
+  const bookingItems = Array.isArray(booking?.items) ? booking.items : [];
 
   return (
     <>
@@ -178,13 +168,17 @@ function BookingDetailPanel({ bookingId, detail, isLoading, error, onClose, onRe
               <section className="space-y-unit-md">
                 <div className="flex items-center gap-unit-sm">
                   <span className="material-symbols-outlined text-primary">theater_comedy</span>
-                  <h4 className="font-label-lg uppercase text-on-surface">Show Details</h4>
+                  <h4 className="font-label-lg uppercase text-on-surface">Selected Tickets</h4>
                 </div>
                 <div className="space-y-unit-md rounded-xl border border-outline-variant/20 p-unit-md">
-                  <DetailRow label="Performance" value={booking.showName} />
-                  <DetailRow label="Show Date" value={formatDate(booking.showDate)} />
-                  <DetailRow label="Show ID" value={truncateId(booking.showId)} />
-                  <DetailRow label="Schedule ID" value={truncateId(booking.scheduleId)} />
+                  {bookingItems.length === 0 ? <p className="text-body-sm text-on-surface-variant">No booking items returned.</p> : bookingItems.map((item) => (
+                    <div className="rounded-lg bg-surface-container-low p-unit-md" key={item.id}>
+                      <p className="font-label-lg font-bold text-on-surface">{item.showName}</p>
+                      <p className="mt-1 text-body-sm text-on-surface-variant">{formatDateTime(item.startTime)} · {item.venueName || 'Venue TBA'}</p>
+                      <p className="mt-1 text-body-sm font-semibold text-primary">{getTicketTypeLabel(item.ticketType)} · {item.quantity} × {formatMoney(item.unitPrice)}</p>
+                      <p className="mt-1 text-right font-label-lg font-bold text-on-surface">{formatMoney(item.lineTotal)}</p>
+                    </div>
+                  ))}
                 </div>
               </section>
 
@@ -194,7 +188,7 @@ function BookingDetailPanel({ bookingId, detail, isLoading, error, onClose, onRe
                   <h4 className="font-label-lg uppercase text-on-surface">Payment Summary</h4>
                 </div>
                 <div className="space-y-unit-md rounded-xl border border-outline-variant/20 p-unit-md">
-                  <DetailRow label="Quantity" value={booking.quantity} />
+                  <DetailRow label="Total Tickets" value={booking.totalQuantity ?? booking.quantity} />
                   <DetailRow label="Booking Total" value={formatMoney(booking.totalAmount)} />
                   <DetailRow label="Payment Amount" value={payment ? formatMoney(payment.amount) : 'No payment record'} />
                   <DetailRow label="PayOS Order Code" value={payment?.payosOrderCode} />
@@ -661,9 +655,9 @@ export default function ManageBookingsPage() {
                               <span className="text-body-sm text-on-surface-variant">{booking.customerEmail || 'No email'}</span>
                             </div>
                           </td>
-                          <td className="px-unit-lg py-unit-md font-body-md">{booking.showName || truncateId(booking.showId)}</td>
+                          <td className="px-unit-lg py-unit-md font-body-md">{booking.showName || truncateId(booking.showId)}{Number(booking.items?.length || 0) > 1 ? ` +${booking.items.length - 1} more` : ''}</td>
                           <td className="px-unit-lg py-unit-md font-body-sm text-on-surface-variant">{formatDate(booking.showDate)}</td>
-                          <td className="px-unit-lg py-unit-md font-body-md">{booking.quantity ?? 'TBA'}</td>
+                          <td className="px-unit-lg py-unit-md font-body-md">{booking.totalQuantity ?? booking.quantity ?? 'TBA'}</td>
                           <td className="px-unit-lg py-unit-md font-body-md font-semibold">{formatMoney(booking.totalAmount)}</td>
                           <td className="px-unit-lg py-unit-md">
                             <span className={statusBadge(booking.status)}>{formatStatus(booking.status)}</span>

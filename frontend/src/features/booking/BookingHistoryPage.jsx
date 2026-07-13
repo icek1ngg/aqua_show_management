@@ -4,6 +4,7 @@ import { Link, useLocation, useNavigate } from 'react-router-dom';
 import { getMyBookings } from '../../services/bookingService.js';
 import MainLayout from '../../shared/layouts/MainLayout.jsx';
 import { normalizeBookingPaymentStatus } from '../../shared/utils/paymentStatus.js';
+import { formatCurrency as formatVnd, getTicketTypeLabel } from '../../shared/utils/ticketPricing.js';
 
 const fallbackImageUrl =
   'https://lh3.googleusercontent.com/aida-public/AB6AXuBQJ-Fo4HDO72JbLax0CiFqctWCGXvU4YEfKNT6BKoii53LhvXYm3tK9deyNpu3SQhQuDwXH4brHWFob4XTMXC0igb1FTIelijgurjSK40wqc_V-h4hB2iXApJSw4tuIL9RRKwcdhGhhcgV9V5pOtwPQGvlVc5CRVwmmWl5xWGLSkDEXdqrpRF327LZc7RzHHIIOK5u5seDmxx49urrFLxksqEEDJ5_xPJn8EULd2-53B3FmPiCpcXrt3oMMoWR8T3lZdXTQe3xXQ';
@@ -101,13 +102,16 @@ function getBookingErrorMessage(error) {
 
 function normalizeBooking(booking) {
   const normalizedStatus = normalizeBookingPaymentStatus(booking, booking?.payment);
+  const items = Array.isArray(booking.items) && booking.items.length > 0 ? booking.items : [];
+  const firstItem = items[0] || null;
   return {
     id: booking.id,
     bookingCode: booking.bookingCode || booking.id,
-    showName: booking.showName || 'AquaPulse Show',
-    showDate: booking.showDate,
-    ticketType: booking.ticketType || 'Standard Entry',
-    quantity: booking.quantity ?? 0,
+    showName: firstItem?.showName || booking.showName || 'AquaPulse Show',
+    showDate: firstItem?.startTime || booking.showDate,
+    ticketType: getTicketTypeLabel(firstItem?.ticketType || booking.ticketType),
+    quantity: booking.totalQuantity ?? booking.quantity ?? 0,
+    additionalShows: Math.max(0, items.length - 1),
     totalAmount: booking.totalAmount,
     status: normalizedStatus.status,
     bookingStatus: normalizedStatus.bookingStatus,
@@ -117,7 +121,7 @@ function normalizeBooking(booking) {
     payment: booking.payment || null,
     tickets: booking.tickets || null,
     emailNotification: booking.emailNotification || null,
-    imageUrl: fallbackImageUrl,
+    imageUrl: firstItem?.imageUrl || fallbackImageUrl,
   };
 }
 
@@ -413,16 +417,16 @@ export default function BookingHistoryPage() {
                     <div className="flex flex-wrap items-start justify-between gap-4">
                       <div>
                         <span className="text-xs font-black uppercase tracking-[0.18em] text-cyan-700">#{booking.bookingCode}</span>
-                        <h2 className="text-2xl font-black text-slate-950">{booking.showName}</h2>
+                        <h2 className="text-2xl font-black text-slate-950">{booking.showName}{booking.additionalShows > 0 ? ` +${booking.additionalShows} more show${booking.additionalShows === 1 ? '' : 's'}` : ''}</h2>
                       </div>
                       <BookingStatus status={booking.status} expiresAt={booking.expiresAt} />
                     </div>
 
                     <div className="grid grid-cols-2 gap-4 md:grid-cols-4">
                       <BookingInfo label="Show Date" value={formatDate(booking.showDate)} />
-                      <BookingInfo label="Ticket Type" value={booking.ticketType} />
+                      <BookingInfo label="First Ticket Type" value={booking.ticketType} />
                       <BookingInfo label="Quantity" value={`${booking.quantity} Ticket${booking.quantity === 1 ? '' : 's'}`} />
-                      <BookingInfo label="Total Amount" value={formatCurrency(booking.totalAmount)} strong />
+                      <BookingInfo label="Total Amount" value={formatVnd(booking.totalAmount)} strong />
                       <BookingInfo label="Created At" value={formatDateTime(booking.createdAt)} />
                       <BookingInfo label="Expires At" value={formatDateTime(booking.expiresAt)} />
                     </div>

@@ -1,5 +1,6 @@
 package com.asms.booking.service;
 
+import com.asms.booking.dto.BookingDtos.BookingItemResponse;
 import com.asms.booking.dto.ManagerBookingDtos.ManagerBookingDetailResponse;
 import com.asms.booking.dto.ManagerBookingDtos.ManagerBookingResponse;
 import com.asms.booking.dto.ManagerBookingDtos.PaymentDetail;
@@ -91,7 +92,26 @@ public class ManagerBookingService {
                 booking.getStatus(),
                 paymentStatus,
                 booking.getCreatedAt(),
-                booking.getExpiresAt()
+                booking.getExpiresAt(),
+                booking.getItems().stream().map(this::toItemResponse).toList(),
+                booking.getTotalQuantity()
+        );
+    }
+
+    private BookingItemResponse toItemResponse(com.asms.booking.entity.BookingItem item) {
+        return new BookingItemResponse(
+                item.getId(),
+                item.getShowId(),
+                item.getScheduleId(),
+                item.getShowName(),
+                item.getImageUrl(),
+                item.getStartTime(),
+                item.getEndTime(),
+                item.getVenueName(),
+                item.getTicketType(),
+                item.getQuantity(),
+                item.getUnitPrice(),
+                item.getLineTotal()
         );
     }
 

@@ -489,6 +489,9 @@ class BookingServiceControllerTest {
         assertThat(response.quantity()).isEqualTo(2);
         assertThat(response.unitPrice()).isEqualByComparingTo("2000");
         assertThat(response.totalAmount()).isEqualByComparingTo("4000");
+        assertThat(response.items()).hasSize(1);
+        assertThat(response.items().getFirst().showName()).isEqualTo("Symphony of Lights");
+        assertThat(response.totalQuantity()).isEqualTo(2);
         assertThat(response.status()).isEqualTo(BookingStatus.PENDING_PAYMENT);
         assertThat(response.expiresAt()).isEqualTo(booking.getExpiresAt());
     }

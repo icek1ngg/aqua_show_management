@@ -232,19 +232,19 @@ export default function PaymentResultPage() {
                   <div id="payment-success-message" className="mt-6 rounded-3xl border border-primary-container/20 bg-surface-container-low px-5 py-4">
                     {resultState === resultStates.PAYMENT_SUCCESS_TICKETS_PROCESSING && !ticketsTimedOut ? (
                       <p className="font-semibold leading-7 text-on-surface-variant">
-                        Payment was successful. Your ticket is being prepared.
+                        Payment was successful. Your tickets are being prepared.
                       </p>
                     ) : null}
 
                     {resultState === resultStates.PAYMENT_SUCCESS_TICKETS_READY ? (
                       <p className="font-semibold leading-7 text-emerald-800">
-                        Your ticket is ready.
+                        Your {booking?.tickets?.total || ''} ticket{Number(booking?.tickets?.total || 0) === 1 ? '' : 's'} {Number(booking?.tickets?.total || 0) === 1 ? 'is' : 'are'} ready.
                       </p>
                     ) : null}
 
                     {ticketsTimedOut ? (
                       <p className="font-semibold leading-7 text-[#a43c12]">
-                        Payment was successful, but your QR ticket is taking longer than expected to prepare.
+                        Payment was successful, but your QR tickets are taking longer than expected to prepare.
                       </p>
                     ) : null}
                   </div>
@@ -256,7 +256,7 @@ export default function PaymentResultPage() {
                       type="button"
                     >
                       <span className="material-symbols-outlined" aria-hidden="true">qr_code_2</span>
-                      View My Ticket
+                      View My Tickets
                     </button>
                     <button
                       autoFocus

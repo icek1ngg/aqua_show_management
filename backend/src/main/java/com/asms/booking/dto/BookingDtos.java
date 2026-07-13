@@ -190,6 +190,7 @@ public final class BookingDtos {
 
     public record TicketDetail(
             UUID id,
+            UUID bookingItemId,
             String qrCode,
             TicketStatus status,
             Instant issuedAt,

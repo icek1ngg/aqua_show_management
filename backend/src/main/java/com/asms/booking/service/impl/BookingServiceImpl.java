@@ -482,6 +482,7 @@ public class BookingServiceImpl implements BookingService {
         List<TicketDetail> items = tickets.stream()
                 .map((Ticket ticket) -> new TicketDetail(
                         ticket.getId(),
+                        ticket.getBookingItem() == null ? null : ticket.getBookingItem().getId(),
                         ticket.getQrCode(),
                         ticket.getStatus(),
                         ticket.getIssuedAt(),
