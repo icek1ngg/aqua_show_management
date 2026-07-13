@@ -1,11 +1,12 @@
 package com.asms.booking;
 
+import com.asms.booking.dto.BookingDtos.CreateBookingItemRequest;
+import com.asms.booking.dto.BookingDtos.CreateBookingRequest;
 import jakarta.validation.Validation;
 import jakarta.validation.Validator;
 import org.junit.jupiter.api.Test;
 
-import java.lang.reflect.Constructor;
-import java.time.LocalDate;
+import java.util.List;
 import java.util.Set;
 
 import static org.assertj.core.api.Assertions.assertThat;
@@ -15,110 +16,38 @@ class BookingDtosValidationTest {
     private final Validator validator = Validation.buildDefaultValidatorFactory().getValidator();
 
     @Test
-    void createBookingRequestRejectsMissingRequiredFields() {
-        Object request = createBookingRequest("", "", "", null, "", 1);
+    void createBookingRequestRequiresIdempotencyKeyAndItems() {
+        CreateBookingRequest request = new CreateBookingRequest("", List.of());
+
+        assertThat(fieldErrors(request)).contains("idempotencyKey", "items");
+    }
+
+    @Test
+    void createBookingRequestValidatesNestedScheduleAndTicketType() {
+        CreateBookingRequest request = new CreateBookingRequest(
+                "checkout-1", List.of(new CreateBookingItemRequest("", "", 1)));
 
         assertThat(fieldErrors(request))
-                .contains("showId", "scheduleId", "showName", "showDate", "ticketType");
+                .contains("items[0].scheduleId", "items[0].ticketType");
     }
 
     @Test
-    void createBookingRequestRequiresScheduleId() {
-        Object request = createBookingRequest(
-                "show-1",
-                "",
-                "Ocean Dreams",
-                LocalDate.now(),
-                "Standard Entry",
-                1
+    void createBookingRequestRejectsInvalidItemQuantity() {
+        assertThat(fieldErrors(requestWithQuantity(0))).contains("items[0].quantity");
+        assertThat(fieldErrors(requestWithQuantity(11))).contains("items[0].quantity");
+    }
+
+    @Test
+    void createBookingRequestAcceptsOneToTenTickets() {
+        assertThat(fieldErrors(requestWithQuantity(1))).isEmpty();
+        assertThat(fieldErrors(requestWithQuantity(10))).isEmpty();
+    }
+
+    private CreateBookingRequest requestWithQuantity(int quantity) {
+        return new CreateBookingRequest(
+                "checkout-1",
+                List.of(new CreateBookingItemRequest("schedule-1", "STANDARD", quantity))
         );
-
-        assertThat(validator.validate(request))
-                .anySatisfy(violation -> {
-                    assertThat(violation.getPropertyPath().toString()).isEqualTo("scheduleId");
-                    assertThat(violation.getMessage()).isEqualTo("Schedule ID is required");
-                });
-    }
-
-    @Test
-    void createBookingRequestRejectsPastDateAndInvalidQuantity() {
-        assertThat(fieldErrors(createBookingRequest(
-                "show-1",
-                "schedule-1",
-                "Ocean Dreams",
-                LocalDate.now().minusDays(1),
-                "Standard Entry",
-                1
-        ))).contains("showDate");
-
-        assertThat(fieldErrors(createBookingRequest(
-                "show-1",
-                "schedule-1",
-                "Ocean Dreams",
-                LocalDate.now(),
-                "Standard Entry",
-                0
-        ))).contains("quantity");
-
-        assertThat(fieldErrors(createBookingRequest(
-                "show-1",
-                "schedule-1",
-                "Ocean Dreams",
-                LocalDate.now(),
-                "Standard Entry",
-                11
-        ))).contains("quantity");
-    }
-
-    @Test
-    void createBookingRequestAcceptsTodayOrFutureDateAndValidQuantity() {
-        assertThat(fieldErrors(createBookingRequest(
-                "show-1",
-                "schedule-1",
-                "Ocean Dreams",
-                LocalDate.now(),
-                "Standard Entry",
-                1
-        ))).isEmpty();
-
-        assertThat(fieldErrors(createBookingRequest(
-                "show-1",
-                "schedule-1",
-                "Ocean Dreams",
-                LocalDate.now().plusDays(1),
-                "Standard Entry",
-                10
-        ))).isEmpty();
-    }
-
-    private Object createBookingRequest(
-            String showId,
-            String scheduleId,
-            String showName,
-            LocalDate showDate,
-            String ticketType,
-            Integer quantity
-    ) {
-        return newRecord(
-                "com.asms.booking.dto.BookingDtos$CreateBookingRequest",
-                new Class<?>[]{String.class, String.class, String.class, LocalDate.class, String.class, Integer.class},
-                showId,
-                scheduleId,
-                showName,
-                showDate,
-                ticketType,
-                quantity
-        );
-    }
-
-    private Object newRecord(String className, Class<?>[] parameterTypes, Object... values) {
-        try {
-            Class<?> recordClass = Class.forName(className);
-            Constructor<?> constructor = recordClass.getDeclaredConstructor(parameterTypes);
-            return constructor.newInstance(values);
-        } catch (ReflectiveOperationException exception) {
-            throw new IllegalStateException(exception);
-        }
     }
 
     private Set<String> fieldErrors(Object request) {

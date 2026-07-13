@@ -1,15 +1,18 @@
 package com.asms.booking;
 
 import com.asms.booking.dto.BookingDtos.BookingResponse;
+import com.asms.booking.dto.BookingDtos.CreateBookingItemRequest;
 import com.asms.booking.dto.BookingDtos.CreateBookingRequest;
 import com.asms.booking.dto.BookingDtos.CreateBookingResponse;
 import com.asms.booking.dto.BookingDtos.PageBookingResponse;
 import com.asms.booking.dto.TicketHoldDtos.HoldResult;
 import com.asms.booking.entity.Booking;
 import com.asms.booking.enums.BookingStatus;
+import com.asms.booking.enums.TicketType;
 import com.asms.booking.repository.BookingRepository;
 import com.asms.booking.service.BookingService;
 import com.asms.booking.service.RedisTicketHoldService;
+import com.asms.booking.service.TicketPricingService;
 import com.asms.catalog.entity.Show;
 import com.asms.catalog.entity.ShowSchedule;
 import com.asms.catalog.entity.Venue;
@@ -43,6 +46,7 @@ import java.util.UUID;
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.assertThatThrownBy;
 import static org.mockito.ArgumentMatchers.any;
+import static org.mockito.ArgumentMatchers.anyInt;
 import static org.mockito.ArgumentMatchers.eq;
 import static org.mockito.Mockito.doThrow;
 import static org.mockito.Mockito.mock;
@@ -56,6 +60,7 @@ class BookingServiceControllerTest {
     private UserRepository userRepository;
     private ShowScheduleRepository scheduleRepository;
     private RedisTicketHoldService redisTicketHoldService;
+    private TicketPricingService ticketPricingService;
     private PaymentRepository paymentRepository;
     private TicketRepository ticketRepository;
     private EmailNotificationRepository emailNotificationRepository;
@@ -67,6 +72,7 @@ class BookingServiceControllerTest {
         userRepository = mock(UserRepository.class);
         scheduleRepository = mock(ShowScheduleRepository.class);
         redisTicketHoldService = mock(RedisTicketHoldService.class);
+        ticketPricingService = new TicketPricingService();
         paymentRepository = mock(PaymentRepository.class);
         ticketRepository = mock(TicketRepository.class);
         emailNotificationRepository = mock(EmailNotificationRepository.class);
@@ -78,6 +84,7 @@ class BookingServiceControllerTest {
                 userRepository,
                 scheduleRepository,
                 redisTicketHoldService,
+                ticketPricingService,
                 paymentRepository,
                 ticketRepository,
                 emailNotificationRepository,
@@ -93,7 +100,7 @@ class BookingServiceControllerTest {
         when(scheduleRepository.findById(schedule.getId())).thenReturn(Optional.of(schedule));
         when(bookingRepository.countPaidTicketsByScheduleId(schedule.getId().toString())).thenReturn(0L);
         when(bookingRepository.countNonExpiredPendingTicketsByScheduleId(eq(schedule.getId().toString()), any(Instant.class))).thenReturn(0L);
-        when(redisTicketHoldService.holdTickets(schedule.getId().toString(), "STANDARD", 2, user.getId()))
+        when(redisTicketHoldService.holdTickets(schedule.getId().toString(), TicketType.STANDARD, 2, user.getId()))
                 .thenReturn(new HoldResult(true, "hold-123", "held", Instant.parse("2026-05-31T15:15:00Z")));
         when(bookingRepository.save(any(Booking.class))).thenAnswer(invocation -> {
             Booking booking = invocation.getArgument(0);
@@ -108,12 +115,12 @@ class BookingServiceControllerTest {
         assertThat(response.holdId()).isEqualTo("hold-123");
         assertThat(response.message()).isEqualTo("Booking created and awaiting payment.");
         ArgumentCaptor<Booking> bookingCaptor = ArgumentCaptor.forClass(Booking.class);
-        verify(redisTicketHoldService).initializeInventory(schedule.getId().toString(), "STANDARD", 10);
+        verify(redisTicketHoldService).initializeInventory(schedule.getId().toString(), TicketType.STANDARD, 10);
         verify(bookingRepository).save(bookingCaptor.capture());
         assertThat(bookingCaptor.getValue().getShowName()).isEqualTo(schedule.getShow().getTitle());
         assertThat(bookingCaptor.getValue().getShowDate()).isEqualTo(schedule.getStartTime().toLocalDate());
-        assertThat(bookingCaptor.getValue().getUnitPrice()).isEqualByComparingTo("2000");
-        assertThat(bookingCaptor.getValue().getTotalAmount()).isEqualByComparingTo("4000");
+        assertThat(bookingCaptor.getValue().getUnitPrice()).isEqualByComparingTo("7500");
+        assertThat(bookingCaptor.getValue().getTotalAmount()).isEqualByComparingTo("15000");
     }
 
     @Test
@@ -124,7 +131,7 @@ class BookingServiceControllerTest {
         when(scheduleRepository.findById(schedule.getId())).thenReturn(Optional.of(schedule));
         when(bookingRepository.countPaidTicketsByScheduleId(schedule.getId().toString())).thenReturn(1L);
         when(bookingRepository.countNonExpiredPendingTicketsByScheduleId(eq(schedule.getId().toString()), any(Instant.class))).thenReturn(2L);
-        when(redisTicketHoldService.holdTickets(eq(schedule.getId().toString()), any(), any(Integer.class), eq(user.getId())))
+        when(redisTicketHoldService.holdTickets(eq(schedule.getId().toString()), any(TicketType.class), anyInt(), eq(user.getId())))
                 .thenReturn(new HoldResult(true, "hold-123", "held", Instant.parse("2026-05-31T15:15:00Z")));
         when(bookingRepository.save(any(Booking.class))).thenAnswer(invocation -> invocation.getArgument(0));
 
@@ -140,12 +147,12 @@ class BookingServiceControllerTest {
         bookingService.createBooking(tampered, "user@example.com");
 
         ArgumentCaptor<Booking> bookingCaptor = ArgumentCaptor.forClass(Booking.class);
-        verify(redisTicketHoldService).initializeInventory(schedule.getId().toString(), "VIP", 7);
+        verify(redisTicketHoldService).initializeInventory(schedule.getId().toString(), TicketType.VIP, 10);
         verify(bookingRepository).save(bookingCaptor.capture());
         assertThat(bookingCaptor.getValue().getShowName()).isEqualTo("Aqua Show");
         assertThat(bookingCaptor.getValue().getShowDate()).isEqualTo(schedule.getStartTime().toLocalDate());
-        assertThat(bookingCaptor.getValue().getUnitPrice()).isEqualByComparingTo("5000");
-        assertThat(bookingCaptor.getValue().getTotalAmount()).isEqualByComparingTo("10000");
+        assertThat(bookingCaptor.getValue().getUnitPrice()).isEqualByComparingTo("18750");
+        assertThat(bookingCaptor.getValue().getTotalAmount()).isEqualByComparingTo("37500");
     }
 
     @Test
@@ -156,7 +163,7 @@ class BookingServiceControllerTest {
         when(scheduleRepository.findById(schedule.getId())).thenReturn(Optional.of(schedule));
         when(bookingRepository.countPaidTicketsByScheduleId(schedule.getId().toString())).thenReturn(0L);
         when(bookingRepository.countNonExpiredPendingTicketsByScheduleId(eq(schedule.getId().toString()), any(Instant.class))).thenReturn(0L);
-        when(redisTicketHoldService.holdTickets(schedule.getId().toString(), "FAMILY", 2, user.getId()))
+        when(redisTicketHoldService.holdTickets(schedule.getId().toString(), TicketType.FAMILY, 2, user.getId()))
                 .thenReturn(new HoldResult(true, "hold-family", "held", Instant.now().plusSeconds(900)));
         when(bookingRepository.save(any(Booking.class))).thenAnswer(invocation -> invocation.getArgument(0));
 
@@ -165,8 +172,131 @@ class BookingServiceControllerTest {
         ArgumentCaptor<Booking> bookingCaptor = ArgumentCaptor.forClass(Booking.class);
         verify(bookingRepository).save(bookingCaptor.capture());
         assertThat(bookingCaptor.getValue().getTicketType()).isEqualTo("FAMILY");
-        assertThat(bookingCaptor.getValue().getUnitPrice()).isEqualByComparingTo("3000");
-        assertThat(bookingCaptor.getValue().getTotalAmount()).isEqualByComparingTo("6000");
+        assertThat(bookingCaptor.getValue().getUnitPrice()).isEqualByComparingTo("11250");
+        assertThat(bookingCaptor.getValue().getTotalAmount()).isEqualByComparingTo("22500");
+    }
+
+    @Test
+    void createsOneBookingWithItemsFromDifferentSchedules() {
+        User user = user("user@example.com");
+        ShowSchedule standardSchedule = schedule();
+        ShowSchedule vipSchedule = schedule();
+        when(userRepository.findByEmailIgnoreCase(user.getEmail())).thenReturn(Optional.of(user));
+        when(scheduleRepository.findById(standardSchedule.getId())).thenReturn(Optional.of(standardSchedule));
+        when(scheduleRepository.findById(vipSchedule.getId())).thenReturn(Optional.of(vipSchedule));
+        when(redisTicketHoldService.holdTickets(
+                standardSchedule.getId().toString(), TicketType.STANDARD, 2, user.getId()))
+                .thenReturn(new HoldResult(true, "hold-standard", "held", Instant.now().plusSeconds(900)));
+        when(redisTicketHoldService.holdTickets(
+                vipSchedule.getId().toString(), TicketType.VIP, 1, user.getId()))
+                .thenReturn(new HoldResult(true, "hold-vip", "held", Instant.now().plusSeconds(800)));
+        when(bookingRepository.save(any(Booking.class))).thenAnswer(invocation -> {
+            Booking booking = invocation.getArgument(0);
+            setId(booking, UUID.randomUUID());
+            return booking;
+        });
+
+        CreateBookingResponse response = bookingService.createBooking(new CreateBookingRequest(
+                "request-multi",
+                List.of(
+                        new CreateBookingItemRequest(standardSchedule.getId().toString(), "STANDARD", 2),
+                        new CreateBookingItemRequest(vipSchedule.getId().toString(), "VIP", 1)
+                )), user.getEmail());
+
+        assertThat(response.items()).hasSize(2);
+        assertThat(response.totalQuantity()).isEqualTo(3);
+        assertThat(response.totalAmount()).isEqualByComparingTo("33750.00");
+        verify(bookingRepository).save(org.mockito.ArgumentMatchers.argThat(
+                booking -> booking.getItems().size() == 2));
+    }
+
+    @Test
+    void releasesEarlierHoldsWhenLaterItemCannotBeHeld() {
+        User user = user("user@example.com");
+        ShowSchedule first = schedule();
+        ShowSchedule second = schedule();
+        when(userRepository.findByEmailIgnoreCase(user.getEmail())).thenReturn(Optional.of(user));
+        when(scheduleRepository.findById(first.getId())).thenReturn(Optional.of(first));
+        when(scheduleRepository.findById(second.getId())).thenReturn(Optional.of(second));
+
+        List<ShowSchedule> ordered = java.util.stream.Stream.of(first, second)
+                .sorted(java.util.Comparator.comparing(schedule -> schedule.getId().toString()))
+                .toList();
+        when(redisTicketHoldService.holdTickets(
+                ordered.get(0).getId().toString(), TicketType.STANDARD, 2, user.getId()))
+                .thenReturn(new HoldResult(true, "hold-first", "held", Instant.now().plusSeconds(900)));
+        when(redisTicketHoldService.holdTickets(
+                ordered.get(1).getId().toString(), TicketType.VIP, 1, user.getId()))
+                .thenReturn(new HoldResult(false, null, "full", null));
+
+        CreateBookingRequest request = new CreateBookingRequest("request-compensate", List.of(
+                new CreateBookingItemRequest(ordered.get(0).getId().toString(), "STANDARD", 2),
+                new CreateBookingItemRequest(ordered.get(1).getId().toString(), "VIP", 1)
+        ));
+
+        assertThatThrownBy(() -> bookingService.createBooking(request, user.getEmail()))
+                .isInstanceOf(ConflictException.class);
+        verify(redisTicketHoldService).releaseHold("hold-first");
+        verify(bookingRepository, never()).save(any());
+    }
+
+    @Test
+    void repeatedIdempotencyKeyReturnsExistingAggregateWithoutNewHolds() {
+        User user = user("user@example.com");
+        Booking existing = booking(user, "hold-existing");
+        when(userRepository.findByEmailIgnoreCase(user.getEmail())).thenReturn(Optional.of(user));
+        when(bookingRepository.findByUserAndIdempotencyKey(user, "same-key")).thenReturn(Optional.of(existing));
+
+        CreateBookingResponse response = bookingService.createBooking(
+                new CreateBookingRequest("same-key", List.of(
+                        new CreateBookingItemRequest(existing.getScheduleId(), "STANDARD", 1))),
+                user.getEmail());
+
+        assertThat(response.bookingId()).isEqualTo(existing.getId());
+        verify(redisTicketHoldService, never()).holdTickets(any(), any(), anyInt(), any());
+        verify(bookingRepository, never()).save(any());
+    }
+
+    @Test
+    void duplicateItemsAreNormalizedBeforeHoldingAndPersisting() {
+        User user = user("user@example.com");
+        ShowSchedule schedule = schedule();
+        when(userRepository.findByEmailIgnoreCase(user.getEmail())).thenReturn(Optional.of(user));
+        when(scheduleRepository.findById(schedule.getId())).thenReturn(Optional.of(schedule));
+        when(redisTicketHoldService.holdTickets(
+                schedule.getId().toString(), TicketType.STANDARD, 3, user.getId()))
+                .thenReturn(new HoldResult(true, "hold-normalized", "held", Instant.now().plusSeconds(900)));
+        when(bookingRepository.save(any(Booking.class))).thenAnswer(invocation -> {
+            Booking booking = invocation.getArgument(0);
+            setId(booking, UUID.randomUUID());
+            return booking;
+        });
+
+        CreateBookingResponse response = bookingService.createBooking(new CreateBookingRequest(
+                "request-normalize", List.of(
+                        new CreateBookingItemRequest(schedule.getId().toString(), "Standard Entry", 1),
+                        new CreateBookingItemRequest(schedule.getId().toString(), "STANDARD", 2)
+                )), user.getEmail());
+
+        assertThat(response.items()).hasSize(1);
+        assertThat(response.totalQuantity()).isEqualTo(3);
+        verify(redisTicketHoldService).holdTickets(
+                schedule.getId().toString(), TicketType.STANDARD, 3, user.getId());
+    }
+
+    @Test
+    void rejectsMoreThanTwentyInputLinesBeforeLoadingSchedules() {
+        User user = user("user@example.com");
+        when(userRepository.findByEmailIgnoreCase(user.getEmail())).thenReturn(Optional.of(user));
+        List<CreateBookingItemRequest> items = java.util.stream.IntStream.range(0, 21)
+                .mapToObj(index -> new CreateBookingItemRequest(UUID.randomUUID().toString(), "STANDARD", 1))
+                .toList();
+
+        assertThatThrownBy(() -> bookingService.createBooking(
+                new CreateBookingRequest("too-many-lines", items), user.getEmail()))
+                .isInstanceOf(BadRequestException.class)
+                .hasMessageContaining("20 items");
+        verify(scheduleRepository, never()).findById(any());
     }
 
     @Test
@@ -211,7 +341,7 @@ class BookingServiceControllerTest {
         when(scheduleRepository.findById(schedule.getId())).thenReturn(Optional.of(schedule));
         when(bookingRepository.countPaidTicketsByScheduleId(schedule.getId().toString())).thenReturn(0L);
         when(bookingRepository.countNonExpiredPendingTicketsByScheduleId(eq(schedule.getId().toString()), any(Instant.class))).thenReturn(0L);
-        when(redisTicketHoldService.holdTickets(schedule.getId().toString(), "VIP", 10, user.getId()))
+        when(redisTicketHoldService.holdTickets(schedule.getId().toString(), TicketType.VIP, 10, user.getId()))
                 .thenReturn(new HoldResult(false, null, "insufficient", null));
 
         assertThatThrownBy(() -> bookingService.createBooking(validRequest(schedule, "VIP", 10), "user@example.com"))
@@ -228,7 +358,7 @@ class BookingServiceControllerTest {
         when(scheduleRepository.findById(schedule.getId())).thenReturn(Optional.of(schedule));
         when(bookingRepository.countPaidTicketsByScheduleId(schedule.getId().toString())).thenReturn(0L);
         when(bookingRepository.countNonExpiredPendingTicketsByScheduleId(eq(schedule.getId().toString()), any(Instant.class))).thenReturn(0L);
-        when(redisTicketHoldService.holdTickets(schedule.getId().toString(), "FAMILY", 2, user.getId()))
+        when(redisTicketHoldService.holdTickets(schedule.getId().toString(), TicketType.FAMILY, 2, user.getId()))
                 .thenReturn(new HoldResult(true, "hold-123", "held", Instant.parse("2026-05-31T15:15:00Z")));
         doThrow(new IllegalStateException("db down")).when(bookingRepository).save(any());
 
@@ -387,6 +517,7 @@ class BookingServiceControllerTest {
         BookingResponse response = bookingService.getBookingDetail(bookingId, "user@example.com");
 
         assertThat(response.status()).isEqualTo(BookingStatus.EXPIRED);
+        verify(redisTicketHoldService).releaseHold("hold-expired");
         verify(bookingRepository).save(booking);
     }
 
@@ -444,7 +575,7 @@ class BookingServiceControllerTest {
         when(scheduleRepository.findById(schedule.getId())).thenReturn(Optional.of(schedule));
         when(bookingRepository.countPaidTicketsByScheduleId(schedule.getId().toString())).thenReturn(0L);
         when(bookingRepository.countNonExpiredPendingTicketsByScheduleId(eq(schedule.getId().toString()), any(Instant.class))).thenReturn(0L);
-        when(redisTicketHoldService.holdTickets(schedule.getId().toString(), "STANDARD", 1, user.getId()))
+        when(redisTicketHoldService.holdTickets(schedule.getId().toString(), TicketType.STANDARD, 1, user.getId()))
                 .thenReturn(new HoldResult(true, "hold-123", "held", Instant.parse("2026-05-31T15:15:00Z")));
         when(bookingRepository.save(any(Booking.class))).thenAnswer(invocation -> invocation.getArgument(0));
         com.asms.booking.controller.BookingController controller = new com.asms.booking.controller.BookingController(bookingService);
@@ -478,6 +609,8 @@ class BookingServiceControllerTest {
                 venue,
                 LocalDateTime.now().plusDays(1),
                 LocalDateTime.now().plusDays(1).plusMinutes(45),
+                10,
+                10,
                 10,
                 new BigDecimal("7500")
         );

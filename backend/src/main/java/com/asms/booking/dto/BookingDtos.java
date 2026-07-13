@@ -7,7 +7,6 @@ import com.asms.notification.enums.EmailNotificationType;
 import com.asms.payment.enums.PaymentStatus;
 import com.asms.ticketing.enums.TicketStatus;
 import jakarta.validation.Valid;
-import jakarta.validation.constraints.FutureOrPresent;
 import jakarta.validation.constraints.Max;
 import jakarta.validation.constraints.Min;
 import jakarta.validation.constraints.NotBlank;
@@ -48,42 +47,9 @@ public final class BookingDtos {
 
             @NotEmpty(message = "At least one booking item is required")
             @Size(max = 20, message = "Booking must not contain more than 20 items")
-            List<@Valid CreateBookingItemRequest> items,
-
-            @NotBlank(message = "Show ID is required")
-            String showId,
-
-            @NotBlank(message = "Schedule ID is required")
-            String scheduleId,
-
-            @NotBlank(message = "Show name is required")
-            String showName,
-
-            @NotNull(message = "Show date is required")
-            @FutureOrPresent(message = "Show date must be today or in the future")
-            LocalDate showDate,
-
-            @NotBlank(message = "Ticket type is required")
-            String ticketType,
-
-            @NotNull(message = "Quantity is required")
-            @Min(value = 1, message = "Quantity must be at least 1")
-            @Max(value = 10, message = "Quantity must not exceed 10")
-            Integer quantity
+            List<@Valid CreateBookingItemRequest> items
     ) {
-        public CreateBookingRequest(String idempotencyKey, List<CreateBookingItemRequest> items) {
-            this(
-                    idempotencyKey,
-                    items,
-                    "aggregate",
-                    "aggregate",
-                    "aggregate",
-                    LocalDate.now(),
-                    "STANDARD",
-                    1
-            );
-        }
-
+        /** Temporary source-compatibility constructor for older tests/clients. */
         public CreateBookingRequest(
                 String showId,
                 String scheduleId,
@@ -94,13 +60,7 @@ public final class BookingDtos {
         ) {
             this(
                     "legacy:" + UUID.randomUUID(),
-                    List.of(new CreateBookingItemRequest(scheduleId, ticketType, quantity)),
-                    showId,
-                    scheduleId,
-                    showName,
-                    showDate,
-                    ticketType,
-                    quantity
+                    List.of(new CreateBookingItemRequest(scheduleId, ticketType, quantity))
             );
         }
     }
@@ -111,8 +71,21 @@ public final class BookingDtos {
             String holdId,
             BookingStatus status,
             String message,
-            Instant expiresAt
+            Instant expiresAt,
+            List<BookingItemResponse> items,
+            Integer totalQuantity,
+            BigDecimal totalAmount
     ) {
+        public CreateBookingResponse(
+                UUID requestId,
+                UUID bookingId,
+                String holdId,
+                BookingStatus status,
+                String message,
+                Instant expiresAt
+        ) {
+            this(requestId, bookingId, holdId, status, message, expiresAt, List.of(), 0, BigDecimal.ZERO);
+        }
     }
 
     public record BookingResponse(

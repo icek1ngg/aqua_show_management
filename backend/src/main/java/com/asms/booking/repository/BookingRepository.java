@@ -29,6 +29,8 @@ public interface BookingRepository extends JpaRepository<Booking, UUID>, JpaSpec
 
     Optional<Booking> findByIdempotencyKey(String idempotencyKey);
 
+    Optional<Booking> findByUserAndIdempotencyKey(User user, String idempotencyKey);
+
     @Query("select distinct b from Booking b join b.items i where i.holdId = :holdId")
     Optional<Booking> findByHoldId(@Param("holdId") String holdId);
 
