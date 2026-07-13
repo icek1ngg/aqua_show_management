@@ -1,7 +1,7 @@
 import { useEffect, useMemo, useState } from 'react';
 import { Link, useParams } from 'react-router-dom';
 
-import { buildBookingUrl } from '../services/bookingService.js';
+import TicketSelector from '../features/cart/TicketSelector.jsx';
 import { getShowDetail, getShowSchedules } from '../services/showService.js';
 import MainLayout from '../shared/layouts/MainLayout.jsx';
 import { formatCurrency } from '../shared/utils/ticketPricing.js';
@@ -97,7 +97,6 @@ export default function ShowDetailPage() {
   const [selectedDate, setSelectedDate] = useState('');
   const [calendarOpen, setCalendarOpen] = useState(false);
   const [selectedScheduleId, setSelectedScheduleId] = useState('');
-  const [quantity, setQuantity] = useState(2);
   const [currentSlide, setCurrentSlide] = useState(0);
   const [lightboxOpen, setLightboxOpen] = useState(false);
 
@@ -142,18 +141,10 @@ export default function ShowDetailPage() {
     [effectiveDate, schedules],
   );
 
-  const selectedSchedule = schedules.find((schedule) => String(schedule.id) === String(selectedScheduleId)) || null;
-  const unitPrice = Number(selectedSchedule?.price) || 0;
-  const bookingUrl = selectedSchedule && show
-    ? buildBookingUrl({
-      showId: show.id,
-      scheduleId: selectedSchedule.id,
-      showName: show.title,
-      showDate: localDateKey(selectedSchedule.startTime),
-      quantity,
-      ticketType: 'STANDARD',
-    })
-    : null;
+  const selectorSchedules = useMemo(() => {
+    if (!selectedScheduleId) return schedules;
+    return [...schedules].sort((first) => (String(first.id) === String(selectedScheduleId) ? -1 : 1));
+  }, [schedules, selectedScheduleId]);
 
   if (isLoading) return <LoadingDetail />;
   if (loadError) return <StateMessage state={loadError} onRetry={loadError.icon === 'error' ? () => setReloadKey((key) => key + 1) : null} />;
@@ -257,7 +248,7 @@ export default function ShowDetailPage() {
                         </div>
                         <div className="flex items-center justify-between gap-4 border-t border-outline-variant/30 pt-6">
                           <div><span className="block text-[10px] font-black uppercase tracking-widest text-outline">Availability</span><span className={`block text-sm font-bold ${availability.unavailable ? 'text-error' : 'text-primary'}`}>{availability.label}</span></div>
-                          <button className={`rounded-full px-10 py-3 text-sm font-black transition-all ${availability.unavailable ? 'cursor-not-allowed bg-outline-variant text-on-surface-variant' : 'show-booking-action shadow-lg shadow-brand-orange/20 hover:scale-105 active:scale-95'}`} disabled={availability.unavailable} onClick={() => { setSelectedScheduleId(schedule.id); setQuantity(2); }} type="button">{selected ? 'SELECTED' : availability.button}</button>
+                          <button className={`rounded-full px-10 py-3 text-sm font-black transition-all ${availability.unavailable ? 'cursor-not-allowed bg-outline-variant text-on-surface-variant' : 'show-booking-action shadow-lg shadow-brand-orange/20 hover:scale-105 active:scale-95'}`} disabled={availability.unavailable} onClick={() => { setSelectedScheduleId(schedule.id); document.getElementById('show-ticket-selector')?.scrollIntoView({ behavior: 'smooth', block: 'center' }); }} type="button">{selected ? 'SELECTED' : availability.button}</button>
                         </div>
                       </article>
                     );
@@ -270,20 +261,8 @@ export default function ShowDetailPage() {
                 </div>
               </div>
 
-              <aside className="min-w-0 md:sticky md:top-24">
-                <div className="show-glass rounded-2xl border border-primary/20 p-6 shadow-xl">
-                  <h3 className="mb-6 flex items-center gap-2 text-xl font-extrabold text-primary"><span className="material-symbols-outlined">shopping_basket</span>Booking Summary</h3>
-                  <div className="flex flex-col gap-6">
-                    <div><span className="block text-[10px] font-black uppercase tracking-widest text-outline">Selected Show</span><span className="text-base font-bold text-on-surface">{show.title}</span></div>
-                    <div><span className="block text-[10px] font-black uppercase tracking-widest text-outline">Selected Time</span><span className="text-sm font-bold text-on-surface">{selectedSchedule ? `${formatDay(selectedSchedule.startTime)} · ${formatTimeRange(selectedSchedule.startTime, selectedSchedule.endTime)}` : 'Choose a showtime'}</span></div>
-                    <div>
-                      <span className="block text-[10px] font-black uppercase tracking-widest text-outline">Selected Tickets</span>
-                      <div className="mt-1 flex items-center justify-between gap-2"><span className="text-sm font-bold">{quantity} Standard {quantity === 1 ? 'Ticket' : 'Tickets'}</span><div className="flex items-center gap-2"><button aria-label="Decrease tickets" className="flex h-7 w-7 items-center justify-center rounded-full border border-outline-variant hover:bg-secondary-container disabled:opacity-40" disabled={quantity <= 1} onClick={() => setQuantity((value) => Math.max(1, value - 1))} type="button"><span className="material-symbols-outlined text-sm">remove</span></button><span className="min-w-4 text-center text-sm font-bold">{quantity}</span><button aria-label="Increase tickets" className="flex h-7 w-7 items-center justify-center rounded-full border border-outline-variant hover:bg-secondary-container disabled:opacity-40" disabled={quantity >= Math.min(10, Number(selectedSchedule?.availableTickets) || 10)} onClick={() => setQuantity((value) => Math.min(10, value + 1))} type="button"><span className="material-symbols-outlined text-sm">add</span></button></div></div>
-                    </div>
-                    <div className="flex items-center justify-between border-t border-outline-variant/30 pt-6"><span className="text-[10px] font-black uppercase tracking-widest text-outline">Total Price</span><span className="text-2xl font-black text-primary">{formatCurrency(unitPrice * quantity)}</span></div>
-                    {bookingUrl ? <Link className="show-booking-action flex w-full items-center justify-center gap-2 rounded-full py-4 text-sm font-black shadow-lg shadow-brand-orange/30 transition-all hover:-translate-y-1 hover:shadow-brand-orange/50" to={bookingUrl}>PROCEED TO BOOKING<span className="material-symbols-outlined text-[20px]">arrow_forward</span></Link> : <button className="w-full cursor-not-allowed rounded-full bg-outline-variant py-4 text-sm font-black text-on-surface-variant" disabled type="button">SELECT A SHOWTIME</button>}
-                  </div>
-                </div>
+              <aside className="min-w-0 scroll-mt-24 md:sticky md:top-24" id="show-ticket-selector">
+                <TicketSelector key={selectedScheduleId || 'default'} show={show} schedules={selectorSchedules} />
               </aside>
             </div>
           </div>

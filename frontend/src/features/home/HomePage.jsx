@@ -1,10 +1,9 @@
-import { useEffect, useMemo, useState } from 'react';
+import { useEffect, useMemo, useRef, useState } from 'react';
 import { Link, useLocation } from 'react-router-dom';
 
-import { buildBookingUrl } from '../../services/bookingService.js';
-import { getShows } from '../../services/showService.js';
+import TicketSelector from '../cart/TicketSelector.jsx';
+import { getShowSchedules, getShows } from '../../services/showService.js';
 import MainLayout from '../../shared/layouts/MainLayout.jsx';
-import { ticketTypeOptions } from '../../shared/utils/ticketPricing.js';
 
 const fallbackShowImage =
   'https://lh3.googleusercontent.com/aida-public/AB6AXuANv7I9nTUaKmdiA6IfaIaY0YwJUIWoqM0X6m_tgMmcJ71PacmGbCJL7U7jN8rhBXSUuV7fovx9LDsAc6N5PhTyiCp6LssLe6FgDdZmMcwFIlWNhrmPMXPWNaNGaENraIJuHz9U8O5qXFdHXwD12d0tWFF6pkX61XHVJWiPscKVSeVXPJHPLntIinpKKiq48E_jrrE2A6BF6g5CVGhbzwWhTMCs07mHdwovKDWCZJwE9QP5SidUIrVjslByRhoxaZve3By201M-MkjJ';
@@ -74,20 +73,6 @@ function scheduleStatus(show) {
       };
 }
 
-function bookingUrlForShow(show, quantity = 1, ticketType = 'STANDARD') {
-  if (!show?.id || !show?.nextScheduleId || !show?.nextStartTime) {
-    return null;
-  }
-
-  return buildBookingUrl({
-    showId: show.id,
-    scheduleId: show.nextScheduleId,
-    showName: show.title,
-    showDate: String(show.nextStartTime).slice(0, 10),
-    quantity,
-    ticketType,
-  });
-}
 function normalizeSectionId(sectionId) {
   if (sectionId === 'schedules') {
     return 'schedule';
@@ -125,9 +110,11 @@ export default function HomePage() {
   const [showsError, setShowsError] = useState('');
   const [reloadKey, setReloadKey] = useState(0);
   const [selectedShowId, setSelectedShowId] = useState('');
-  const [selectedDate, setSelectedDate] = useState('');
-  const [ticketQuantity, setTicketQuantity] = useState(1);
-  const [ticketType, setTicketType] = useState('STANDARD');
+  const [selectorShow, setSelectorShow] = useState(null);
+  const [selectorSchedules, setSelectorSchedules] = useState([]);
+  const [selectorError, setSelectorError] = useState('');
+  const [isLoadingSelector, setIsLoadingSelector] = useState(false);
+  const handledSelectorLocation = useRef('');
 
   useEffect(() => {
     const sectionId = normalizeSectionId(
@@ -217,24 +204,40 @@ export default function HomePage() {
   );
   const firstBookableShow = upcomingSchedules.find((show) => show.nextScheduleId);
   const selectedShow = shows.find((show) => show.id === selectedShowId);
-  const selectedBookingUrl = selectedShow && selectedDate
-    ? buildBookingUrl({
-        showId: selectedShow.id,
-        scheduleId: selectedShow.nextScheduleId,
-        showName: selectedShow.title,
-        showDate: selectedDate,
-        quantity: ticketQuantity,
-        ticketType,
-      })
-    : null;
-  const heroBookingUrl = bookingUrlForShow(firstBookableShow);
 
   const handleBookingShowChange = (event) => {
     const nextShowId = event.target.value;
-    const nextShow = shows.find((show) => show.id === nextShowId);
     setSelectedShowId(nextShowId);
-    setSelectedDate(nextShow?.nextStartTime ? String(nextShow.nextStartTime).slice(0, 10) : '');
   };
+
+  const openSelector = async (show, preferredScheduleId = '') => {
+    if (!show?.id) return;
+    setSelectorShow(show);
+    setSelectorSchedules([]);
+    setSelectorError('');
+    setIsLoadingSelector(true);
+    try {
+      const response = await getShowSchedules(show.id);
+      const scheduleItems = Array.isArray(response) ? response : [];
+      setSelectorSchedules(preferredScheduleId
+        ? [...scheduleItems].sort((first) => (String(first.id) === String(preferredScheduleId) ? -1 : 1))
+        : scheduleItems);
+    } catch (error) {
+      setSelectorError(getShowsErrorMessage(error));
+    } finally {
+      setIsLoadingSelector(false);
+    }
+  };
+
+  useEffect(() => {
+    const requestedShowId = location.state?.ticketSelectorShowId;
+    if (!requestedShowId || shows.length === 0 || handledSelectorLocation.current === location.key) return;
+    const requestedShow = shows.find((show) => String(show.id) === String(requestedShowId));
+    if (requestedShow) {
+      handledSelectorLocation.current = location.key;
+      openSelector(requestedShow, location.state?.ticketSelectorScheduleId);
+    }
+  }, [location.key, location.state, shows]);
 
   const handleShowSearch = (event) => {
     event.preventDefault();
@@ -273,9 +276,9 @@ export default function HomePage() {
               Experience the harmony of light, water, and music.
             </p>
             <div className="mt-10 flex flex-wrap gap-4">
-              <Link className="rounded-full bg-gradient-to-r from-cyan-500 to-teal-700 px-10 py-4 font-bold text-white shadow-2xl shadow-cyan-950/30 transition hover:-translate-y-0.5 hover:shadow-cyan-950/40 active:translate-y-0" to={heroBookingUrl || '/shows'}>
+              <button className="rounded-full bg-gradient-to-r from-cyan-500 to-teal-700 px-10 py-4 font-bold text-white shadow-2xl shadow-cyan-950/30 transition hover:-translate-y-0.5 hover:shadow-cyan-950/40 active:translate-y-0 disabled:opacity-40" disabled={!firstBookableShow} type="button" onClick={() => openSelector(firstBookableShow)}>
                 Book Tickets
-              </Link>
+              </button>
               <button className="rounded-full border-2 border-white/30 bg-white/10 px-10 py-4 font-bold text-white backdrop-blur-md transition hover:bg-white/20" type="button" onClick={() => scrollToSection('shows')}>
                 Explore Shows
               </button>
@@ -286,7 +289,7 @@ export default function HomePage() {
 
       <div className="relative z-20 mx-auto -mt-24 max-w-7xl px-4 sm:px-6 lg:px-8">
         <div className="flex flex-col items-end gap-6 rounded-[2rem] border border-cyan-100/80 bg-white p-6 shadow-2xl shadow-cyan-950/10 md:flex-row md:p-8">
-          <div className="grid w-full grid-cols-1 gap-6 md:grid-cols-4">
+          <div className="grid w-full grid-cols-1 gap-6">
             <label className="space-y-2">
               <span className="flex items-center gap-2 px-1 text-sm font-bold text-slate-600">
                 <span className="material-symbols-outlined text-cyan-700">water_drop</span>
@@ -306,62 +309,17 @@ export default function HomePage() {
               </select>
             </label>
 
-            <label className="space-y-2">
-              <span className="flex items-center gap-2 px-1 text-sm font-bold text-slate-600">
-                <span className="material-symbols-outlined text-cyan-700">calendar_month</span>
-                Select Date
-              </span>
-              <input
-                className="w-full rounded-full border border-cyan-100 bg-cyan-50/70 px-5 py-3 text-slate-700 focus:border-cyan-400 focus:outline-none focus:ring-2 focus:ring-cyan-200"
-                type="date"
-                value={selectedDate}
-                readOnly
-              />
-            </label>
-
-            <label className="space-y-2">
-              <span className="flex items-center gap-2 px-1 text-sm font-bold text-slate-600">
-                <span className="material-symbols-outlined text-cyan-700">numbers</span>
-                Quantity
-              </span>
-              <input
-                className="w-full rounded-full border border-cyan-100 bg-cyan-50/70 px-5 py-3 text-slate-700 focus:border-cyan-400 focus:outline-none focus:ring-2 focus:ring-cyan-200"
-                min="1"
-                max="10"
-                type="number"
-                value={ticketQuantity}
-                onChange={(event) => setTicketQuantity(Math.min(10, Math.max(1, Number(event.target.value) || 1)))}
-              />
-            </label>
-
-            <label className="space-y-2">
-              <span className="flex items-center gap-2 px-1 text-sm font-bold text-slate-600">
-                <span className="material-symbols-outlined text-cyan-700">confirmation_number</span>
-                Ticket Type
-              </span>
-              <select
-                className="w-full rounded-full border border-cyan-100 bg-cyan-50/70 px-5 py-3 text-slate-700 focus:border-cyan-400 focus:outline-none focus:ring-2 focus:ring-cyan-200"
-                value={ticketType}
-                onChange={(event) => setTicketType(event.target.value)}
-              >
-                {ticketTypeOptions.map((option) => (
-                  <option key={option.value} value={option.value}>
-                    {option.label}
-                  </option>
-                ))}
-              </select>
-            </label>
           </div>
 
-          {selectedBookingUrl ? (
-            <Link className="flex w-full items-center justify-center gap-2 whitespace-nowrap rounded-full bg-cyan-700 px-10 py-4 font-bold text-white shadow-lg shadow-cyan-900/20 transition hover:bg-cyan-800 md:w-auto" to={selectedBookingUrl}>
+          {selectedShow ? (
+            <button className="flex w-full items-center justify-center gap-2 whitespace-nowrap rounded-full bg-cyan-700 px-10 py-4 font-bold text-white shadow-lg shadow-cyan-900/20 transition hover:bg-cyan-800 md:w-auto" type="button" onClick={() => openSelector(selectedShow)}>
               <span className="material-symbols-outlined">search</span>
-              Search Tickets
-            </Link>
+              Select Tickets
+            </button>
           ) : (
             <button className="flex w-full cursor-not-allowed items-center justify-center gap-2 whitespace-nowrap rounded-full bg-slate-300 px-10 py-4 font-bold text-slate-600 md:w-auto" disabled type="button">
               <span className="material-symbols-outlined">search</span>
-              Search Tickets
+              Select Tickets
             </button>
           )}
         </div>
@@ -468,9 +426,10 @@ export default function HomePage() {
                           </p>
                         )}
                       </div>
-                      <Link className="block w-full rounded-full border-2 border-cyan-700 py-3.5 text-center font-bold text-cyan-700 transition hover:bg-cyan-700 hover:text-white" to={`/shows/${show.id}`}>
-                        View Details
-                      </Link>
+                      <div className="grid grid-cols-2 gap-3">
+                        <Link className="rounded-full border-2 border-cyan-700 py-3.5 text-center font-bold text-cyan-700 transition hover:bg-cyan-50" to={`/shows/${show.id}`}>View Details</Link>
+                        <button className="rounded-full bg-cyan-700 py-3.5 text-center font-bold text-white transition hover:bg-cyan-800 disabled:opacity-40" disabled={!show.nextScheduleId} type="button" onClick={() => openSelector(show)}>Select Tickets</button>
+                      </div>
                     </div>
                   </article>
                 );
@@ -558,9 +517,9 @@ export default function HomePage() {
                     <span className={`h-2 w-2 rounded-full ${status.dotClass}`} />
                     {status.label}
                   </span>
-                  <Link className="rounded-full bg-cyan-700 px-8 py-3.5 font-bold text-white shadow-md transition hover:bg-cyan-800" to={bookingUrlForShow(schedule)}>
+                  <button className="rounded-full bg-cyan-700 px-8 py-3.5 font-bold text-white shadow-md transition hover:bg-cyan-800" type="button" onClick={() => openSelector(schedule)}>
                     Book Now
-                  </Link>
+                  </button>
                 </div>
               </article>
                 );
@@ -638,6 +597,17 @@ export default function HomePage() {
           </div>
         </div>
       </section>
+
+      {selectorShow && (
+        <div className="fixed inset-0 z-[80] flex items-center justify-center overflow-y-auto bg-cyan-950/60 p-4 backdrop-blur-sm" role="dialog" aria-modal="true">
+          <button aria-label="Close ticket selector" className="absolute inset-0" type="button" onClick={() => setSelectorShow(null)} />
+          <div className="relative z-10 w-full max-w-3xl">
+            {isLoadingSelector ? <div className="rounded-[2rem] bg-white p-12 text-center font-black text-cyan-700">Loading schedules...</div>
+              : selectorError ? <div className="rounded-[2rem] bg-white p-10 text-center"><p className="font-bold text-red-700">{selectorError}</p><button className="mt-4 rounded-full bg-cyan-700 px-6 py-3 font-bold text-white" type="button" onClick={() => openSelector(selectorShow)}>Try Again</button></div>
+                : <TicketSelector show={selectorShow} schedules={selectorSchedules} onClose={() => setSelectorShow(null)} />}
+          </div>
+        </div>
+      )}
     </MainLayout>
   );
 }

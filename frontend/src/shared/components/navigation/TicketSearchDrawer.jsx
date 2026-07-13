@@ -1,13 +1,8 @@
 import { useEffect, useState } from 'react';
 import { useNavigate } from 'react-router-dom';
 
-import { buildBookingUrl } from '../../../services/bookingService.js';
 import { getShowSchedules, getShows } from '../../../services/showService.js';
-import {
-  sanitizeDigits,
-  validateRequired,
-} from '../../utils/validation.js';
-import { ticketTypeOptions } from '../../utils/ticketPricing.js';
+import { validateRequired } from '../../utils/validation.js';
 
 function formatScheduleOption(schedule) {
   const date = new Date(schedule.startTime);
@@ -46,8 +41,6 @@ export default function TicketSearchDrawer({ open, onClose }) {
   const [formValues, setFormValues] = useState({
     showId: '',
     scheduleId: '',
-    quantity: '',
-    ticketType: '',
   });
   const [shows, setShows] = useState([]);
   const [schedules, setSchedules] = useState([]);
@@ -136,7 +129,7 @@ export default function TicketSearchDrawer({ open, onClose }) {
     const { name, value } = event.target;
     setFormValues((currentValues) => ({
       ...currentValues,
-      [name]: name === 'quantity' ? sanitizeDigits(value, 2) : value,
+      [name]: value,
       ...(name === 'showId' ? { scheduleId: '' } : {}),
     }));
     setFieldErrors((currentErrors) => {
@@ -153,15 +146,9 @@ export default function TicketSearchDrawer({ open, onClose }) {
   const handleSubmit = (event) => {
     event.preventDefault();
 
-    const quantityNumber = Number(formValues.quantity);
     const nextErrors = {
       showId: validateRequired(formValues.showId, 'Show'),
       scheduleId: validateRequired(formValues.scheduleId, 'Schedule'),
-      quantity: validateRequired(formValues.quantity, 'Quantity')
-        || (Number.isInteger(quantityNumber) && quantityNumber >= 1 && quantityNumber <= 10
-          ? ''
-          : 'Quantity must be a number from 1 to 10.'),
-      ticketType: validateRequired(formValues.ticketType, 'Ticket type'),
     };
 
     const activeErrors = Object.fromEntries(Object.entries(nextErrors).filter(([, message]) => message));
@@ -170,21 +157,14 @@ export default function TicketSearchDrawer({ open, onClose }) {
       return;
     }
 
-    const selectedShow = shows.find((show) => show.id === formValues.showId);
-    const selectedSchedule = schedules.find((schedule) => schedule.id === formValues.scheduleId);
-    const showDate = selectedSchedule?.startTime
-      ? String(selectedSchedule.startTime).slice(0, 10)
-      : '';
-
     onClose();
-    navigate(buildBookingUrl({
-      showId: formValues.showId,
-      scheduleId: formValues.scheduleId,
-      showName: selectedShow?.title,
-      showDate,
-      quantity: formValues.quantity,
-      ticketType: formValues.ticketType,
-    }));
+    navigate('/shows', {
+      state: {
+        scrollTo: 'shows',
+        ticketSelectorShowId: formValues.showId,
+        ticketSelectorScheduleId: formValues.scheduleId,
+      },
+    });
   };
 
   if (!open) {
@@ -290,68 +270,12 @@ export default function TicketSearchDrawer({ open, onClose }) {
               <FieldError>{fieldErrors.scheduleId}</FieldError>
             </div>
 
-            <div className="grid gap-4 sm:grid-cols-2">
-              <div className="space-y-2">
-                <label className="ml-1 block text-sm font-bold text-slate-700" htmlFor="ticket-quantity">
-                  Quantity
-                </label>
-                <div className="relative">
-                  <span className="material-symbols-outlined absolute left-4 top-1/2 -translate-y-1/2 text-cyan-700">
-                    numbers
-                  </span>
-                  <input
-                    className="w-full rounded-2xl border border-cyan-100 bg-cyan-50/70 py-4 pl-12 pr-4 text-sm font-semibold text-slate-800 outline-none transition focus:border-cyan-500 focus:bg-white focus:ring-2 focus:ring-cyan-200"
-                    id="ticket-quantity"
-                    inputMode="numeric"
-                    max="10"
-                    min="1"
-                    name="quantity"
-                    pattern="[0-9]*"
-                    placeholder="Ticket quantity"
-                    type="text"
-                    value={formValues.quantity}
-                    onChange={handleChange}
-                  />
-                </div>
-                <FieldError>{fieldErrors.quantity}</FieldError>
-              </div>
-
-              <div className="space-y-2">
-                <label className="ml-1 block text-sm font-bold text-slate-700" htmlFor="ticket-type">
-                  Ticket Type
-                </label>
-                <div className="relative">
-                  <span className="material-symbols-outlined absolute left-4 top-1/2 -translate-y-1/2 text-cyan-700">
-                    confirmation_number
-                  </span>
-                  <select
-                    className="w-full appearance-none rounded-2xl border border-cyan-100 bg-cyan-50/70 py-4 pl-12 pr-10 text-sm font-semibold text-slate-800 outline-none transition focus:border-cyan-500 focus:bg-white focus:ring-2 focus:ring-cyan-200"
-                    id="ticket-type"
-                    name="ticketType"
-                  value={formValues.ticketType}
-                  onChange={handleChange}
-                >
-                  <option value="">Select type</option>
-                  {ticketTypeOptions.map((ticketType) => (
-                      <option key={ticketType.value} value={ticketType.value}>
-                        {ticketType.label}
-                      </option>
-                    ))}
-                  </select>
-                  <span className="material-symbols-outlined pointer-events-none absolute right-4 top-1/2 -translate-y-1/2 text-slate-400">
-                    expand_more
-                  </span>
-                </div>
-                <FieldError>{fieldErrors.ticketType}</FieldError>
-              </div>
-            </div>
-
             <button
               className="mt-2 flex w-full items-center justify-center gap-2 rounded-full bg-gradient-to-r from-cyan-500 via-teal-500 to-cyan-800 px-6 py-4 font-bold text-white shadow-lg shadow-cyan-800/25 transition hover:-translate-y-0.5 hover:shadow-cyan-800/35 active:translate-y-0"
               type="submit"
             >
-              <span className="material-symbols-outlined">search</span>
-              Search Tickets
+              <span className="material-symbols-outlined">confirmation_number</span>
+              Continue to Ticket Selection
             </button>
 
             {optionsError && <p className="text-center text-sm font-semibold text-red-600">{optionsError}</p>}
