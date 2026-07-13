@@ -27,8 +27,20 @@ import jakarta.persistence.EntityManagerFactory;
 import java.math.BigDecimal;
 import java.nio.file.Files;
 import java.nio.file.Path;
+import java.sql.Connection;
+import java.sql.DriverManager;
+import java.sql.ResultSet;
+import java.sql.Statement;
 import java.time.LocalDateTime;
 import java.util.Optional;
+import java.util.UUID;
+import java.util.concurrent.CountDownLatch;
+import java.util.concurrent.ExecutorService;
+import java.util.concurrent.Executors;
+import java.util.concurrent.Future;
+import java.util.concurrent.TimeUnit;
+
+import static org.junit.jupiter.api.Assumptions.assumeTrue;
 
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.assertThatThrownBy;
@@ -319,6 +331,104 @@ class ScheduleCapacityServiceTest {
                 "isRequired()",
                 "migrate()"
         );
+    }
+
+    @Test
+    void migrationSerializesMarkerCheckAndInstallInOneTransaction() throws Exception {
+        String schema = Files.readString(Path.of("src/main/resources/schema.sql"));
+
+        assertThat(schema).startsWith("BEGIN^^^");
+        assertThat(schema).contains(
+                "pg_advisory_xact_lock",
+                "hashtextextended('2026_07_14_schedule_capacity_v3', 0)",
+                "COMMIT^^^"
+        );
+        assertThat(schema.indexOf("pg_advisory_xact_lock"))
+                .isLessThan(schema.indexOf("CREATE TABLE IF NOT EXISTS asms_schema_migrations"));
+        assertThat(schema.lastIndexOf("COMMIT^^^"))
+                .isGreaterThan(schema.lastIndexOf("INSERT INTO asms_schema_migrations"));
+    }
+
+    @Test
+    void migrationRejectsPaidBookingsWithoutScheduleBeforeApplyingMarker() throws Exception {
+        String schema = Files.readString(Path.of("src/main/resources/schema.sql"));
+
+        assertThat(schema).contains(
+                "paid_orphan_count",
+                "NOT EXISTS",
+                "Paid booking schedule not found during migration"
+        );
+        assertThat(schema.indexOf("Paid booking schedule not found during migration"))
+                .isLessThan(schema.indexOf("INSERT INTO asms_schema_migrations"));
+    }
+
+    @Test
+    void concurrentPostgresMigrationAppliesOnceWithoutDuplicateMarker() throws Exception {
+        assumeTrue(Boolean.getBoolean("asms.postgres.integration"));
+        String url = System.getProperty("asms.postgres.url", "jdbc:postgresql://localhost:5432/asms_db");
+        String user = System.getProperty("asms.postgres.user", "asms_user");
+        String password = System.getProperty("asms.postgres.password", "asms_password");
+        String schemaName = "task2_concurrent_" + UUID.randomUUID().toString().replace("-", "");
+
+        try (Connection setup = DriverManager.getConnection(url, user, password);
+             Statement statement = setup.createStatement()) {
+            statement.execute("CREATE SCHEMA " + schemaName);
+            statement.execute("SET search_path TO " + schemaName);
+            statement.execute("CREATE TABLE show_schedules (id uuid PRIMARY KEY, capacity integer NOT NULL, available_tickets integer NOT NULL, price numeric(12,2) NOT NULL)");
+            statement.execute("CREATE TABLE bookings (id uuid PRIMARY KEY, schedule_id varchar(255), status varchar(30), ticket_type varchar(30), quantity integer)");
+            statement.execute("INSERT INTO show_schedules VALUES ('00000000-0000-0000-0000-000000000501', 10, 9, 2500)");
+
+            String migration = Files.readString(Path.of("src/main/resources/schema.sql"));
+            CountDownLatch ready = new CountDownLatch(2);
+            CountDownLatch start = new CountDownLatch(1);
+            ExecutorService executor = Executors.newFixedThreadPool(2);
+            try {
+                Future<?> first = executor.submit(() -> executeMigration(url, user, password, schemaName, migration, ready, start));
+                Future<?> second = executor.submit(() -> executeMigration(url, user, password, schemaName, migration, ready, start));
+                assertThat(ready.await(10, TimeUnit.SECONDS)).isTrue();
+                start.countDown();
+                first.get(30, TimeUnit.SECONDS);
+                second.get(30, TimeUnit.SECONDS);
+            } finally {
+                executor.shutdownNow();
+            }
+
+            try (ResultSet result = statement.executeQuery(
+                    "SELECT count(*) FROM asms_schema_migrations WHERE version = '2026_07_14_schedule_capacity_v3'"
+            )) {
+                result.next();
+                assertThat(result.getInt(1)).isEqualTo(1);
+            }
+        } finally {
+            try (Connection cleanup = DriverManager.getConnection(url, user, password);
+                 Statement statement = cleanup.createStatement()) {
+                statement.execute("DROP SCHEMA IF EXISTS " + schemaName + " CASCADE");
+            }
+        }
+    }
+
+    private static void executeMigration(
+            String url,
+            String user,
+            String password,
+            String schemaName,
+            String migration,
+            CountDownLatch ready,
+            CountDownLatch start
+    ) {
+        try (Connection connection = DriverManager.getConnection(url, user, password);
+             Statement statement = connection.createStatement()) {
+            statement.execute("SET search_path TO " + schemaName);
+            ready.countDown();
+            start.await();
+            for (String sql : migration.split("\\Q^^^\\E")) {
+                if (!sql.isBlank()) {
+                    statement.execute(sql);
+                }
+            }
+        } catch (Exception exception) {
+            throw new IllegalStateException(exception);
+        }
     }
 
     private ShowSchedule schedule(int standard, int vip, int family) {

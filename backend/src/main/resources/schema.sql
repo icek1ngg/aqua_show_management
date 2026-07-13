@@ -1,3 +1,9 @@
+BEGIN^^^
+
+SELECT pg_advisory_xact_lock(
+  hashtextextended('2026_07_14_schedule_capacity_v3', 0)
+)^^^
+
 CREATE TABLE IF NOT EXISTS asms_schema_migrations (
   version varchar(100) PRIMARY KEY,
   applied_at timestamp NOT NULL DEFAULT CURRENT_TIMESTAMP
@@ -11,6 +17,7 @@ DECLARE
   paid_family bigint;
   paid_unknown_count bigint;
   paid_nonpositive_count bigint;
+  paid_orphan_count bigint;
   legacy_sold bigint;
 BEGIN
   -- The pre-JPA pass handles upgrades. On a fresh database it leaves the version
@@ -31,6 +38,21 @@ BEGIN
   ALTER TABLE show_schedules ADD COLUMN IF NOT EXISTS standard_price numeric(12,2);
 
   IF to_regclass('bookings') IS NOT NULL THEN
+    SELECT COUNT(*)
+    INTO paid_orphan_count
+    FROM bookings booking
+    WHERE booking.status = 'PAID'
+      AND NOT EXISTS (
+        SELECT 1 FROM show_schedules schedule
+        WHERE schedule.id::text = booking.schedule_id
+      );
+
+    IF paid_orphan_count > 0 THEN
+      RAISE EXCEPTION
+        'Paid booking schedule not found during migration: % orphan booking(s)',
+        paid_orphan_count;
+    END IF;
+
     SELECT COUNT(*) FILTER (WHERE quantity <= 0)
     INTO paid_nonpositive_count
     FROM bookings;
@@ -290,3 +312,5 @@ BEGIN
   VALUES ('2026_07_14_schedule_capacity_v3');
 END
 $asms_trigger_install$^^^
+
+COMMIT^^^
