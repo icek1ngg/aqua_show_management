@@ -2,6 +2,7 @@ package com.asms.booking.service.impl;
 
 import com.asms.booking.dto.TicketHoldDtos.HoldResult;
 import com.asms.booking.dto.TicketHoldDtos.TicketHoldInfo;
+import com.asms.booking.enums.TicketType;
 import com.asms.booking.exception.TicketHoldServiceUnavailableException;
 import com.asms.booking.service.RedisTicketHoldService;
 import org.slf4j.Logger;
@@ -26,18 +27,34 @@ public class RedisTicketHoldServiceImpl implements RedisTicketHoldService {
     private static final Duration HOLD_TTL = Duration.ofMinutes(15);
     private static final String INVENTORY_PREFIX = "booking:inventory:";
     private static final String HOLD_PREFIX = "booking:hold:";
-    private static final String HELD_PREFIX = "booking:held:";
+    private static final String ACTIVE_HOLDS_PREFIX = "booking:active-holds:";
 
     private static final RedisScript<List> HOLD_SCRIPT = new DefaultRedisScript<>(
             """
-            local inventory = tonumber(redis.call('GET', KEYS[1]) or '0')
-            local held = tonumber(redis.call('GET', KEYS[3]) or '0')
-            local quantity = tonumber(ARGV[1])
-            if inventory - held < quantity then
-              return {'0', '', ''}
+            local expired = redis.call('ZRANGEBYSCORE', KEYS[3], '-inf', ARGV[9])
+            for _, holdId in ipairs(expired) do
+              redis.call('DEL', ARGV[10] .. holdId)
+            end
+            redis.call('ZREMRANGEBYSCORE', KEYS[3], '-inf', ARGV[9])
+
+            local activeHeld = 0
+            local active = redis.call('ZRANGE', KEYS[3], 0, -1)
+            for _, holdId in ipairs(active) do
+              local quantity = redis.call('HGET', ARGV[10] .. holdId, 'quantity')
+              if quantity then
+                activeHeld = activeHeld + tonumber(quantity)
+              else
+                redis.call('ZREM', KEYS[3], holdId)
+              end
             end
 
-            redis.call('INCRBY', KEYS[3], quantity)
+            local inventory = tonumber(redis.call('GET', KEYS[1]) or '0')
+            local requested = tonumber(ARGV[1])
+            local available = inventory - activeHeld
+            if available < requested then
+              return {'0', '', tostring(math.max(0, available)), ''}
+            end
+
             redis.call('HSET', KEYS[2],
               'holdId', ARGV[2],
               'scheduleId', ARGV[3],
@@ -47,36 +64,44 @@ public class RedisTicketHoldServiceImpl implements RedisTicketHoldService {
               'createdAt', ARGV[6],
               'expiresAt', ARGV[7])
             redis.call('EXPIRE', KEYS[2], tonumber(ARGV[8]))
-            redis.call('EXPIRE', KEYS[3], tonumber(ARGV[8]))
-            return {'1', ARGV[2], ARGV[7]}
+            redis.call('ZADD', KEYS[3], tonumber(ARGV[11]), ARGV[2])
+            return {'1', ARGV[2], tostring(available - requested), ARGV[7]}
             """,
             List.class
     );
 
-    private static final RedisScript<Long> RELEASE_SCRIPT = new DefaultRedisScript<>(
+    private static final RedisScript<Long> AVAILABLE_SCRIPT = new DefaultRedisScript<>(
             """
-            local hold = redis.call('HGETALL', KEYS[1])
-            if next(hold) == nil then
-              return 0
+            local expired = redis.call('ZRANGEBYSCORE', KEYS[2], '-inf', ARGV[1])
+            for _, holdId in ipairs(expired) do
+              redis.call('DEL', ARGV[2] .. holdId)
             end
+            redis.call('ZREMRANGEBYSCORE', KEYS[2], '-inf', ARGV[1])
 
-            local scheduleId = ''
-            local ticketType = ''
-            local quantity = 0
-            for i = 1, #hold, 2 do
-              if hold[i] == 'scheduleId' then scheduleId = hold[i + 1] end
-              if hold[i] == 'ticketType' then ticketType = hold[i + 1] end
-              if hold[i] == 'quantity' then quantity = tonumber(hold[i + 1]) end
-            end
-
-            if scheduleId ~= '' and ticketType ~= '' and quantity > 0 then
-              local heldKey = 'booking:held:' .. scheduleId .. ':' .. ticketType
-              local remaining = redis.call('DECRBY', heldKey, quantity)
-              if remaining < 0 then
-                redis.call('SET', heldKey, 0)
+            local activeHeld = 0
+            local active = redis.call('ZRANGE', KEYS[2], 0, -1)
+            for _, holdId in ipairs(active) do
+              local quantity = redis.call('HGET', ARGV[2] .. holdId, 'quantity')
+              if quantity then
+                activeHeld = activeHeld + tonumber(quantity)
+              else
+                redis.call('ZREM', KEYS[2], holdId)
               end
             end
+            local inventory = tonumber(redis.call('GET', KEYS[1]) or '0')
+            return math.max(0, inventory - activeHeld)
+            """,
+            Long.class
+    );
 
+    private static final RedisScript<Long> RELEASE_SCRIPT = new DefaultRedisScript<>(
+            """
+            local scheduleId = redis.call('HGET', KEYS[1], 'scheduleId')
+            local ticketType = redis.call('HGET', KEYS[1], 'ticketType')
+            if not scheduleId or not ticketType then
+              return 0
+            end
+            redis.call('ZREM', ARGV[1] .. scheduleId .. ':' .. ticketType, ARGV[2])
             redis.call('DEL', KEYS[1])
             return 1
             """,
@@ -90,124 +115,92 @@ public class RedisTicketHoldServiceImpl implements RedisTicketHoldService {
     }
 
     @Override
-    public void initializeInventory(String scheduleId, String ticketType, int availableTickets) {
+    public void initializeInventory(String scheduleId, String ticketType, Integer availableTickets) {
+        initializeInventory(scheduleId, TicketType.parse(ticketType), availableTickets);
+    }
+
+    @Override
+    public void initializeInventory(String scheduleId, TicketType type, int availableTickets) {
         if (availableTickets < 0) {
             throw new IllegalArgumentException("Available tickets cannot be negative");
         }
-        String normalizedTicketType = normalizeTicketType(ticketType);
         try {
-            redisTemplate.opsForValue().set(inventoryKey(scheduleId, normalizedTicketType), String.valueOf(availableTickets));
+            redisTemplate.opsForValue().set(inventoryKey(scheduleId, type), String.valueOf(availableTickets));
         } catch (DataAccessException exception) {
-            log.error(
-                    "Redis ticket inventory initialization failed: scheduleId={}, ticketType={}",
-                    scheduleId,
-                    normalizedTicketType,
-                    exception
-            );
-            throw new TicketHoldServiceUnavailableException("Ticket hold service is temporarily unavailable");
+            throw unavailable("initializeInventory", scheduleId, type, null, exception);
         }
     }
 
     @Override
-    public HoldResult holdTickets(String scheduleId, String ticketType, int quantity, UUID userId) {
-        String normalizedTicketType = normalizeTicketType(ticketType);
+    public HoldResult holdTickets(String scheduleId, String ticketType, Integer quantity, UUID userId) {
+        return holdTickets(scheduleId, TicketType.parse(ticketType), quantity, userId);
+    }
+
+    @Override
+    public HoldResult holdTickets(String scheduleId, TicketType type, int quantity, UUID userId) {
         String holdId = UUID.randomUUID().toString();
         Instant createdAt = Instant.now();
         Instant expiresAt = createdAt.plus(HOLD_TTL);
-        String inventoryKey = inventoryKey(scheduleId, normalizedTicketType);
-        String heldKey = heldKey(scheduleId, normalizedTicketType);
-
-        log.info(
-                "Attempting Redis ticket hold: scheduleId={}, ticketType={}, quantity={}, userId={}, inventoryKey={}, heldKey={}",
-                scheduleId,
-                normalizedTicketType,
-                quantity,
-                userId,
-                inventoryKey,
-                heldKey
-        );
-
         try {
             List<?> result = redisTemplate.execute(
                     HOLD_SCRIPT,
-                    List.of(inventoryKey, holdKey(holdId), heldKey),
+                    List.of(inventoryKey(scheduleId, type), holdKey(holdId), activeHoldsKey(scheduleId, type)),
                     String.valueOf(quantity),
                     holdId,
                     scheduleId,
-                    normalizedTicketType,
+                    type.name(),
                     userId.toString(),
                     createdAt.toString(),
                     expiresAt.toString(),
-                    String.valueOf(HOLD_TTL.toSeconds())
+                    String.valueOf(HOLD_TTL.toSeconds()),
+                    String.valueOf(createdAt.getEpochSecond()),
+                    holdKeyPrefix(),
+                    String.valueOf(expiresAt.getEpochSecond())
             );
 
+            int remaining = parseRemaining(result);
             if (result == null || result.isEmpty() || !"1".equals(String.valueOf(result.getFirst()))) {
-                log.warn(
-                        "Redis ticket hold rejected due to insufficient inventory: scheduleId={}, ticketType={}, requestedQuantity={}, userId={}",
-                        scheduleId,
-                        normalizedTicketType,
-                        quantity,
-                        userId
-                );
-                return new HoldResult(false, null, "Insufficient ticket inventory", null);
+                return new HoldResult(false, null, "Insufficient ticket inventory", null, remaining);
             }
-
-            String returnedHoldId = String.valueOf(result.get(1));
-            Instant returnedExpiresAt = Instant.parse(String.valueOf(result.get(2)));
-            log.info(
-                    "Redis ticket hold created: holdId={}, scheduleId={}, ticketType={}, quantity={}, userId={}, expiresAt={}, ttlSeconds={}",
-                    returnedHoldId,
-                    scheduleId,
-                    normalizedTicketType,
-                    quantity,
-                    userId,
-                    returnedExpiresAt,
-                    HOLD_TTL.toSeconds()
+            return new HoldResult(
+                    true,
+                    String.valueOf(result.get(1)),
+                    "Tickets held successfully",
+                    Instant.parse(String.valueOf(result.get(3))),
+                    remaining
             );
-            return new HoldResult(true, returnedHoldId, "Tickets held successfully", returnedExpiresAt);
         } catch (DataAccessException | IllegalStateException exception) {
-            log.error(
-                    "Redis ticket hold operation failed: operation={}, scheduleId={}, ticketType={}, holdId={}",
-                    "holdTickets",
-                    scheduleId,
-                    normalizedTicketType,
-                    holdId,
-                    exception
+            throw unavailable("holdTickets", scheduleId, type, holdId, exception);
+        }
+    }
+
+    @Override
+    public int effectiveAvailability(String scheduleId, TicketType type, int persistentAvailable) {
+        initializeInventory(scheduleId, type, persistentAvailable);
+        try {
+            Long result = redisTemplate.execute(
+                    AVAILABLE_SCRIPT,
+                    List.of(inventoryKey(scheduleId, type), activeHoldsKey(scheduleId, type)),
+                    String.valueOf(Instant.now().getEpochSecond()),
+                    holdKeyPrefix()
             );
-            throw new TicketHoldServiceUnavailableException("Ticket hold service is temporarily unavailable");
+            return Math.max(0, result == null ? 0 : result.intValue());
+        } catch (DataAccessException exception) {
+            throw unavailable("effectiveAvailability", scheduleId, type, null, exception);
         }
     }
 
     @Override
     public void releaseHold(String holdId) {
-        log.info("Releasing Redis ticket hold: holdId={}", holdId);
         try {
-            Optional<TicketHoldInfo> hold = getHold(holdId);
-            Long releaseResult = redisTemplate.execute(RELEASE_SCRIPT, List.of(holdKey(holdId)), holdId);
-            if (releaseResult == null || releaseResult == 0) {
-                log.warn("Redis ticket hold release skipped because hold does not exist: holdId={}", holdId);
-                return;
-            }
-            hold.ifPresentOrElse(
-                    holdInfo -> log.info(
-                            "Redis ticket hold released: holdId={}, scheduleId={}, ticketType={}, quantity={}",
-                            holdInfo.holdId(),
-                            holdInfo.scheduleId(),
-                            holdInfo.ticketType(),
-                            holdInfo.quantity()
-                    ),
-                    () -> log.info("Redis ticket hold released: holdId={}, scheduleId={}, ticketType={}, quantity={}", holdId, null, null, null)
+            redisTemplate.execute(
+                    RELEASE_SCRIPT,
+                    List.of(holdKey(holdId)),
+                    ACTIVE_HOLDS_PREFIX,
+                    holdId
             );
         } catch (DataAccessException exception) {
-            log.error(
-                    "Redis ticket hold operation failed: operation={}, scheduleId={}, ticketType={}, holdId={}",
-                    "releaseHold",
-                    null,
-                    null,
-                    holdId,
-                    exception
-            );
-            throw new TicketHoldServiceUnavailableException("Ticket hold service is temporarily unavailable");
+            throw unavailable("releaseHold", null, null, holdId, exception);
         }
     }
 
@@ -218,7 +211,6 @@ public class RedisTicketHoldServiceImpl implements RedisTicketHoldService {
             if (entries == null || entries.isEmpty()) {
                 return Optional.empty();
             }
-
             return Optional.of(new TicketHoldInfo(
                     value(entries, "holdId"),
                     value(entries, "scheduleId"),
@@ -229,23 +221,36 @@ public class RedisTicketHoldServiceImpl implements RedisTicketHoldService {
                     Instant.parse(value(entries, "expiresAt"))
             ));
         } catch (DataAccessException exception) {
-            log.error(
-                    "Redis ticket hold operation failed: operation={}, scheduleId={}, ticketType={}, holdId={}",
-                    "getHold",
-                    null,
-                    null,
-                    holdId,
-                    exception
-            );
-            throw new TicketHoldServiceUnavailableException("Ticket hold service is temporarily unavailable");
+            throw unavailable("getHold", null, null, holdId, exception);
         }
     }
 
     @Override
     public boolean isHoldValid(String holdId) {
-        return getHold(holdId)
-                .map(hold -> hold.expiresAt().isAfter(Instant.now()))
-                .orElse(false);
+        return getHold(holdId).map(hold -> hold.expiresAt().isAfter(Instant.now())).orElse(false);
+    }
+
+    public String inventoryKey(String scheduleId, TicketType type) {
+        return INVENTORY_PREFIX + scheduleId + ':' + type.name();
+    }
+
+    String activeHoldsKey(String scheduleId, TicketType type) {
+        return ACTIVE_HOLDS_PREFIX + scheduleId + ':' + type.name();
+    }
+
+    String holdKeyPrefix() {
+        return HOLD_PREFIX;
+    }
+
+    private String holdKey(String holdId) {
+        return holdKeyPrefix() + holdId;
+    }
+
+    private int parseRemaining(List<?> result) {
+        if (result == null || result.size() < 3) {
+            return 0;
+        }
+        return Math.max(0, Integer.parseInt(String.valueOf(result.get(2))));
     }
 
     private String value(Map<Object, Object> entries, String key) {
@@ -256,19 +261,17 @@ public class RedisTicketHoldServiceImpl implements RedisTicketHoldService {
         return value.toString();
     }
 
-    private String inventoryKey(String scheduleId, String ticketType) {
-        return INVENTORY_PREFIX + scheduleId;
-    }
-
-    private String holdKey(String holdId) {
-        return HOLD_PREFIX + holdId;
-    }
-
-    private String heldKey(String scheduleId, String ticketType) {
-        return HELD_PREFIX + scheduleId;
-    }
-
-    private String normalizeTicketType(String ticketType) {
-        return ticketType == null ? "" : ticketType.trim();
+    private TicketHoldServiceUnavailableException unavailable(
+            String operation,
+            String scheduleId,
+            TicketType type,
+            String holdId,
+            Exception exception
+    ) {
+        log.error(
+                "Redis ticket hold operation failed: operation={}, scheduleId={}, ticketType={}, holdId={}",
+                operation, scheduleId, type, holdId, exception
+        );
+        return new TicketHoldServiceUnavailableException("Ticket hold service is temporarily unavailable");
     }
 }

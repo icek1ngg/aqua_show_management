@@ -12,8 +12,12 @@ public final class TicketHoldDtos {
             boolean success,
             String holdId,
             String message,
-            Instant expiresAt
+            Instant expiresAt,
+            int remainingAvailable
     ) {
+        public HoldResult(boolean success, String holdId, String message, Instant expiresAt) {
+            this(success, holdId, message, expiresAt, 0);
+        }
     }
 
     public record TicketHoldInfo(

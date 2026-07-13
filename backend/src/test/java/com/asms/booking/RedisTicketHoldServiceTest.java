@@ -1,5 +1,9 @@
 package com.asms.booking;
 
+import com.asms.booking.dto.TicketHoldDtos.HoldResult;
+import com.asms.booking.enums.TicketType;
+import com.asms.booking.exception.TicketHoldServiceUnavailableException;
+import com.asms.booking.service.impl.RedisTicketHoldServiceImpl;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 import org.mockito.ArgumentCaptor;
@@ -9,8 +13,6 @@ import org.springframework.data.redis.core.StringRedisTemplate;
 import org.springframework.data.redis.core.ValueOperations;
 import org.springframework.data.redis.core.script.RedisScript;
 
-import java.lang.reflect.Constructor;
-import java.lang.reflect.Method;
 import java.time.Instant;
 import java.util.List;
 import java.util.Map;
@@ -21,9 +23,7 @@ import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.assertThatThrownBy;
 import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.ArgumentMatchers.anyList;
-import static org.mockito.ArgumentMatchers.anyString;
 import static org.mockito.Mockito.mock;
-import static org.mockito.Mockito.never;
 import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
 
@@ -32,125 +32,123 @@ class RedisTicketHoldServiceTest {
     private StringRedisTemplate redisTemplate;
     private ValueOperations<String, String> valueOperations;
     private HashOperations<String, Object, Object> hashOperations;
-    private Object holdService;
+    private RedisTicketHoldServiceImpl service;
 
     @BeforeEach
-    void setUp() throws Exception {
+    void setUp() {
         redisTemplate = mock(StringRedisTemplate.class);
         valueOperations = mock(ValueOperations.class);
         hashOperations = mock(HashOperations.class);
         when(redisTemplate.opsForValue()).thenReturn(valueOperations);
         when(redisTemplate.opsForHash()).thenReturn(hashOperations);
-        holdService = newHoldService(redisTemplate);
+        service = new RedisTicketHoldServiceImpl(redisTemplate);
     }
 
     @Test
-    void holdTicketsReturnsSuccessWhenRedisScriptSucceeds() throws Exception {
-        when(redisTemplate.execute(any(RedisScript.class), anyList(), anyString(), anyString(), anyString(), anyString(), anyString(), anyString(), anyString(), anyString()))
-                .thenReturn(List.of("1", "hold-123", "2026-05-31T15:15:00Z"));
+    void inventoryKeyIncludesScheduleAndTicketType() {
+        assertThat(service.inventoryKey("schedule-1", TicketType.VIP))
+                .isEqualTo("booking:inventory:schedule-1:VIP");
+    }
 
-        Object result = invoke(
-                holdService,
-                "holdTickets",
-                new Class<?>[]{String.class, String.class, int.class, UUID.class},
-                "schedule-1",
-                "Standard Entry",
-                2,
-                UUID.randomUUID()
+    @Test
+    void initializeInventoryUsesScheduleAndTicketTypeKey() {
+        service.initializeInventory("schedule-1", TicketType.STANDARD, 7);
+
+        verify(valueOperations).set("booking:inventory:schedule-1:STANDARD", "7");
+    }
+
+    @Test
+    void holdTicketsReturnsRemainingEffectiveAvailability() {
+        when(redisTemplate.execute(any(RedisScript.class), anyList(), any(Object[].class)))
+                .thenReturn(List.of("1", "hold-123", "7", "2026-07-13T15:15:00Z"));
+
+        HoldResult result = service.holdTickets(
+                "schedule-1", TicketType.VIP, 3, UUID.randomUUID());
+
+        assertThat(result.success()).isTrue();
+        assertThat(result.holdId()).isEqualTo("hold-123");
+        assertThat(result.expiresAt()).isEqualTo(Instant.parse("2026-07-13T15:15:00Z"));
+        assertThat(result.remainingAvailable()).isEqualTo(7);
+
+        @SuppressWarnings("unchecked")
+        ArgumentCaptor<List<String>> keys = ArgumentCaptor.forClass(List.class);
+        verify(redisTemplate).execute(any(RedisScript.class), keys.capture(), any(Object[].class));
+        assertThat(keys.getValue().get(0)).isEqualTo("booking:inventory:schedule-1:VIP");
+        assertThat(keys.getValue().get(1)).startsWith("booking:hold:");
+        assertThat(keys.getValue().get(2)).isEqualTo("booking:active-holds:schedule-1:VIP");
+    }
+
+    @Test
+    void effectiveAvailabilityCleansOnlyExpiredHoldsAndCountsActiveHolds() {
+        // Given two sorted-set members with different scores, the Lua script must clean by
+        // the current epoch boundary and then sum the quantities of the surviving members.
+        long expiredAt = Instant.parse("2026-07-13T15:00:00Z").getEpochSecond();
+        long activeUntil = Instant.parse("2026-07-13T15:30:00Z").getEpochSecond();
+        assertThat(expiredAt).isLessThan(activeUntil);
+        when(redisTemplate.execute(any(RedisScript.class), anyList(), any(Object[].class)))
+                .thenReturn(7L);
+
+        int available = service.effectiveAvailability("schedule-1", TicketType.FAMILY, 10);
+
+        assertThat(available).isEqualTo(7);
+        @SuppressWarnings("unchecked")
+        ArgumentCaptor<RedisScript<Long>> script = ArgumentCaptor.forClass(RedisScript.class);
+        @SuppressWarnings("unchecked")
+        ArgumentCaptor<List<String>> keys = ArgumentCaptor.forClass(List.class);
+        verify(redisTemplate).execute(script.capture(), keys.capture(), any(Object[].class));
+        assertThat(keys.getValue()).containsExactly(
+                "booking:inventory:schedule-1:FAMILY",
+                "booking:active-holds:schedule-1:FAMILY"
         );
-
-        assertThat(invoke(result, "success")).isEqualTo(true);
-        assertThat(invoke(result, "holdId")).isEqualTo("hold-123");
-        assertThat(invoke(result, "message")).isEqualTo("Tickets held successfully");
-        assertThat(invoke(result, "expiresAt")).isEqualTo(Instant.parse("2026-05-31T15:15:00Z"));
-        verify(valueOperations, never()).setIfAbsent(anyString(), anyString());
+        assertThat(script.getValue().getScriptAsString())
+                .contains("ZRANGEBYSCORE", "ZREMRANGEBYSCORE", "ZRANGE", "HGET")
+                .contains("'-inf', ARGV[1]");
     }
 
     @Test
-    void initializeInventorySetsDbSourcedAvailability() throws Exception {
-        invoke(
-                holdService,
-                "initializeInventory",
-                new Class<?>[]{String.class, String.class, int.class},
-                "schedule-1",
-                "STANDARD",
-                7
-        );
+    void holdTicketsReturnsFailureWhenInventoryIsInsufficient() {
+        when(redisTemplate.execute(any(RedisScript.class), anyList(), any(Object[].class)))
+                .thenReturn(List.of("0", "", "4", ""));
 
-        verify(valueOperations).set("booking:inventory:schedule-1", "7");
+        HoldResult result = service.holdTickets(
+                "schedule-1", TicketType.VIP, 10, UUID.randomUUID());
+
+        assertThat(result.success()).isFalse();
+        assertThat(result.holdId()).isNull();
+        assertThat(result.remainingAvailable()).isEqualTo(4);
     }
 
     @Test
-    void holdTicketsReturnsFailureWhenInventoryIsInsufficient() throws Exception {
-        when(redisTemplate.execute(any(RedisScript.class), anyList(), anyString(), anyString(), anyString(), anyString(), anyString(), anyString(), anyString(), anyString()))
-                .thenReturn(List.of("0", "", ""));
+    void releaseHoldDeletesHashAndRemovesMemberFromItsTypedActiveSet() {
+        when(redisTemplate.execute(any(RedisScript.class), anyList(), any(Object[].class)))
+                .thenReturn(1L);
 
-        Object result = invoke(
-                holdService,
-                "holdTickets",
-                new Class<?>[]{String.class, String.class, int.class, UUID.class},
-                "schedule-1",
-                "VIP Entry",
-                10,
-                UUID.randomUUID()
-        );
+        service.releaseHold("hold-123");
 
-        assertThat(invoke(result, "success")).isEqualTo(false);
-        assertThat(invoke(result, "holdId")).isNull();
-        assertThat(invoke(result, "message")).isEqualTo("Insufficient ticket inventory");
+        @SuppressWarnings("unchecked")
+        ArgumentCaptor<RedisScript<Long>> script = ArgumentCaptor.forClass(RedisScript.class);
+        verify(redisTemplate).execute(script.capture(), anyList(), any(Object[].class));
+        assertThat(script.getValue().getScriptAsString()).contains("ZREM", "DEL");
     }
 
     @Test
-    void releaseHoldUsesAtomicScriptToDecrementHeldCountAndDeleteHold() throws Exception {
-        invoke(holdService, "releaseHold", new Class<?>[]{String.class}, "hold-123");
-
-        ArgumentCaptor<List<String>> keysCaptor = ArgumentCaptor.forClass(List.class);
-        verify(redisTemplate).execute(any(RedisScript.class), keysCaptor.capture(), anyString());
-
-        assertThat(keysCaptor.getValue()).containsExactly("booking:hold:hold-123");
-    }
-
-    @Test
-    void missingHoldReturnsInvalid() throws Exception {
+    void missingHoldReturnsInvalid() {
         when(hashOperations.entries("booking:hold:missing")).thenReturn(Map.of());
 
-        Object hold = invoke(holdService, "getHold", new Class<?>[]{String.class}, "missing");
-        Object valid = invoke(holdService, "isHoldValid", new Class<?>[]{String.class}, "missing");
+        Optional<?> hold = service.getHold("missing");
 
-        assertThat((Optional<?>) hold).isEmpty();
-        assertThat(valid).isEqualTo(false);
+        assertThat(hold).isEmpty();
+        assertThat(service.isHoldValid("missing")).isFalse();
     }
 
     @Test
-    void redisExceptionIsWrappedClearly() {
-        when(redisTemplate.execute(any(RedisScript.class), anyList(), anyString(), anyString(), anyString(), anyString(), anyString(), anyString(), anyString(), anyString()))
+    void redisExceptionIsWrappedClearlyForCheckout() {
+        when(redisTemplate.execute(any(RedisScript.class), anyList(), any(Object[].class)))
                 .thenThrow(new RedisConnectionFailureException("redis down"));
 
-        assertThatThrownBy(() -> invoke(
-                holdService,
-                "holdTickets",
-                new Class<?>[]{String.class, String.class, int.class, UUID.class},
-                "schedule-1",
-                "Standard Entry",
-                1,
-                UUID.randomUUID()
-        ))
-                .isInstanceOf(Exception.class)
-                .hasRootCauseMessage("Ticket hold service is temporarily unavailable");
-    }
-
-    private Object newHoldService(StringRedisTemplate redisTemplate) throws Exception {
-        Constructor<?> constructor = Class.forName("com.asms.booking.service.impl.RedisTicketHoldServiceImpl")
-                .getConstructor(StringRedisTemplate.class);
-        return constructor.newInstance(redisTemplate);
-    }
-
-    private Object invoke(Object target, String methodName) throws Exception {
-        return invoke(target, methodName, new Class<?>[]{});
-    }
-
-    private Object invoke(Object target, String methodName, Class<?>[] parameterTypes, Object... values) throws Exception {
-        Method method = target.getClass().getMethod(methodName, parameterTypes);
-        return method.invoke(target, values);
+        assertThatThrownBy(() -> service.holdTickets(
+                "schedule-1", TicketType.STANDARD, 1, UUID.randomUUID()))
+                .isInstanceOf(TicketHoldServiceUnavailableException.class)
+                .hasMessage("Ticket hold service is temporarily unavailable");
     }
 }
