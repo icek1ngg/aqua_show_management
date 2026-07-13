@@ -13,14 +13,18 @@ import ManagerActionBar from '../features/manager/components/ManagerActionBar.js
 import ManagerLayout from '../features/manager/components/ManagerLayout.jsx';
 import ManagerPageHeader from '../features/manager/components/ManagerPageHeader.jsx';
 import ManagerStatCard from '../features/manager/components/ManagerStatCard.jsx';
+import { validateScheduleInventory } from '../features/manager/scheduleForm.js';
+import { formatCurrency } from '../shared/utils/ticketPricing.js';
 
 const emptyForm = {
   showId: '',
   venueId: '',
   startTime: '',
   endTime: '',
-  capacity: '',
-  price: '',
+  standardCapacity: '',
+  vipCapacity: '',
+  familyCapacity: '',
+  standardPrice: '',
   status: 'ACTIVE',
 };
 
@@ -41,20 +45,6 @@ function formatDateTime(value) {
     hour: '2-digit',
     minute: '2-digit',
   });
-}
-
-function formatMoney(value) {
-  const amount = Number(value);
-
-  if (!Number.isFinite(amount)) {
-    return 'TBA';
-  }
-
-  return new Intl.NumberFormat('en-US', {
-    style: 'currency',
-    currency: 'USD',
-    maximumFractionDigits: amount % 1 === 0 ? 0 : 2,
-  }).format(amount);
 }
 
 function toDateTimeLocal(value) {
@@ -91,26 +81,16 @@ function statusBadge(status) {
   return 'bg-surface-container-highest text-on-surface-variant';
 }
 
-function capacityPercent(schedule) {
-  const capacity = Number(schedule.capacity);
-  const availableTickets = Number(schedule.availableTickets);
-
-  if (!Number.isFinite(capacity) || capacity <= 0 || !Number.isFinite(availableTickets)) {
-    return 0;
-  }
-
-  const sold = Math.max(0, capacity - availableTickets);
-  return Math.min(100, Math.round((sold / capacity) * 100));
-}
-
 function toForm(schedule) {
   return {
     showId: schedule?.showId || '',
     venueId: schedule?.venueId || '',
     startTime: toDateTimeLocal(schedule?.startTime),
     endTime: toDateTimeLocal(schedule?.endTime),
-    capacity: schedule?.capacity ? String(schedule.capacity) : '',
-    price: schedule?.price != null ? String(schedule.price) : '',
+    standardCapacity: schedule?.standardCapacity != null ? String(schedule.standardCapacity) : '',
+    vipCapacity: schedule?.vipCapacity != null ? String(schedule.vipCapacity) : '',
+    familyCapacity: schedule?.familyCapacity != null ? String(schedule.familyCapacity) : '',
+    standardPrice: schedule?.standardPrice != null ? String(schedule.standardPrice) : '',
     status: schedule?.status || 'ACTIVE',
   };
 }
@@ -129,6 +109,7 @@ function ScheduleFormModal({
   shows,
   venues,
   selectedVenue,
+  inventoryValidation,
   fieldErrors,
   generalError,
   isSaving,
@@ -234,45 +215,88 @@ function ScheduleFormModal({
             </div>
           </div>
 
-          <div className="grid grid-cols-1 gap-unit-lg md:grid-cols-3">
+          <div className="grid grid-cols-1 gap-unit-lg md:grid-cols-2">
             <div className="space-y-unit-xs">
-              <label className="text-label-md font-bold text-on-surface-variant" htmlFor="schedule-capacity">
-                Capacity
+              <label className="text-label-md font-bold text-on-surface-variant" htmlFor="schedule-standard-capacity">
+                Standard Capacity
               </label>
               <input
                 className="w-full rounded-md border-none bg-surface-container-low px-unit-md py-unit-md text-body-md focus:ring-2 focus:ring-primary"
-                id="schedule-capacity"
-                min="1"
-                name="capacity"
-                placeholder="500"
+                id="schedule-standard-capacity"
+                min="0"
+                name="standardCapacity"
+                placeholder="70"
+                step="1"
                 type="number"
-                value={formValues.capacity}
+                value={formValues.standardCapacity}
                 onChange={onChange}
               />
-              <FieldError>{fieldErrors.capacity}</FieldError>
-              {selectedVenue && <p className="text-[10px] font-medium text-tertiary">Max Venue Cap: {selectedVenue.capacity}</p>}
+              <FieldError>{fieldErrors.standardCapacity || inventoryValidation.errors.standardCapacity}</FieldError>
             </div>
 
             <div className="space-y-unit-xs">
-              <label className="text-label-md font-bold text-on-surface-variant" htmlFor="schedule-price">
-                Ticket Price
+              <label className="text-label-md font-bold text-on-surface-variant" htmlFor="schedule-vip-capacity">
+                VIP Capacity
               </label>
               <input
                 className="w-full rounded-md border-none bg-surface-container-low px-unit-md py-unit-md text-body-md focus:ring-2 focus:ring-primary"
-                id="schedule-price"
-                min="0.01"
-                name="price"
-                placeholder="45.00"
-                step="0.01"
+                id="schedule-vip-capacity"
+                min="0"
+                name="vipCapacity"
+                placeholder="20"
+                step="1"
                 type="number"
-                value={formValues.price}
+                value={formValues.vipCapacity}
                 onChange={onChange}
               />
-              <FieldError>{fieldErrors.price}</FieldError>
+              <FieldError>{fieldErrors.vipCapacity || inventoryValidation.errors.vipCapacity}</FieldError>
+            </div>
+
+            <div className="space-y-unit-xs">
+              <label className="text-label-md font-bold text-on-surface-variant" htmlFor="schedule-family-capacity">
+                Family Capacity
+              </label>
+              <input
+                className="w-full rounded-md border-none bg-surface-container-low px-unit-md py-unit-md text-body-md focus:ring-2 focus:ring-primary"
+                id="schedule-family-capacity"
+                min="0"
+                name="familyCapacity"
+                placeholder="10"
+                step="1"
+                type="number"
+                value={formValues.familyCapacity}
+                onChange={onChange}
+              />
+              <FieldError>{fieldErrors.familyCapacity || inventoryValidation.errors.familyCapacity}</FieldError>
+            </div>
+
+            <div className="space-y-unit-xs">
+              <label className="text-label-md font-bold text-on-surface-variant" htmlFor="schedule-standard-price">
+                Standard Price (VND)
+              </label>
+              <input
+                className="w-full rounded-md border-none bg-surface-container-low px-unit-md py-unit-md text-body-md focus:ring-2 focus:ring-primary"
+                id="schedule-standard-price"
+                min="1"
+                name="standardPrice"
+                placeholder="2500"
+                step="1"
+                type="number"
+                value={formValues.standardPrice}
+                onChange={onChange}
+              />
+              <FieldError>{fieldErrors.standardPrice || inventoryValidation.errors.standardPrice}</FieldError>
+            </div>
+
+            <div className="rounded-md bg-surface-container-low p-unit-md md:col-span-2">
+              <p className="font-label-lg text-on-surface">
+                Total Capacity: {inventoryValidation.totalCapacity} / {selectedVenue?.capacity ?? 'Select a venue'}
+              </p>
+              <FieldError>{inventoryValidation.errors.totalCapacity}</FieldError>
             </div>
 
             {isEdit && (
-              <div className="space-y-unit-xs">
+              <div className="space-y-unit-xs md:col-span-2">
                 <label className="text-label-md font-bold text-on-surface-variant" htmlFor="schedule-status">
                   Status
                 </label>
@@ -296,7 +320,7 @@ function ScheduleFormModal({
             <div className="space-y-1">
               <h4 className="text-label-md font-bold text-tertiary">Backend Validation Applies</h4>
               <p className="text-body-sm text-on-surface-variant">
-                Start must be before end, at least 24 hours ahead, within venue capacity, non-overlapping, and price must be greater than 0.
+                Start must be before end, at least 24 hours ahead, non-overlapping, and the combined ticket capacity must fit the venue.
               </p>
             </div>
           </div>
@@ -305,7 +329,7 @@ function ScheduleFormModal({
             <button className="rounded-md px-unit-xl py-unit-md font-label-lg text-on-surface-variant transition-colors hover:bg-surface-container-high" disabled={isSaving} type="button" onClick={onClose}>
               Cancel
             </button>
-            <button className="rounded-md bg-primary px-unit-xl py-unit-md font-label-lg text-on-primary transition-all hover:opacity-90 active:scale-95 disabled:cursor-not-allowed disabled:opacity-60" disabled={isSaving} type="submit">
+            <button className="rounded-md bg-primary px-unit-xl py-unit-md font-label-lg text-on-primary transition-all hover:opacity-90 active:scale-95 disabled:cursor-not-allowed disabled:opacity-60" disabled={isSaving || !inventoryValidation.isValid} type="submit">
               {isSaving ? 'Saving...' : isEdit ? 'Update Schedule' : 'Create Schedule'}
             </button>
           </div>
@@ -471,7 +495,13 @@ export default function ManageSchedulesPage() {
   const stats = useMemo(() => {
     const active = schedules.filter((schedule) => schedule.status === 'ACTIVE').length;
     const inactive = schedules.filter((schedule) => schedule.status === 'INACTIVE').length;
-    const availableTickets = schedules.reduce((total, schedule) => total + (Number(schedule.availableTickets) || 0), 0);
+    const availableTickets = schedules.reduce(
+      (total, schedule) => total
+        + (Number(schedule.standardAvailableTickets) || 0)
+        + (Number(schedule.vipAvailableTickets) || 0)
+        + (Number(schedule.familyAvailableTickets) || 0),
+      0,
+    );
 
     return {
       total: pagination.totalItems,
@@ -484,6 +514,10 @@ export default function ManageSchedulesPage() {
   const selectedVenue = useMemo(
     () => venues.find((venue) => venue.id === formValues.venueId),
     [formValues.venueId, venues],
+  );
+  const inventoryValidation = useMemo(
+    () => validateScheduleInventory(formValues, selectedVenue?.capacity),
+    [formValues, selectedVenue?.capacity],
   );
 
   const handleFilterChange = (event) => {
@@ -537,6 +571,11 @@ export default function ManageSchedulesPage() {
 
   const handleSubmit = async (event) => {
     event.preventDefault();
+
+    if (!inventoryValidation.isValid) {
+      return;
+    }
+
     setIsSaving(true);
     setFieldErrors({});
     setFormError('');
@@ -547,8 +586,10 @@ export default function ManageSchedulesPage() {
       venueId: formValues.venueId || null,
       startTime: formValues.startTime || null,
       endTime: formValues.endTime || null,
-      capacity: formValues.capacity ? Number(formValues.capacity) : null,
-      price: formValues.price ? Number(formValues.price) : null,
+      standardCapacity: Number(formValues.standardCapacity),
+      vipCapacity: Number(formValues.vipCapacity),
+      familyCapacity: Number(formValues.familyCapacity),
+      standardPrice: Number(formValues.standardPrice),
     };
     const payload = formMode === 'edit'
       ? { ...basePayload, status: formValues.status }
@@ -742,18 +783,17 @@ export default function ManageSchedulesPage() {
                         <th className="px-unit-lg py-unit-md">Venue</th>
                         <th className="px-unit-lg py-unit-md">Start Time</th>
                         <th className="px-unit-lg py-unit-md">End Time</th>
-                        <th className="px-unit-lg py-unit-md text-center">Capacity</th>
-                        <th className="px-unit-lg py-unit-md text-center">Available</th>
-                        <th className="px-unit-lg py-unit-md">Price</th>
+                        <th className="px-unit-lg py-unit-md text-center">Standard A/C</th>
+                        <th className="px-unit-lg py-unit-md text-center">VIP A/C</th>
+                        <th className="px-unit-lg py-unit-md text-center">Family A/C</th>
+                        <th className="px-unit-lg py-unit-md text-center">Total Available</th>
+                        <th className="px-unit-lg py-unit-md">Standard Price</th>
                         <th className="px-unit-lg py-unit-md">Status</th>
                         <th className="px-unit-lg py-unit-md text-right">Actions</th>
                       </tr>
                     </thead>
                     <tbody className="divide-y divide-outline-variant/10">
-                      {schedules.map((schedule) => {
-                        const percent = capacityPercent(schedule);
-
-                        return (
+                      {schedules.map((schedule) => (
                           <tr className={`group transition-colors hover:bg-surface-container-low ${schedule.status === 'INACTIVE' ? 'opacity-70' : ''}`} key={schedule.id}>
                             <td className="px-unit-lg py-unit-md font-mono text-[12px] text-on-surface-variant" title={schedule.id}>{truncateId(schedule.id)}</td>
                             <td className="px-unit-lg py-unit-md">
@@ -762,16 +802,11 @@ export default function ManageSchedulesPage() {
                             <td className="px-unit-lg py-unit-md text-on-surface-variant">{schedule.venueName || 'TBA'}</td>
                             <td className="px-unit-lg py-unit-md font-medium">{formatDateTime(schedule.startTime)}</td>
                             <td className="px-unit-lg py-unit-md text-on-surface-variant">{formatDateTime(schedule.endTime)}</td>
-                            <td className="px-unit-lg py-unit-md text-center">{schedule.capacity ?? 'TBA'}</td>
-                            <td className="px-unit-lg py-unit-md">
-                              <div className="flex flex-col items-center gap-1">
-                                <span className="text-body-sm font-bold">{schedule.availableTickets ?? 'TBA'}</span>
-                                <div className="h-1.5 w-24 overflow-hidden rounded-full bg-surface-container-highest">
-                                  <div className="h-full bg-primary" style={{ width: `${percent}%` }} />
-                                </div>
-                              </div>
-                            </td>
-                            <td className="px-unit-lg py-unit-md font-bold">{formatMoney(schedule.price)}</td>
+                            <td className="px-unit-lg py-unit-md text-center font-bold">{schedule.standardAvailableTickets ?? 'TBA'}/{schedule.standardCapacity ?? 'TBA'}</td>
+                            <td className="px-unit-lg py-unit-md text-center font-bold">{schedule.vipAvailableTickets ?? 'TBA'}/{schedule.vipCapacity ?? 'TBA'}</td>
+                            <td className="px-unit-lg py-unit-md text-center font-bold">{schedule.familyAvailableTickets ?? 'TBA'}/{schedule.familyCapacity ?? 'TBA'}</td>
+                            <td className="px-unit-lg py-unit-md text-center font-bold">{schedule.totalAvailableTickets ?? 'TBA'}</td>
+                            <td className="px-unit-lg py-unit-md font-bold">{schedule.standardPrice != null ? formatCurrency(schedule.standardPrice) : 'TBA'}</td>
                             <td className="px-unit-lg py-unit-md">
                               <span className={`rounded-full px-3 py-1 text-label-md font-bold uppercase ${statusBadge(schedule.status)}`}>{schedule.status}</span>
                             </td>
@@ -792,8 +827,7 @@ export default function ManageSchedulesPage() {
                               </div>
                             </td>
                           </tr>
-                        );
-                      })}
+                      ))}
                     </tbody>
                   </table>
                 </div>
@@ -826,6 +860,7 @@ export default function ManageSchedulesPage() {
           shows={shows}
           venues={venues}
           selectedVenue={selectedVenue}
+          inventoryValidation={inventoryValidation}
           fieldErrors={fieldErrors}
           generalError={formError}
           isSaving={isSaving}
