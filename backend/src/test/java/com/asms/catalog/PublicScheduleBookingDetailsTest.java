@@ -25,6 +25,7 @@ import org.springframework.transaction.annotation.Transactional;
 
 import java.math.BigDecimal;
 import java.time.LocalDateTime;
+import java.util.Arrays;
 import java.util.Optional;
 import java.util.UUID;
 
@@ -82,7 +83,6 @@ class PublicScheduleBookingDetailsTest {
         assertThat(response.venueId()).isEqualTo(venue.getId());
         assertThat(response.venueName()).isEqualTo("Main Plaza Pool");
         assertThat(response.venueLocation()).isEqualTo("Zone A");
-        assertThat(response.standardBasePrice()).isEqualByComparingTo("2500");
         assertThat(response.standardPrice()).isEqualByComparingTo("2500.00");
         assertThat(response.vipPrice()).isEqualByComparingTo("6250.00");
         assertThat(response.familyPrice()).isEqualByComparingTo("3750.00");
@@ -95,6 +95,14 @@ class PublicScheduleBookingDetailsTest {
         verify(holds).effectiveAvailability(schedule.getId().toString(), TicketType.STANDARD, 100);
         verify(holds).effectiveAvailability(schedule.getId().toString(), TicketType.VIP, 20);
         verify(holds).effectiveAvailability(schedule.getId().toString(), TicketType.FAMILY, 10);
+    }
+
+    @Test
+    void bookingScheduleResponseExposesOneCanonicalPricePerTicketType() {
+        assertThat(Arrays.stream(BookingScheduleResponse.class.getRecordComponents())
+                .map(component -> component.getName())
+                .filter(name -> name.toLowerCase().contains("price")))
+                .containsExactly("standardPrice", "vipPrice", "familyPrice");
     }
 
     @Test

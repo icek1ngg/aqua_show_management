@@ -64,7 +64,6 @@ public final class CatalogDtos {
             UUID venueId,
             String venueName,
             String venueLocation,
-            BigDecimal standardBasePrice,
             BigDecimal standardPrice,
             BigDecimal vipPrice,
             BigDecimal familyPrice,

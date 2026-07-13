@@ -79,7 +79,6 @@ final class CatalogMapper {
                 venue == null ? null : venue.getId(),
                 venue == null ? null : venue.getName(),
                 venue == null ? null : venue.getLocation(),
-                schedule.getStandardPrice(),
                 standardPrice,
                 vipPrice,
                 familyPrice,
