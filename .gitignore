@@ -107,3 +107,7 @@ data/
 tmp/
 temp/
 *.tmp
+
+# Local parallel-agent worktrees
+.worktrees/
+.superpowers/
