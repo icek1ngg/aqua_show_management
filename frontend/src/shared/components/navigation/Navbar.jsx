@@ -2,6 +2,7 @@ import { useEffect, useRef, useState } from 'react';
 import { Link, NavLink, useLocation, useNavigate } from 'react-router-dom';
 
 import { useAuth } from '../../../features/auth/AuthContext.jsx';
+import CartBadge from '../../../features/cart/CartBadge.jsx';
 import Logo from './Logo.jsx';
 import TicketSearchDrawer from './TicketSearchDrawer.jsx';
 
@@ -232,6 +233,7 @@ export default function Navbar() {
           </nav>
 
           <div className="hidden items-center gap-4 md:flex">
+            {!isStaff ? <CartBadge /> : null}
             {isAuthenticated ? <LoggedInActions user={user} onLogout={handleLogout} /> : !loading && <LoggedOutActions />}
             {!isStaff ? (
               <button
@@ -262,6 +264,9 @@ export default function Navbar() {
             </nav>
 
             <div className="mt-4 flex flex-col gap-3 border-t border-cyan-100 pt-4">
+              {!isStaff ? (
+                <CartBadge className="self-end" onClick={closeMobileMenu} />
+              ) : null}
               {isAuthenticated ? (
                 <>
                   <button
