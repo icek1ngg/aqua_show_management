@@ -81,16 +81,21 @@ export function cartTotalQuantity(items) {
 }
 
 function browserStorage() {
-  return typeof window === 'undefined' ? null : window.localStorage;
+  try {
+    return typeof window === 'undefined' ? null : window.localStorage;
+  } catch {
+    return null;
+  }
 }
 
-export function readCart(storage = browserStorage()) {
-  if (!storage) {
+export function readCart(storage) {
+  const resolvedStorage = arguments.length === 0 ? browserStorage() : storage;
+  if (!resolvedStorage) {
     return [];
   }
 
   try {
-    const value = JSON.parse(storage.getItem(CART_STORAGE_KEY));
+    const value = JSON.parse(resolvedStorage.getItem(CART_STORAGE_KEY));
     if (value?.version !== CART_STORAGE_VERSION || !Array.isArray(value.items)) {
       return [];
     }
@@ -101,13 +106,18 @@ export function readCart(storage = browserStorage()) {
 }
 
 export function writeCart(storageOrItems, maybeItems) {
-  const storage = maybeItems === undefined ? browserStorage() : storageOrItems;
-  const items = maybeItems === undefined ? storageOrItems : maybeItems;
+  const hasInjectedStorage = arguments.length >= 2;
+  const storage = hasInjectedStorage ? storageOrItems : browserStorage();
+  const items = hasInjectedStorage ? maybeItems : storageOrItems;
   if (!storage) {
     return;
   }
-  storage.setItem(CART_STORAGE_KEY, JSON.stringify({
-    version: CART_STORAGE_VERSION,
-    items,
-  }));
+  try {
+    storage.setItem(CART_STORAGE_KEY, JSON.stringify({
+      version: CART_STORAGE_VERSION,
+      items,
+    }));
+  } catch {
+    // Persistence is best-effort; the CartContext continues to own the in-memory cart.
+  }
 }

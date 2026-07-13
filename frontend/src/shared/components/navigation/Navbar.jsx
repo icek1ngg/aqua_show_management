@@ -5,6 +5,7 @@ import { useAuth } from '../../../features/auth/AuthContext.jsx';
 import CartBadge from '../../../features/cart/CartBadge.jsx';
 import Logo from './Logo.jsx';
 import TicketSearchDrawer from './TicketSearchDrawer.jsx';
+import { canShowUserCart } from './navbarCartEligibility.js';
 
 const sectionNavigationLinks = [
   { label: 'Home', sectionId: 'home' },
@@ -178,6 +179,7 @@ export default function Navbar() {
   const [isMobileUserMenuOpen, setIsMobileUserMenuOpen] = useState(false);
   const [isTicketDrawerOpen, setIsTicketDrawerOpen] = useState(false);
   const isStaff = hasRole(user, 'STAFF');
+  const canShowCart = canShowUserCart(user, loading);
 
   useEffect(() => {
     const handleOpenDrawer = () => {
@@ -233,7 +235,7 @@ export default function Navbar() {
           </nav>
 
           <div className="hidden items-center gap-4 md:flex">
-            {!isStaff ? <CartBadge /> : null}
+            {canShowCart ? <CartBadge /> : null}
             {isAuthenticated ? <LoggedInActions user={user} onLogout={handleLogout} /> : !loading && <LoggedOutActions />}
             {!isStaff ? (
               <button
@@ -264,7 +266,7 @@ export default function Navbar() {
             </nav>
 
             <div className="mt-4 flex flex-col gap-3 border-t border-cyan-100 pt-4">
-              {!isStaff ? (
+              {canShowCart ? (
                 <CartBadge className="self-end" onClick={closeMobileMenu} />
               ) : null}
               {isAuthenticated ? (

@@ -107,3 +107,41 @@ test('writes and reads a versioned immutable cart snapshot', () => {
   assert.deepEqual(readCart(storage), items);
   assert.notStrictEqual(readCart(storage), items);
 });
+
+test('keeps the cart usable when the browser storage getter throws', () => {
+  const originalWindow = globalThis.window;
+  globalThis.window = {};
+  Object.defineProperty(globalThis.window, 'localStorage', {
+    configurable: true,
+    get() {
+      throw new Error('storage access denied');
+    },
+  });
+
+  try {
+    assert.deepEqual(readCart(), []);
+    assert.doesNotThrow(() => writeCart([{ scheduleId: 's1', ticketType: 'VIP', quantity: 2 }]));
+  } finally {
+    if (originalWindow === undefined) {
+      delete globalThis.window;
+    } else {
+      globalThis.window = originalWindow;
+    }
+  }
+});
+
+test('keeps the cart usable when storage getItem or setItem throws', () => {
+  const throwingReader = {
+    getItem() {
+      throw new Error('read blocked');
+    },
+  };
+  const throwingWriter = {
+    setItem() {
+      throw new Error('quota exceeded');
+    },
+  };
+
+  assert.deepEqual(readCart(throwingReader), []);
+  assert.doesNotThrow(() => writeCart(throwingWriter, [{ scheduleId: 's1', ticketType: 'VIP', quantity: 2 }]));
+});
