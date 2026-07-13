@@ -12,6 +12,7 @@ import org.springframework.data.redis.core.HashOperations;
 import org.springframework.data.redis.core.StringRedisTemplate;
 import org.springframework.data.redis.core.ValueOperations;
 import org.springframework.data.redis.core.script.RedisScript;
+import org.springframework.data.redis.connection.lettuce.LettuceConnectionFactory;
 
 import java.time.Instant;
 import java.util.List;
@@ -79,30 +80,40 @@ class RedisTicketHoldServiceTest {
     }
 
     @Test
-    void effectiveAvailabilityCleansOnlyExpiredHoldsAndCountsActiveHolds() {
-        // Given two sorted-set members with different scores, the Lua script must clean by
-        // the current epoch boundary and then sum the quantities of the surviving members.
-        long expiredAt = Instant.parse("2026-07-13T15:00:00Z").getEpochSecond();
-        long activeUntil = Instant.parse("2026-07-13T15:30:00Z").getEpochSecond();
-        assertThat(expiredAt).isLessThan(activeUntil);
-        when(redisTemplate.execute(any(RedisScript.class), anyList(), any(Object[].class)))
-                .thenReturn(7L);
+    void effectiveAvailabilityRemovesOnlyExpiredHoldAndCountsActiveHoldInRealRedis() {
+        LettuceConnectionFactory connectionFactory = new LettuceConnectionFactory("localhost", 6379);
+        connectionFactory.afterPropertiesSet();
+        connectionFactory.start();
+        StringRedisTemplate realRedis = new StringRedisTemplate(connectionFactory);
+        realRedis.afterPropertiesSet();
 
-        int available = service.effectiveAvailability("schedule-1", TicketType.FAMILY, 10);
+        String scheduleId = "redis-hold-test-" + UUID.randomUUID();
+        String inventoryKey = "booking:inventory:" + scheduleId + ":FAMILY";
+        String activeHoldsKey = "booking:active-holds:" + scheduleId + ":FAMILY";
+        String expiredHoldId = "expired-" + UUID.randomUUID();
+        String activeHoldId = "active-" + UUID.randomUUID();
+        String expiredHoldKey = "booking:hold:" + expiredHoldId;
+        String activeHoldKey = "booking:hold:" + activeHoldId;
+        long now = Instant.now().getEpochSecond();
 
-        assertThat(available).isEqualTo(7);
-        @SuppressWarnings("unchecked")
-        ArgumentCaptor<RedisScript<Long>> script = ArgumentCaptor.forClass(RedisScript.class);
-        @SuppressWarnings("unchecked")
-        ArgumentCaptor<List<String>> keys = ArgumentCaptor.forClass(List.class);
-        verify(redisTemplate).execute(script.capture(), keys.capture(), any(Object[].class));
-        assertThat(keys.getValue()).containsExactly(
-                "booking:inventory:schedule-1:FAMILY",
-                "booking:active-holds:schedule-1:FAMILY"
-        );
-        assertThat(script.getValue().getScriptAsString())
-                .contains("ZRANGEBYSCORE", "ZREMRANGEBYSCORE", "ZRANGE", "HGET")
-                .contains("'-inf', ARGV[1]");
+        try {
+            realRedis.opsForHash().putAll(expiredHoldKey, Map.of("quantity", "4"));
+            realRedis.opsForHash().putAll(activeHoldKey, Map.of("quantity", "3"));
+            realRedis.opsForZSet().add(activeHoldsKey, expiredHoldId, now - 60);
+            realRedis.opsForZSet().add(activeHoldsKey, activeHoldId, now + 600);
+
+            RedisTicketHoldServiceImpl realService = new RedisTicketHoldServiceImpl(realRedis);
+            int available = realService.effectiveAvailability(scheduleId, TicketType.FAMILY, 10);
+
+            assertThat(available).isEqualTo(7);
+            assertThat(realRedis.hasKey(expiredHoldKey)).isFalse();
+            assertThat(realRedis.opsForZSet().score(activeHoldsKey, expiredHoldId)).isNull();
+            assertThat(realRedis.hasKey(activeHoldKey)).isTrue();
+            assertThat(realRedis.opsForZSet().score(activeHoldsKey, activeHoldId)).isNotNull();
+        } finally {
+            realRedis.delete(List.of(inventoryKey, activeHoldsKey, expiredHoldKey, activeHoldKey));
+            connectionFactory.destroy();
+        }
     }
 
     @Test
