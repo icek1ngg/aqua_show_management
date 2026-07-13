@@ -81,15 +81,37 @@ apiClient.interceptors.request.use((config) => {
 
 apiClient.interceptors.response.use(
   (response) => response,
-  (error) => {
-    const requestHeaders = error.config?.headers;
+  async (error) => {
+    const originalRequest = error.config;
+    const token = getAccessToken();
+    const requestHeaders = originalRequest?.headers;
     const hadAuthHeader = Boolean(
       requestHeaders?.Authorization ||
       requestHeaders?.authorization ||
       (typeof requestHeaders?.get === 'function' && requestHeaders.get('Authorization')),
     );
 
-    if (error.response?.status === 401 && hadAuthHeader && !error.config?.skipAuthClear) {
+    if (
+      error.response?.status === 401 &&
+      token &&
+      hadAuthHeader &&
+      !originalRequest?._retry &&
+      !originalRequest?.skipAuthRefresh
+    ) {
+      originalRequest._retry = true;
+
+      try {
+        const nextToken = await refreshAccessToken();
+        originalRequest.headers = originalRequest.headers || {};
+        originalRequest.headers.Authorization = `Bearer ${nextToken}`;
+        return apiClient(originalRequest);
+      } catch (refreshError) {
+        clearStoredToken();
+        return Promise.reject(refreshError);
+      }
+    }
+
+    if (error.response?.status === 401 && token && hadAuthHeader && !originalRequest?.skipAuthClear) {
       clearStoredToken();
     }
 
