@@ -1,6 +1,7 @@
 package com.asms.ticketing.service.impl;
 
 import com.asms.booking.entity.Booking;
+import com.asms.booking.entity.BookingItem;
 import com.asms.ticketing.entity.Ticket;
 import com.asms.ticketing.repository.TicketRepository;
 import com.asms.ticketing.service.TicketGenerationService;
@@ -30,16 +31,19 @@ public class TicketGenerationServiceImpl implements TicketGenerationService {
         }
 
         List<Ticket> tickets = new ArrayList<>();
-        for (int index = 1; index <= booking.getQuantity(); index++) {
-            tickets.add(new Ticket(booking, buildQrCode(booking, index)));
+        for (BookingItem item : booking.getItems()) {
+            for (int index = 1; index <= item.getQuantity(); index++) {
+                tickets.add(new Ticket(booking, item, buildQrCode(booking, item, index)));
+            }
         }
 
         return ticketRepository.saveAll(tickets);
     }
 
-    private String buildQrCode(Booking booking, int index) {
+    private String buildQrCode(Booking booking, BookingItem item, int index) {
         byte[] randomBytes = new byte[8];
         secureRandom.nextBytes(randomBytes);
-        return "ASMS:" + booking.getId() + ":" + index + ":" + HexFormat.of().formatHex(randomBytes);
+        return "ASMS:" + booking.getId() + ":" + item.getId() + ":" + index + ":"
+                + HexFormat.of().formatHex(randomBytes);
     }
 }

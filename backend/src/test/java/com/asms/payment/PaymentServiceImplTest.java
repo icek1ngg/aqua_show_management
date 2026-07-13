@@ -1,9 +1,16 @@
 package com.asms.payment;
 
 import com.asms.booking.entity.Booking;
+import com.asms.booking.entity.BookingItem;
+import com.asms.booking.dto.TicketHoldDtos.TicketHoldInfo;
 import com.asms.booking.enums.BookingStatus;
+import com.asms.booking.enums.TicketType;
 import com.asms.booking.repository.BookingRepository;
 import com.asms.booking.service.RedisTicketHoldService;
+import com.asms.catalog.entity.Show;
+import com.asms.catalog.entity.ShowSchedule;
+import com.asms.catalog.entity.Venue;
+import com.asms.catalog.repository.ShowScheduleRepository;
 import com.asms.identity.entity.User;
 import com.asms.payment.dto.CreatePaymentRequest;
 import com.asms.payment.dto.PayOsCallbackRequest;
@@ -25,8 +32,9 @@ import org.mockito.ArgumentCaptor;
 import java.lang.reflect.Field;
 import java.math.BigDecimal;
 import java.time.Instant;
-import java.time.LocalDate;
+import java.time.LocalDateTime;
 import java.util.List;
+import java.util.Comparator;
 import java.util.Optional;
 import java.util.UUID;
 
@@ -48,6 +56,7 @@ class PaymentServiceImplTest {
     private TicketGenerationService ticketGenerationService;
     private PaymentCompletedPublisher paymentCompletedPublisher;
     private RedisTicketHoldService redisTicketHoldService;
+    private ShowScheduleRepository showScheduleRepository;
     private PaymentServiceImpl paymentService;
 
     @BeforeEach
@@ -58,6 +67,7 @@ class PaymentServiceImplTest {
         ticketGenerationService = mock(TicketGenerationService.class);
         paymentCompletedPublisher = mock(PaymentCompletedPublisher.class);
         redisTicketHoldService = mock(RedisTicketHoldService.class);
+        showScheduleRepository = mock(ShowScheduleRepository.class);
         when(ticketGenerationService.generateTicketsIfMissing(any())).thenReturn(List.of(mock(Ticket.class)));
 
         paymentService = new PaymentServiceImpl(
@@ -66,7 +76,8 @@ class PaymentServiceImplTest {
                 payOsClient,
                 ticketGenerationService,
                 paymentCompletedPublisher,
-                redisTicketHoldService
+                redisTicketHoldService,
+                showScheduleRepository
         );
     }
 
@@ -96,6 +107,89 @@ class PaymentServiceImplTest {
 
         verify(paymentCompletedPublisher, times(1)).publish(any());
         verify(ticketGenerationService, times(1)).generateTicketsIfMissing(payment.getBooking());
+    }
+
+    @Test
+    void firstSuccessfulCallbackCommitsEveryBookingItemExactlyOnce() {
+        Show show = new Show("Ocean Dreams", "Water show", "image.jpg", 45);
+        Venue venue = new Venue("Main Pool", "Central lagoon", 500);
+        LocalDateTime start = LocalDateTime.now().plusDays(2);
+        ShowSchedule standardSchedule = new ShowSchedule(
+                show, venue, start, start.plusMinutes(45), 10, 0, 0, new BigDecimal("2500")
+        );
+        ShowSchedule vipSchedule = new ShowSchedule(
+                show, venue, start.plusDays(1), start.plusDays(1).plusMinutes(45), 0, 5, 0, new BigDecimal("2500")
+        );
+        Booking booking = Booking.create(new User("Test", "User", "multi@example.com", "0900000001", "hash"),
+                "AQB-MULTI", Instant.now().plusSeconds(900));
+        setId(booking, UUID.randomUUID());
+        booking.addItem(BookingItem.create(booking, standardSchedule, TicketType.STANDARD, 2,
+                new BigDecimal("2500"), "hold-standard"));
+        booking.addItem(BookingItem.create(booking, vipSchedule, TicketType.VIP, 1,
+                new BigDecimal("6250"), "hold-vip"));
+        Payment payment = new Payment(booking, "987654321", booking.getTotalAmount(), "https://pay.payos.vn/multi");
+
+        when(payOsClient.isValidCallback(any())).thenReturn(true);
+        when(paymentRepository.findByPayosOrderCodeForUpdate(payment.getPayosOrderCode())).thenReturn(Optional.of(payment));
+        List<UUID> lockedIds = List.of(standardSchedule.getId(), vipSchedule.getId()).stream()
+                .sorted(Comparator.naturalOrder())
+                .toList();
+        when(showScheduleRepository.findAllByIdForUpdate(lockedIds))
+                .thenReturn(List.of(standardSchedule, vipSchedule));
+        when(redisTicketHoldService.getHold("hold-standard")).thenReturn(Optional.of(validHold(booking, booking.getItems().get(0))));
+        when(redisTicketHoldService.getHold("hold-vip")).thenReturn(Optional.of(validHold(booking, booking.getItems().get(1))));
+        when(ticketGenerationService.generateTicketsIfMissing(booking))
+                .thenReturn(List.of(mock(Ticket.class), mock(Ticket.class), mock(Ticket.class)));
+
+        paymentService.processCallback(successCallback(payment.getPayosOrderCode(), booking.getTotalAmount()));
+        paymentService.processCallback(successCallback(payment.getPayosOrderCode(), booking.getTotalAmount()));
+
+        assertThat(standardSchedule.availableFor(TicketType.STANDARD)).isEqualTo(8);
+        assertThat(vipSchedule.availableFor(TicketType.VIP)).isEqualTo(4);
+        verify(showScheduleRepository, times(1))
+                .findAllByIdForUpdate(lockedIds);
+        verify(redisTicketHoldService, times(1)).releaseHold("hold-standard");
+        verify(redisTicketHoldService, times(1)).releaseHold("hold-vip");
+        verify(ticketGenerationService, times(1)).generateTicketsIfMissing(booking);
+        verify(paymentCompletedPublisher, times(1)).publish(any());
+    }
+
+    @Test
+    void expiredHoldRejectsPaymentBeforeAnyStateOrInventoryWrite() {
+        Payment payment = pendingPayment();
+        when(payOsClient.isValidCallback(any())).thenReturn(true);
+        when(paymentRepository.findByPayosOrderCodeForUpdate(payment.getPayosOrderCode())).thenReturn(Optional.of(payment));
+        when(redisTicketHoldService.getHold("hold-test")).thenReturn(Optional.empty());
+        org.assertj.core.api.Assertions.assertThatThrownBy(
+                () -> paymentService.processCallback(successCallback(payment.getPayosOrderCode()))
+        ).hasMessageContaining("hold has expired");
+
+        assertThat(payment.getStatus()).isEqualTo(PaymentStatus.PENDING);
+        assertThat(payment.getBooking().getStatus()).isEqualTo(BookingStatus.PENDING_PAYMENT);
+        verify(showScheduleRepository, never()).saveAll(any());
+        verify(bookingRepository, never()).save(any());
+        verify(paymentRepository, never()).save(any());
+        verify(ticketGenerationService, never()).generateTicketsIfMissing(any());
+        verify(paymentCompletedPublisher, never()).publish(any());
+    }
+
+    @Test
+    void holdForAnotherScheduleCannotPayThisBooking() {
+        Payment payment = pendingPayment();
+        BookingItem item = payment.getBooking().getItems().getFirst();
+        when(payOsClient.isValidCallback(any())).thenReturn(true);
+        when(paymentRepository.findByPayosOrderCodeForUpdate(payment.getPayosOrderCode())).thenReturn(Optional.of(payment));
+        when(redisTicketHoldService.getHold(item.getHoldId())).thenReturn(Optional.of(new TicketHoldInfo(
+                item.getHoldId(), UUID.randomUUID().toString(), item.getTicketType().name(), item.getQuantity(),
+                payment.getBooking().getUser().getId(), Instant.now(), Instant.now().plusSeconds(300)
+        )));
+
+        org.assertj.core.api.Assertions.assertThatThrownBy(
+                () -> paymentService.processCallback(successCallback(payment.getPayosOrderCode()))
+        ).hasMessageContaining("does not match");
+
+        verify(showScheduleRepository, never()).findAllByIdForUpdate(any());
+        verify(ticketGenerationService, never()).generateTicketsIfMissing(any());
     }
 
     @Test
@@ -293,26 +387,32 @@ class PaymentServiceImplTest {
 
     private Payment pendingPayment() {
         User user = new User("Test", "User", "user@example.com", "0900000000", "hash");
-        Booking booking = Booking.create();
+        Show show = new Show("Aqua Show", "Water show", null, 45);
+        Venue venue = new Venue("Main Pool", "Central lagoon", 100);
+        LocalDateTime start = LocalDateTime.now().plusDays(1);
+        ShowSchedule schedule = new ShowSchedule(
+                show, venue, start, start.plusMinutes(45), 10, 0, 0, new BigDecimal("100000")
+        );
+        Booking booking = Booking.create(user, "AQB-TEST", Instant.now().plusSeconds(900));
         setId(booking, UUID.randomUUID());
-        booking.setUser(user);
-        booking.setBookingCode("AQB-TEST");
-        booking.setHoldId("hold-test");
-        booking.setShowId("show-1");
-        booking.setScheduleId("schedule-1");
-        booking.setShowName("Aqua Show");
-        booking.setShowDate(LocalDate.now().plusDays(1));
-        booking.setTicketType("STANDARD");
-        booking.setQuantity(1);
-        booking.setUnitPrice(new BigDecimal("100000"));
-        booking.setTotalAmount(new BigDecimal("100000"));
-        booking.setStatus(BookingStatus.PENDING_PAYMENT);
-        booking.setExpiresAt(Instant.now().plusSeconds(900));
+        booking.addItem(BookingItem.create(
+                booking, schedule, TicketType.STANDARD, 1, new BigDecimal("100000"), "hold-test"
+        ));
+        when(redisTicketHoldService.getHold("hold-test"))
+                .thenReturn(Optional.of(validHold(booking, booking.getItems().getFirst())));
+        when(showScheduleRepository.findAllByIdForUpdate(List.of(schedule.getId()))).thenReturn(List.of(schedule));
         return new Payment(booking, "123456789", booking.getTotalAmount(), "https://pay.payos.vn/test");
     }
 
     private PayOsCallbackRequest successCallback(String orderCode) {
         return successCallback(orderCode, new BigDecimal("100000"));
+    }
+
+    private TicketHoldInfo validHold(Booking booking, BookingItem item) {
+        return new TicketHoldInfo(
+                item.getHoldId(), item.getScheduleId(), item.getTicketType().name(), item.getQuantity(),
+                booking.getUser().getId(), Instant.now(), Instant.now().plusSeconds(300)
+        );
     }
 
     private PayOsCallbackRequest successCallback(String orderCode, BigDecimal amount) {

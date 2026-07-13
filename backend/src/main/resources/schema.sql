@@ -8,6 +8,10 @@ SELECT pg_advisory_xact_lock(
   hashtextextended('2026_07_14_booking_aggregate_v1', 0)
 )^^^
 
+SELECT pg_advisory_xact_lock(
+  hashtextextended('2026_07_14_ticket_booking_item_v1', 0)
+)^^^
+
 CREATE TABLE IF NOT EXISTS asms_schema_migrations (
   version varchar(100) PRIMARY KEY,
   applied_at timestamp NOT NULL DEFAULT CURRENT_TIMESTAMP
@@ -655,5 +659,39 @@ BEGIN
   VALUES ('2026_07_14_booking_aggregate_v1');
 END
 $asms_booking_aggregate_triggers$^^^
+
+DO $asms_ticket_booking_item_migration$
+BEGIN
+  IF to_regclass('tickets') IS NULL
+     OR to_regclass('booking_items') IS NULL
+     OR EXISTS (
+       SELECT 1 FROM asms_schema_migrations
+       WHERE version = '2026_07_14_ticket_booking_item_v1'
+     ) THEN
+    RETURN;
+  END IF;
+
+  ALTER TABLE tickets ADD COLUMN IF NOT EXISTS booking_item_id uuid;
+  IF NOT EXISTS (
+    SELECT 1 FROM pg_constraint
+    WHERE conname = 'tickets_booking_item_id_fkey'
+      AND conrelid = 'tickets'::regclass
+  ) THEN
+    ALTER TABLE tickets
+      ADD CONSTRAINT tickets_booking_item_id_fkey
+      FOREIGN KEY (booking_item_id) REFERENCES booking_items(id);
+  END IF;
+  CREATE INDEX IF NOT EXISTS tickets_booking_item_id_idx ON tickets (booking_item_id);
+
+  -- Inventory is now committed by PaymentService while schedules are locked in UUID order.
+  -- Removing both aggregate triggers prevents a successful payment from decrementing twice.
+  DROP TRIGGER IF EXISTS asms_sync_paid_schedule_inventory ON bookings;
+  DROP TRIGGER IF EXISTS asms_sync_paid_booking_inventory ON bookings;
+  DROP TRIGGER IF EXISTS asms_sync_paid_booking_item_inventory ON booking_items;
+
+  INSERT INTO asms_schema_migrations(version)
+  VALUES ('2026_07_14_ticket_booking_item_v1');
+END
+$asms_ticket_booking_item_migration$^^^
 
 COMMIT^^^

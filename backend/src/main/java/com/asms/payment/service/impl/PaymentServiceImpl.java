@@ -1,9 +1,13 @@
 package com.asms.payment.service.impl;
 
 import com.asms.booking.entity.Booking;
+import com.asms.booking.entity.BookingItem;
+import com.asms.booking.dto.TicketHoldDtos.TicketHoldInfo;
 import com.asms.booking.enums.BookingStatus;
 import com.asms.booking.repository.BookingRepository;
 import com.asms.booking.service.RedisTicketHoldService;
+import com.asms.catalog.entity.ShowSchedule;
+import com.asms.catalog.repository.ShowScheduleRepository;
 import com.asms.core.exception.BadRequestException;
 import com.asms.core.exception.NotFoundException;
 import com.asms.core.exception.UnauthorizedException;
@@ -35,7 +39,11 @@ import org.springframework.transaction.support.TransactionSynchronizationManager
 import java.math.BigDecimal;
 import java.time.Duration;
 import java.time.Instant;
+import java.util.Comparator;
+import java.util.HashMap;
+import java.util.List;
 import java.util.Locale;
+import java.util.Map;
 import java.util.UUID;
 import java.util.concurrent.ThreadLocalRandom;
 
@@ -51,6 +59,7 @@ public class PaymentServiceImpl implements PaymentService {
     private final TicketGenerationService ticketGenerationService;
     private final PaymentCompletedPublisher paymentCompletedPublisher;
     private final RedisTicketHoldService redisTicketHoldService;
+    private final ShowScheduleRepository showScheduleRepository;
 
     public PaymentServiceImpl(
             BookingRepository bookingRepository,
@@ -58,7 +67,8 @@ public class PaymentServiceImpl implements PaymentService {
             PayOsClient payOsClient,
             TicketGenerationService ticketGenerationService,
             PaymentCompletedPublisher paymentCompletedPublisher,
-            RedisTicketHoldService redisTicketHoldService
+            RedisTicketHoldService redisTicketHoldService,
+            ShowScheduleRepository showScheduleRepository
     ) {
         this.bookingRepository = bookingRepository;
         this.paymentRepository = paymentRepository;
@@ -66,6 +76,7 @@ public class PaymentServiceImpl implements PaymentService {
         this.ticketGenerationService = ticketGenerationService;
         this.paymentCompletedPublisher = paymentCompletedPublisher;
         this.redisTicketHoldService = redisTicketHoldService;
+        this.showScheduleRepository = showScheduleRepository;
     }
 
     @Override
@@ -242,6 +253,9 @@ public class PaymentServiceImpl implements PaymentService {
         if (incomingStatus == PaymentStatus.SUCCESS) {
             boolean firstSuccessfulTransition =
                     oldPaymentStatus != PaymentStatus.SUCCESS || oldBookingStatus != BookingStatus.PAID;
+            if (firstSuccessfulTransition) {
+                commitHeldInventory(booking);
+            }
             payment.setStatus(PaymentStatus.SUCCESS);
             if (payment.getPaidAt() == null) {
                 payment.setPaidAt(providerStatus.paidAt() == null ? Instant.now() : providerStatus.paidAt());
@@ -250,20 +264,19 @@ public class PaymentServiceImpl implements PaymentService {
             bookingRepository.save(booking);
             paymentRepository.save(payment);
             if (firstSuccessfulTransition) {
-                releaseHoldIfPresent(booking);
                 generatedTickets = ticketGenerationService.generateTicketsIfMissing(booking).size();
-                publishPaymentCompletedAfterCommit(payment);
+                completePaymentAfterCommit(payment, booking);
             }
         } else if (incomingStatus == PaymentStatus.EXPIRED && oldPaymentStatus == PaymentStatus.PENDING) {
             payment.setStatus(PaymentStatus.EXPIRED);
             booking.setStatus(BookingStatus.EXPIRED);
-            releaseHoldIfPresent(booking);
+            releaseHoldsAfterCommit(booking);
             bookingRepository.save(booking);
             paymentRepository.save(payment);
         } else if (incomingStatus == PaymentStatus.FAILED && oldPaymentStatus == PaymentStatus.PENDING) {
             payment.setStatus(PaymentStatus.FAILED);
             booking.setStatus(BookingStatus.FAILED);
-            releaseHoldIfPresent(booking);
+            releaseHoldsAfterCommit(booking);
             bookingRepository.save(booking);
             paymentRepository.save(payment);
         } else if (incomingStatus == PaymentStatus.PENDING) {
@@ -285,15 +298,54 @@ public class PaymentServiceImpl implements PaymentService {
         return new AppliedPaymentStatus(changed, generatedTickets);
     }
 
-    private void releaseHoldIfPresent(Booking booking) {
-        String holdId = booking.getHoldId();
-        if (holdId == null || holdId.isBlank()) {
-            return;
+    private void commitHeldInventory(Booking booking) {
+        for (BookingItem item : booking.getItems()) {
+            TicketHoldInfo hold = redisTicketHoldService.getHold(item.getHoldId()).orElse(null);
+            if (hold == null || !hold.expiresAt().isAfter(Instant.now())) {
+                throw new BadRequestException("A ticket hold has expired. Please select the tickets again.");
+            }
+            boolean matchesItem = item.getHoldId().equals(hold.holdId())
+                    && item.getScheduleId().equals(hold.scheduleId())
+                    && item.getTicketType().name().equals(hold.ticketType())
+                    && item.getQuantity() == hold.quantity()
+                    && booking.getUser().getId().equals(hold.userId());
+            if (!matchesItem) {
+                throw new BadRequestException("A ticket hold does not match the booking item");
+            }
         }
-        redisTicketHoldService.releaseHold(holdId);
+
+        List<UUID> scheduleIds = booking.getItems().stream()
+                .map(BookingItem::getScheduleId)
+                .map(this::parseScheduleId)
+                .distinct()
+                .sorted(Comparator.naturalOrder())
+                .toList();
+        List<ShowSchedule> schedules = showScheduleRepository.findAllByIdForUpdate(scheduleIds);
+        if (schedules.size() != scheduleIds.size()) {
+            throw new BadRequestException("One or more show schedules no longer exist");
+        }
+        Map<UUID, ShowSchedule> scheduleById = new HashMap<>();
+        schedules.forEach(schedule -> scheduleById.put(schedule.getId(), schedule));
+
+        for (BookingItem item : booking.getItems()) {
+            ShowSchedule schedule = scheduleById.get(parseScheduleId(item.getScheduleId()));
+            if (schedule == null) {
+                throw new BadRequestException("One or more show schedules no longer exist");
+            }
+            schedule.decrementAvailable(item.getTicketType(), item.getQuantity());
+        }
+        showScheduleRepository.saveAll(schedules);
     }
 
-    private void publishPaymentCompletedAfterCommit(Payment payment) {
+    private UUID parseScheduleId(String scheduleId) {
+        try {
+            return UUID.fromString(scheduleId);
+        } catch (IllegalArgumentException exception) {
+            throw new BadRequestException("Invalid show schedule in booking");
+        }
+    }
+
+    private void completePaymentAfterCommit(Payment payment, Booking booking) {
         PaymentCompletedMessage message = new PaymentCompletedMessage(
                 payment.getBooking().getId(),
                 payment.getId(),
@@ -301,15 +353,33 @@ public class PaymentServiceImpl implements PaymentService {
                 payment.getPaidAt()
         );
 
-        if (!TransactionSynchronizationManager.isSynchronizationActive()) {
+        runAfterCommit(() -> {
+            releaseHolds(booking);
             paymentCompletedPublisher.publish(message);
+        });
+    }
+
+    private void releaseHoldsAfterCommit(Booking booking) {
+        runAfterCommit(() -> releaseHolds(booking));
+    }
+
+    private void releaseHolds(Booking booking) {
+        booking.getItems().stream()
+                .map(BookingItem::getHoldId)
+                .filter(holdId -> holdId != null && !holdId.isBlank())
+                .distinct()
+                .forEach(redisTicketHoldService::releaseHold);
+    }
+
+    private void runAfterCommit(Runnable action) {
+        if (!TransactionSynchronizationManager.isSynchronizationActive()) {
+            action.run();
             return;
         }
-
         TransactionSynchronizationManager.registerSynchronization(new TransactionSynchronization() {
             @Override
             public void afterCommit() {
-                paymentCompletedPublisher.publish(message);
+                action.run();
             }
         });
     }

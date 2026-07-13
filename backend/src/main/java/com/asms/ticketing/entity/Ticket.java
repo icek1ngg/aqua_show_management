@@ -1,6 +1,8 @@
 package com.asms.ticketing.entity;
 
 import com.asms.booking.entity.Booking;
+import com.asms.booking.entity.BookingItem;
+import com.asms.booking.enums.TicketType;
 import com.asms.ticketing.enums.TicketStatus;
 import jakarta.persistence.Column;
 import jakarta.persistence.Entity;
@@ -32,6 +34,10 @@ public class Ticket {
     @ManyToOne(fetch = FetchType.LAZY, optional = false)
     @JoinColumn(name = "booking_id", nullable = false)
     private Booking booking;
+
+    @ManyToOne(fetch = FetchType.LAZY)
+    @JoinColumn(name = "booking_item_id")
+    private BookingItem bookingItem;
 
     @Column(nullable = false, length = 100)
     private String scheduleId;
@@ -77,6 +83,25 @@ public class Ticket {
         this.issuedAt = Instant.now();
     }
 
+    public Ticket(Booking booking, BookingItem bookingItem, String qrCode) {
+        if (bookingItem == null) {
+            throw new IllegalArgumentException("Booking item is required");
+        }
+        this.id = UUID.randomUUID();
+        this.booking = booking;
+        this.bookingItem = bookingItem;
+        this.scheduleId = bookingItem.getScheduleId();
+        this.showName = bookingItem.getShowName();
+        this.venueName = bookingItem.getVenueName();
+        this.showStartTime = bookingItem.getStartTime()
+                .atZone(java.time.ZoneId.systemDefault()).toInstant();
+        this.showEndTime = bookingItem.getEndTime()
+                .atZone(java.time.ZoneId.systemDefault()).toInstant();
+        this.qrCode = qrCode;
+        this.status = TicketStatus.VALID;
+        this.issuedAt = Instant.now();
+    }
+
     @PrePersist
     void prePersist() {
         if (id == null) {
@@ -96,6 +121,14 @@ public class Ticket {
 
     public Booking getBooking() {
         return booking;
+    }
+
+    public BookingItem getBookingItem() {
+        return bookingItem;
+    }
+
+    public TicketType getTicketType() {
+        return bookingItem == null ? TicketType.parse(booking.getTicketType()) : bookingItem.getTicketType();
     }
 
     public String getScheduleId() {

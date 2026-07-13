@@ -12,6 +12,7 @@ import org.springframework.data.repository.query.Param;
 
 import java.time.LocalDateTime;
 import java.util.List;
+import java.util.Collection;
 import java.util.Optional;
 import java.util.UUID;
 
@@ -45,6 +46,10 @@ public interface ShowScheduleRepository extends JpaRepository<ShowSchedule, UUID
     @Lock(LockModeType.PESSIMISTIC_WRITE)
     @Query("select s from ShowSchedule s where s.id = :id")
     Optional<ShowSchedule> findByIdForUpdate(@Param("id") UUID id);
+
+    @Lock(LockModeType.PESSIMISTIC_WRITE)
+    @Query("select s from ShowSchedule s where s.id in :ids order by s.id")
+    List<ShowSchedule> findAllByIdForUpdate(@Param("ids") Collection<UUID> ids);
 
     @Query("""
             select coalesce(sum(i.quantity), 0) from BookingItem i
