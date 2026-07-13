@@ -1,7 +1,53 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
 
-import { validateScheduleInventory } from './scheduleForm.js';
+import {
+  buildScheduleVenueOptions,
+  findScheduleVenue,
+  validateScheduleInventory,
+} from './scheduleForm.js';
+
+test('keeps the current edit venue available when it is absent from the active venue page', () => {
+  const activeVenue = { id: 'active-venue', name: 'Active Venue', capacity: 200 };
+  const schedule = { venueId: 'inactive-venue', venueName: 'Historic Venue' };
+  const resolvedCurrentVenue = {
+    id: 'inactive-venue',
+    name: 'Historic Venue',
+    capacity: 100,
+    status: 'INACTIVE',
+  };
+
+  const options = buildScheduleVenueOptions([activeVenue], schedule, resolvedCurrentVenue);
+
+  assert.deepEqual(options, [activeVenue, resolvedCurrentVenue]);
+  assert.equal(findScheduleVenue(options, schedule.venueId)?.capacity, 100);
+});
+
+test('resolves the newly selected venue capacity when switching between smaller and larger venues', () => {
+  const options = buildScheduleVenueOptions([
+    { id: 'smaller', name: 'Smaller Venue', capacity: 90 },
+    { id: 'larger', name: 'Larger Venue', capacity: 120 },
+  ]);
+  const inventory = {
+    standardCapacity: '70',
+    vipCapacity: '20',
+    familyCapacity: '10',
+    standardPrice: '2500',
+  };
+
+  const smallerResult = validateScheduleInventory(
+    inventory,
+    findScheduleVenue(options, 'smaller')?.capacity,
+  );
+  const largerResult = validateScheduleInventory(
+    inventory,
+    findScheduleVenue(options, 'larger')?.capacity,
+  );
+
+  assert.equal(smallerResult.isValid, false);
+  assert.equal(smallerResult.errors.totalCapacity, 'Total capacity cannot exceed the venue capacity.');
+  assert.equal(largerResult.isValid, true);
+});
 
 test('accepts ticket capacities that exactly match the venue capacity', () => {
   const result = validateScheduleInventory({

@@ -8,12 +8,16 @@ import {
   getSchedules,
   updateSchedule,
 } from '../services/scheduleService.js';
-import { getVenues } from '../services/venueService.js';
+import { getVenue, getVenues } from '../services/venueService.js';
 import ManagerActionBar from '../features/manager/components/ManagerActionBar.jsx';
 import ManagerLayout from '../features/manager/components/ManagerLayout.jsx';
 import ManagerPageHeader from '../features/manager/components/ManagerPageHeader.jsx';
 import ManagerStatCard from '../features/manager/components/ManagerStatCard.jsx';
-import { validateScheduleInventory } from '../features/manager/scheduleForm.js';
+import {
+  buildScheduleVenueOptions,
+  findScheduleVenue,
+  validateScheduleInventory,
+} from '../features/manager/scheduleForm.js';
 import { formatCurrency } from '../shared/utils/ticketPricing.js';
 
 const emptyForm = {
@@ -393,6 +397,7 @@ export default function ManageSchedulesPage() {
 
   const [formMode, setFormMode] = useState(null);
   const [editingSchedule, setEditingSchedule] = useState(null);
+  const [resolvedEditingVenue, setResolvedEditingVenue] = useState(null);
   const [formValues, setFormValues] = useState(emptyForm);
   const [fieldErrors, setFieldErrors] = useState({});
   const [formError, setFormError] = useState('');
@@ -492,6 +497,34 @@ export default function ManageSchedulesPage() {
     };
   }, [currentPage, filters, pagination.size, reloadKey]);
 
+  useEffect(() => {
+    const currentVenueId = editingSchedule?.venueId;
+
+    if (!currentVenueId || venues.some((venue) => venue.id === currentVenueId)) {
+      setResolvedEditingVenue(null);
+      return undefined;
+    }
+
+    let isActive = true;
+    setResolvedEditingVenue(null);
+
+    getVenue(currentVenueId)
+      .then((venue) => {
+        if (isActive) {
+          setResolvedEditingVenue(venue);
+        }
+      })
+      .catch((error) => {
+        if (isActive) {
+          setFormError(getErrorMessage(error, 'Could not load the current venue details.'));
+        }
+      });
+
+    return () => {
+      isActive = false;
+    };
+  }, [editingSchedule, venues]);
+
   const stats = useMemo(() => {
     const active = schedules.filter((schedule) => schedule.status === 'ACTIVE').length;
     const inactive = schedules.filter((schedule) => schedule.status === 'INACTIVE').length;
@@ -511,9 +544,13 @@ export default function ManageSchedulesPage() {
     };
   }, [pagination.totalItems, schedules]);
 
+  const venueOptions = useMemo(
+    () => buildScheduleVenueOptions(venues, editingSchedule, resolvedEditingVenue),
+    [editingSchedule, resolvedEditingVenue, venues],
+  );
   const selectedVenue = useMemo(
-    () => venues.find((venue) => venue.id === formValues.venueId),
-    [formValues.venueId, venues],
+    () => findScheduleVenue(venueOptions, formValues.venueId),
+    [formValues.venueId, venueOptions],
   );
   const inventoryValidation = useMemo(
     () => validateScheduleInventory(formValues, selectedVenue?.capacity),
@@ -540,6 +577,7 @@ export default function ManageSchedulesPage() {
   const openCreateForm = () => {
     setFormMode('create');
     setEditingSchedule(null);
+    setResolvedEditingVenue(null);
     setFormValues(emptyForm);
     setFieldErrors({});
     setFormError('');
@@ -548,6 +586,7 @@ export default function ManageSchedulesPage() {
   const openEditForm = (schedule) => {
     setFormMode('edit');
     setEditingSchedule(schedule);
+    setResolvedEditingVenue(null);
     setFormValues(toForm(schedule));
     setFieldErrors({});
     setFormError('');
@@ -559,6 +598,7 @@ export default function ManageSchedulesPage() {
     }
     setFormMode(null);
     setEditingSchedule(null);
+    setResolvedEditingVenue(null);
     setFieldErrors({});
     setFormError('');
   };
@@ -858,7 +898,7 @@ export default function ManageSchedulesPage() {
           formMode={formMode}
           formValues={formValues}
           shows={shows}
-          venues={venues}
+          venues={venueOptions}
           selectedVenue={selectedVenue}
           inventoryValidation={inventoryValidation}
           fieldErrors={fieldErrors}
