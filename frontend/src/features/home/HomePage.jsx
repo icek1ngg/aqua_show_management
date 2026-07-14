@@ -4,8 +4,9 @@ import { Link, useLocation, useNavigate } from 'react-router-dom';
 import ShowTicketWorkspace from '../cart/ShowTicketWorkspace.jsx';
 import { showTicketTarget } from '../cart/showTicketNavigation.js';
 import { chooseBookableSchedule } from '../cart/ticketSelectorState.js';
-import { getSchedule, getShowSchedules, getShows } from '../../services/showService.js';
+import { getSchedule, getShowDetail, getShowSchedules, getShows } from '../../services/showService.js';
 import MainLayout from '../../shared/layouts/MainLayout.jsx';
+import { resolveTicketWorkspaceShow } from './ticketWorkspaceRoute.js';
 
 const fallbackShowImage =
   'https://lh3.googleusercontent.com/aida-public/AB6AXuANv7I9nTUaKmdiA6IfaIaY0YwJUIWoqM0X6m_tgMmcJ71PacmGbCJL7U7jN8rhBXSUuV7fovx9LDsAc6N5PhTyiCp6LssLe6FgDdZmMcwFIlWNhrmPMXPWNaNGaENraIJuHz9U8O5qXFdHXwD12d0tWFF6pkX61XHVJWiPscKVSeVXPJHPLntIinpKKiq48E_jrrE2A6BF6g5CVGhbzwWhTMCs07mHdwovKDWCZJwE9QP5SidUIrVjslByRhoxaZve3By201M-MkjJ';
@@ -261,22 +262,38 @@ export default function HomePage() {
   };
 
   useEffect(() => {
+    const requestedShowId = location.state?.ticketSelectionShowId;
     if (
-      shows.length === 0
+      (!requestedShowId && shows.length === 0)
       || handledWorkspaceLocation.current === location.key
       || (location.pathname !== '/shows' && location.pathname !== '/public/shows')
     ) return;
-    const requestedShowId = location.state?.ticketSelectionShowId;
-    const requestedShow = requestedShowId
-      ? shows.find((show) => String(show.id) === String(requestedShowId))
-      : firstBookableShow;
-    if (requestedShow) {
-      handledWorkspaceLocation.current = location.key;
-      activateTicketWorkspace(
-        requestedShow,
-        location.state?.ticketSelectionScheduleId || (!requestedShowId ? firstBookableShow?.nextScheduleId : ''),
-      );
-    }
+    const locationKey = location.key;
+    const requestId = ++workspaceRequest.current;
+    handledWorkspaceLocation.current = locationKey;
+    if (requestedShowId) setWorkspaceLoading(true);
+    setWorkspaceError('');
+    resolveTicketWorkspaceShow(shows, requestedShowId, firstBookableShow, getShowDetail)
+      .then((requestedShow) => {
+        if (
+          !requestedShow
+          || workspaceRequest.current !== requestId
+          || handledWorkspaceLocation.current !== locationKey
+        ) return;
+        activateTicketWorkspace(
+          requestedShow,
+          location.state?.ticketSelectionScheduleId || (!requestedShowId ? firstBookableShow?.nextScheduleId : ''),
+        );
+      })
+      .catch((loadError) => {
+        if (
+          workspaceRequest.current === requestId
+          && handledWorkspaceLocation.current === locationKey
+        ) {
+          setWorkspaceLoading(false);
+          setWorkspaceError(getShowsErrorMessage(loadError));
+        }
+      });
   }, [firstBookableShow, location.key, location.pathname, location.state, shows]);
 
   const handleShowSearch = (event) => {
