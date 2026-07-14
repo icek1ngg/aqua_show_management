@@ -7,7 +7,7 @@ const quickLinks = [
   { label: 'Shows', sectionId: 'shows' },
   { label: 'Schedule', sectionId: 'schedule' },
   { label: 'My Bookings', to: '/bookings/my' },
-  { label: 'Book Tickets', to: '/shows' },
+  { label: 'Book Tickets', to: '/#shows' },
 ];
 const supportLinks = [
   { label: 'Login', to: '/login' },
@@ -49,7 +49,7 @@ function FooterLink({ link, onSectionNavigate }) {
 export default function Footer({ compact = false }) {
   const location = useLocation();
   const navigate = useNavigate();
-  const isHomepageRoute = ['/', '/shows', '/public/shows'].includes(location.pathname);
+  const isHomepageRoute = location.pathname === '/';
   const scrollToSection = (sectionId) => {
     if (sectionId === 'home') {
       window.scrollTo({ top: 0, behavior: 'smooth' });
