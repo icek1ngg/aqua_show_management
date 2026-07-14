@@ -3,6 +3,7 @@ import { createContext, useCallback, useContext, useEffect, useMemo, useState } 
 import {
   CART_STORAGE_KEY,
   addCartItem,
+  addCartItems,
   cartTotalQuantity,
   readCart,
   removeCartItem,
@@ -35,6 +36,10 @@ export function CartProvider({ children }) {
     setItems((currentItems) => addCartItem(currentItems, item, maxQuantity));
   }, []);
 
+  const addItems = useCallback((additions) => {
+    setItems((currentItems) => addCartItems(currentItems, additions));
+  }, []);
+
   const updateQuantity = useCallback((key, quantity, maxQuantity) => {
     setItems((currentItems) => updateCartItemQuantity(currentItems, key, quantity, maxQuantity));
   }, []);
@@ -52,11 +57,12 @@ export function CartProvider({ children }) {
     items,
     totalQuantity: cartTotalQuantity(items),
     addItem,
+    addItems,
     updateQuantity,
     removeItem,
     removeItems,
     clearCart,
-  }), [addItem, clearCart, items, removeItem, removeItems, updateQuantity]);
+  }), [addItem, addItems, clearCart, items, removeItem, removeItems, updateQuantity]);
 
   return <CartContext.Provider value={value}>{children}</CartContext.Provider>;
 }
