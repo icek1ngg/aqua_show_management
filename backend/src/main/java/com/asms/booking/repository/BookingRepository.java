@@ -56,8 +56,8 @@ public interface BookingRepository extends JpaRepository<Booking, UUID>, JpaSpec
             where (:showId is null or i.showId = :showId)
               and (:scheduleId is null or i.scheduleId = :scheduleId)
               and (:status is null or b.status = :status)
-              and (:fromTime is null or b.createdAt >= :fromTime)
-              and (:toTime is null or b.createdAt <= :toTime)
+              and (cast(:fromTime as Instant) is null or b.createdAt >= :fromTime)
+              and (cast(:toTime as Instant) is null or b.createdAt <= :toTime)
             order by b.createdAt desc
             """)
     Page<Booking> searchForManager(
