@@ -88,6 +88,16 @@ test('chooses the earliest future schedule with any ticket type available', () =
   assert.equal(chooseBookableSchedule(schedules, '', NOW)?.id, 'nearest');
 });
 
+test('chooses the nearest API schedule brief with aggregate availability', () => {
+  const schedules = [
+    { id: 'later-brief', startTime: '2026-07-15T12:00:00Z', availableTickets: 8, price: 2500 },
+    { id: 'sold-out-brief', startTime: '2026-07-14T10:00:00Z', availableTickets: 0, price: 2500 },
+    { id: 'nearest-brief', startTime: '2026-07-14T12:00:00Z', availableTickets: 3, price: 2500 },
+  ];
+
+  assert.equal(chooseBookableSchedule(schedules, '', NOW)?.id, 'nearest-brief');
+});
+
 test('honors a valid preferred schedule before the nearest default', () => {
   const schedules = [
     { id: 'nearest', startTime: '2026-07-14T12:00:00Z', standardAvailableTickets: 3 },

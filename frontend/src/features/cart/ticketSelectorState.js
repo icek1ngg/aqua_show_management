@@ -47,6 +47,12 @@ function scheduleId(schedule) {
 export function isScheduleBookable(schedule, now = Date.now()) {
   const start = new Date(schedule?.startTime).getTime();
   if (!Number.isFinite(start) || start <= Number(now) + 30 * 60 * 1000) return false;
+  const hasPerTypeAvailability = SELECTOR_TICKET_TYPES.some(
+    (type) => schedule?.[availabilityFields[type]] != null,
+  );
+  if (!hasPerTypeAvailability) {
+    return Math.max(0, Math.trunc(Number(schedule?.availableTickets) || 0)) > 0;
+  }
   return SELECTOR_TICKET_TYPES.some((type) => ticketTypeAvailability(schedule, type).available > 0);
 }
 
