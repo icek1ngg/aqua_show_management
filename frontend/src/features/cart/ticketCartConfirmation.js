@@ -10,6 +10,30 @@ function selectionChanged(state, reconciledState) {
   ));
 }
 
+export function createConfirmationLifecycle() {
+  let active = true;
+  let operation = 0;
+  return {
+    activate() {
+      active = true;
+    },
+    begin() {
+      operation += 1;
+      return operation;
+    },
+    invalidate() {
+      operation += 1;
+    },
+    dispose() {
+      active = false;
+      operation += 1;
+    },
+    isCurrent(operationId) {
+      return active && operation === operationId;
+    },
+  };
+}
+
 export async function confirmTicketSelection({
   schedule,
   state,
@@ -26,6 +50,7 @@ export async function confirmTicketSelection({
   if (selectionChanged(state, reconciledState)) {
     return {
       status: 'changed',
+      schedule: freshSchedule,
       state: reconciledState,
       summary,
       notice: 'Ticket availability changed. Review the updated selection, then click Add to Cart again.',

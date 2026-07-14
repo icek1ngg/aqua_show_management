@@ -4,7 +4,10 @@ import { useNavigate } from 'react-router-dom';
 import { getSchedule } from '../../services/showService.js';
 import { formatCurrency, getTicketTypeLabel } from '../../shared/utils/ticketPricing.js';
 import { useCart } from './CartContext.jsx';
-import { confirmTicketSelection } from './ticketCartConfirmation.js';
+import {
+  confirmTicketSelection,
+  createConfirmationLifecycle,
+} from './ticketCartConfirmation.js';
 import { ticketWorkspaceContentState } from './showTicketWorkspaceState.js';
 import {
   createSelectorState,
@@ -65,21 +68,37 @@ export default function ShowTicketWorkspace({
   const [calendarOpen, setCalendarOpen] = useState(false);
   const [addingToCart, setAddingToCart] = useState(false);
   const [cartError, setCartError] = useState('');
+  const [authoritativeSchedule, setAuthoritativeSchedule] = useState(schedule);
   const selectionVersion = useRef(0);
-  const addOperation = useRef(0);
-  const scheduleIntent = useRef(scheduleId(schedule));
-  scheduleIntent.current = scheduleId(schedule);
+  const confirmationLifecycle = useRef(null);
+  if (!confirmationLifecycle.current) {
+    confirmationLifecycle.current = createConfirmationLifecycle();
+  }
+  const displayedSchedule = scheduleId(authoritativeSchedule) === String(selectedScheduleId || '')
+    ? authoritativeSchedule
+    : schedule;
+  const scheduleIntent = useRef(scheduleId(displayedSchedule));
+  scheduleIntent.current = scheduleId(displayedSchedule);
+
+  useEffect(() => {
+    confirmationLifecycle.current.activate();
+    return () => confirmationLifecycle.current.dispose();
+  }, []);
 
   useEffect(() => {
     selectionVersion.current += 1;
-    addOperation.current += 1;
+    confirmationLifecycle.current.invalidate();
     setAddingToCart(false);
+    setAuthoritativeSchedule(schedule);
     setState((current) => selectSchedule(current, selectedScheduleId));
     setCartError('');
-  }, [selectedScheduleId]);
+  }, [schedule, selectedScheduleId]);
 
-  const summary = useMemo(() => selectedTicketSummary(schedule, state), [schedule, state]);
-  const contentState = ticketWorkspaceContentState({ loading, error, schedule });
+  const summary = useMemo(
+    () => selectedTicketSummary(displayedSchedule, state),
+    [displayedSchedule, state],
+  );
+  const contentState = ticketWorkspaceContentState({ loading, error, schedule: displayedSchedule });
   const bookableSchedules = useMemo(
     () => schedules.filter((item) => isScheduleBookable(item)),
     [schedules],
@@ -88,7 +107,7 @@ export default function ShowTicketWorkspace({
     if (addingToCart) return;
     selectionVersion.current += 1;
     setCartError('');
-    const availability = ticketTypeAvailability(schedule, type);
+    const availability = ticketTypeAvailability(displayedSchedule, type);
     setState((current) => setTypeQuantity(
       current,
       type,
@@ -99,19 +118,19 @@ export default function ShowTicketWorkspace({
 
   const handleAddToCart = async () => {
     if (addingToCart || summary.lines.length === 0) return;
-    const currentScheduleId = scheduleId(schedule);
+    const currentScheduleId = scheduleId(displayedSchedule);
     if (!currentScheduleId) return;
-    const operationId = ++addOperation.current;
+    const operationId = confirmationLifecycle.current.begin();
     const intentVersion = selectionVersion.current;
     setAddingToCart(true);
     setCartError('');
     try {
       const result = await confirmTicketSelection({
-        schedule,
+        schedule: displayedSchedule,
         state,
         loadSchedule: getSchedule,
         isCurrent: () => (
-          addOperation.current === operationId
+          confirmationLifecycle.current.isCurrent(operationId)
           && selectionVersion.current === intentVersion
           && scheduleIntent.current === currentScheduleId
         ),
@@ -122,16 +141,17 @@ export default function ShowTicketWorkspace({
       });
       if (result.status === 'changed') {
         selectionVersion.current += 1;
+        setAuthoritativeSchedule(result.schedule);
         setState(result.state);
         setCartError(result.notice);
         return;
       }
     } catch {
-      if (addOperation.current === operationId) {
+      if (confirmationLifecycle.current.isCurrent(operationId)) {
         setCartError('Could not confirm current ticket availability. Please try again.');
       }
     } finally {
-      if (addOperation.current === operationId) setAddingToCart(false);
+      if (confirmationLifecycle.current.isCurrent(operationId)) setAddingToCart(false);
     }
   };
 
@@ -142,7 +162,7 @@ export default function ShowTicketWorkspace({
           <div>
             <p className="text-sm font-black uppercase tracking-[0.22em] text-cyan-700">Upcoming Times</p>
             <h2 className="mt-2 text-3xl font-black tracking-tight text-slate-950 sm:text-4xl">
-              {schedule ? formatDate(schedule.startTime) : show?.title || 'Choose your show'}
+              {displayedSchedule ? formatDate(displayedSchedule.startTime) : show?.title || 'Choose your show'}
             </h2>
           </div>
           <p className="max-w-xl text-sm font-semibold text-slate-600">
@@ -180,15 +200,15 @@ export default function ShowTicketWorkspace({
                 <div className="grid flex-1 gap-4 sm:grid-cols-3">
                   <div>
                     <p className="text-xs font-black uppercase tracking-[0.18em] text-slate-400">Time</p>
-                    <p className="mt-1 text-xl font-black text-slate-950">{formatTime(schedule.startTime)} – {formatTime(schedule.endTime)}</p>
+                    <p className="mt-1 text-xl font-black text-slate-950">{formatTime(displayedSchedule.startTime)} – {formatTime(displayedSchedule.endTime)}</p>
                   </div>
                   <div>
                     <p className="text-xs font-black uppercase tracking-[0.18em] text-slate-400">Venue</p>
-                    <p className="mt-1 text-lg font-black text-slate-950">{schedule.venueName || show?.venueName || 'Venue TBA'}</p>
+                    <p className="mt-1 text-lg font-black text-slate-950">{displayedSchedule.venueName || show?.venueName || 'Venue TBA'}</p>
                   </div>
                   <div>
                     <p className="text-xs font-black uppercase tracking-[0.18em] text-slate-400">Availability</p>
-                    <p className="mt-1 text-lg font-black text-teal-700">{totalAvailability(schedule)} tickets available</p>
+                    <p className="mt-1 text-lg font-black text-teal-700">{totalAvailability(displayedSchedule)} tickets available</p>
                   </div>
                 </div>
                 <button
@@ -232,14 +252,14 @@ export default function ShowTicketWorkspace({
             <div className="mt-8 grid items-start gap-8 lg:grid-cols-[minmax(0,1fr)_380px]">
               <div className="space-y-4">
                 {SELECTOR_TICKET_TYPES.map((type) => {
-                  const availability = ticketTypeAvailability(schedule, type);
+                  const availability = ticketTypeAvailability(displayedSchedule, type);
                   const quantity = Number(state.quantities[type]) || 0;
                   const label = getTicketTypeLabel(type);
                   return (
                     <article className={`flex flex-col gap-5 rounded-[1.75rem] border p-6 sm:flex-row sm:items-center sm:justify-between ${availability.disabled ? 'border-slate-100 bg-slate-50' : 'border-cyan-100 bg-white shadow-sm'}`} key={type}>
                       <div>
                         <h3 className="text-xl font-black text-slate-950">{label}</h3>
-                        <p className="mt-1 text-lg font-black text-cyan-700">{formatCurrency(ticketPrice(schedule, type))}</p>
+                        <p className="mt-1 text-lg font-black text-cyan-700">{formatCurrency(ticketPrice(displayedSchedule, type))}</p>
                         <p className="mt-1 text-sm font-semibold text-slate-500">{availability.available} available</p>
                       </div>
                       <button
@@ -250,7 +270,7 @@ export default function ShowTicketWorkspace({
                           if (addingToCart) return;
                           selectionVersion.current += 1;
                           setCartError('');
-                          setState((current) => selectTicketType(current, type, schedule));
+                          setState((current) => selectTicketType(current, type, displayedSchedule));
                         }}
                       >
                         {availability.disabled ? 'Sold Out' : quantity > 0 ? `${label} selected` : 'Select'}
@@ -271,7 +291,7 @@ export default function ShowTicketWorkspace({
                   <div className="mt-5 space-y-5">
                     {summary.lines.map((line) => {
                       const label = getTicketTypeLabel(line.ticketType);
-                      const availability = ticketTypeAvailability(schedule, line.ticketType);
+                      const availability = ticketTypeAvailability(displayedSchedule, line.ticketType);
                       return (
                         <div className="border-b border-cyan-100 pb-5 last:border-0" key={line.ticketType}>
                           <div className="flex items-start justify-between gap-4">

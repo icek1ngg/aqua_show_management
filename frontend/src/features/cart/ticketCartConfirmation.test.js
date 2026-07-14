@@ -5,8 +5,12 @@ import {
   createSelectorState,
   selectTicketType,
   setTypeQuantity,
+  ticketTypeAvailability,
 } from './ticketSelectorState.js';
-import { confirmTicketSelection } from './ticketCartConfirmation.js';
+import {
+  confirmTicketSelection,
+  createConfirmationLifecycle,
+} from './ticketCartConfirmation.js';
 
 const schedule = {
   scheduleId: 'schedule-2',
@@ -47,6 +51,27 @@ test('a stale async confirmation cannot commit or navigate', async () => {
   assert.equal(navigated, 0);
 });
 
+test('disposing the component confirmation lifecycle invalidates deferred completion', async () => {
+  let resolveSchedule;
+  let commits = 0;
+  const lifecycle = createConfirmationLifecycle();
+  const operationId = lifecycle.begin();
+  const selected = selectTicketType(createSelectorState('schedule-2'), 'STANDARD', schedule);
+  const confirmation = confirmTicketSelection({
+    schedule,
+    state: selected,
+    loadSchedule: () => new Promise((resolve) => { resolveSchedule = resolve; }),
+    isCurrent: () => lifecycle.isCurrent(operationId),
+    commit: () => { commits += 1; },
+  });
+
+  lifecycle.dispose();
+  resolveSchedule(schedule);
+
+  assert.deepEqual(await confirmation, { status: 'stale' });
+  assert.equal(commits, 0);
+});
+
 test('reduced availability updates selection and requires another confirmation', async () => {
   let selected = selectTicketType(createSelectorState('schedule-2'), 'STANDARD', schedule);
   selected = setTypeQuantity(selected, 'STANDARD', 4, schedule.standardAvailableTickets);
@@ -55,13 +80,22 @@ test('reduced availability updates selection and requires another confirmation',
   const result = await confirmTicketSelection({
     schedule,
     state: selected,
-    loadSchedule: async () => ({ ...schedule, standardAvailableTickets: 2 }),
+    loadSchedule: async () => ({
+      ...schedule,
+      standardAvailableTickets: 2,
+      standardPrice: 3000,
+    }),
     isCurrent: () => true,
     commit: () => { commits += 1; },
   });
 
   assert.equal(result.status, 'changed');
   assert.equal(result.state.quantities.STANDARD, 2);
+  assert.equal(result.schedule.standardAvailableTickets, 2);
+  assert.equal(result.schedule.standardPrice, 3000);
+  assert.equal(result.summary.lines[0].unitPrice, 3000);
+  assert.equal(result.summary.lines[0].availableTickets, 2);
+  assert.equal(ticketTypeAvailability(result.schedule, 'STANDARD').maximum, 2);
   assert.match(result.notice, /availability changed/i);
   assert.equal(commits, 0);
 });
@@ -82,6 +116,8 @@ test('a sold-out line is removed without committing the remaining line', async (
   assert.equal(result.status, 'changed');
   assert.equal(result.state.quantities.STANDARD, 0);
   assert.equal(result.state.quantities.FAMILY, 1);
+  assert.equal(result.schedule.standardAvailableTickets, 0);
+  assert.equal(ticketTypeAvailability(result.schedule, 'STANDARD').disabled, true);
   assert.equal(commits, 0);
 });
 
