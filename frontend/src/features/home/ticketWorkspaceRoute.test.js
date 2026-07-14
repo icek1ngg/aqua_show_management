@@ -109,13 +109,25 @@ test('generic routing chooses the earliest bookable schedule across loaded shows
   assert.deepEqual(target, { show: shows[2], scheduleId: 'nearest' });
 });
 
-test('generic routing skips a show whose schedule lookup fails', async () => {
+test('generic routing rejects a partial lookup failure because the earliest result is indeterminate', async () => {
   const shows = [{ id: 'broken-show' }, { id: 'bookable-show' }];
 
-  const target = await resolveNearestBookableWorkspace(shows, async (showId) => {
-    if (showId === 'broken-show') throw new Error('temporary schedule failure');
-    return [{ id: 'bookable', startTime: '2026-07-14T12:00:00Z', availableTickets: 2 }];
-  }, new Date('2026-07-14T08:00:00Z').getTime());
+  await assert.rejects(
+    resolveNearestBookableWorkspace(shows, async (showId) => {
+      if (showId === 'broken-show') throw new Error('temporary schedule failure');
+      return [{ id: 'bookable', startTime: '2026-07-14T12:00:00Z', availableTickets: 2 }];
+    }, new Date('2026-07-14T08:00:00Z').getTime()),
+    /could not confirm schedules/i,
+  );
+});
 
-  assert.deepEqual(target, { show: shows[1], scheduleId: 'bookable' });
+test('generic routing rejects when every schedule lookup fails', async () => {
+  const shows = [{ id: 'first' }, { id: 'second' }];
+
+  await assert.rejects(
+    resolveNearestBookableWorkspace(shows, async () => {
+      throw new Error('catalog unavailable');
+    }, new Date('2026-07-14T08:00:00Z').getTime()),
+    /could not confirm schedules/i,
+  );
 });

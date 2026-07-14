@@ -14,16 +14,24 @@ export async function resolveTicketWorkspaceShow(
 }
 
 export async function resolveNearestBookableWorkspace(shows, loadSchedules, now = Date.now()) {
-  const candidates = await Promise.all((Array.isArray(shows) ? shows : []).map(async (show) => {
-    try {
-      const schedules = await loadSchedules(show.id);
-      const schedule = chooseBookableSchedule(schedules, '', now);
-      return schedule ? { show, schedule } : null;
-    } catch {
-      return null;
-    }
+  const activeShows = Array.isArray(shows) ? shows : [];
+  const results = await Promise.allSettled(activeShows.map(async (show) => {
+    const schedules = await loadSchedules(show.id);
+    const schedule = chooseBookableSchedule(schedules, '', now);
+    return schedule ? { show, schedule } : null;
   }));
-  const selected = candidates
+  const failures = results.flatMap((result, index) => (
+    result.status === 'rejected'
+      ? [{ showId: String(activeShows[index]?.id || ''), reason: result.reason }]
+      : []
+  ));
+  if (failures.length > 0) {
+    const error = new Error('Could not confirm schedules for every active show. Please try again.');
+    error.failures = failures;
+    throw error;
+  }
+  const selected = results
+    .map((result) => result.value)
     .filter(Boolean)
     .sort((first, second) => (
       new Date(first.schedule.startTime).getTime() - new Date(second.schedule.startTime).getTime()

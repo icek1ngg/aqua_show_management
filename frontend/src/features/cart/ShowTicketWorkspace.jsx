@@ -1,14 +1,14 @@
-import { useEffect, useMemo, useState } from 'react';
+import { useEffect, useMemo, useRef, useState } from 'react';
 import { useNavigate } from 'react-router-dom';
 
 import { getSchedule } from '../../services/showService.js';
 import { formatCurrency, getTicketTypeLabel } from '../../shared/utils/ticketPricing.js';
 import { useCart } from './CartContext.jsx';
+import { confirmTicketSelection } from './ticketCartConfirmation.js';
 import { ticketWorkspaceContentState } from './showTicketWorkspaceState.js';
 import {
   createSelectorState,
   isScheduleBookable,
-  reconcileSelectorState,
   SELECTOR_TICKET_TYPES,
   selectSchedule,
   selectTicketType,
@@ -65,8 +65,15 @@ export default function ShowTicketWorkspace({
   const [calendarOpen, setCalendarOpen] = useState(false);
   const [addingToCart, setAddingToCart] = useState(false);
   const [cartError, setCartError] = useState('');
+  const selectionVersion = useRef(0);
+  const addOperation = useRef(0);
+  const scheduleIntent = useRef(scheduleId(schedule));
+  scheduleIntent.current = scheduleId(schedule);
 
   useEffect(() => {
+    selectionVersion.current += 1;
+    addOperation.current += 1;
+    setAddingToCart(false);
     setState((current) => selectSchedule(current, selectedScheduleId));
     setCartError('');
   }, [selectedScheduleId]);
@@ -78,6 +85,8 @@ export default function ShowTicketWorkspace({
     [schedules],
   );
   const changeQuantity = (type, delta) => {
+    if (addingToCart) return;
+    selectionVersion.current += 1;
     setCartError('');
     const availability = ticketTypeAvailability(schedule, type);
     setState((current) => setTypeQuantity(
@@ -92,23 +101,37 @@ export default function ShowTicketWorkspace({
     if (addingToCart || summary.lines.length === 0) return;
     const currentScheduleId = scheduleId(schedule);
     if (!currentScheduleId) return;
+    const operationId = ++addOperation.current;
+    const intentVersion = selectionVersion.current;
     setAddingToCart(true);
     setCartError('');
     try {
-      const freshSchedule = await getSchedule(currentScheduleId);
-      const reconciledState = reconcileSelectorState(state, freshSchedule);
-      const freshSummary = selectedTicketSummary(freshSchedule, reconciledState);
-      setState(reconciledState);
-      if (freshSummary.lines.length === 0) {
-        setCartError('Those tickets are no longer available. Select an available ticket type and try again.');
+      const result = await confirmTicketSelection({
+        schedule,
+        state,
+        loadSchedule: getSchedule,
+        isCurrent: () => (
+          addOperation.current === operationId
+          && selectionVersion.current === intentVersion
+          && scheduleIntent.current === currentScheduleId
+        ),
+        commit: (lines) => {
+          addItems(lines);
+          navigate('/bookings/create');
+        },
+      });
+      if (result.status === 'changed') {
+        selectionVersion.current += 1;
+        setState(result.state);
+        setCartError(result.notice);
         return;
       }
-      addItems(freshSummary.lines);
-      navigate('/bookings/create');
     } catch {
-      setCartError('Could not confirm current ticket availability. Please try again.');
+      if (addOperation.current === operationId) {
+        setCartError('Could not confirm current ticket availability. Please try again.');
+      }
     } finally {
-      setAddingToCart(false);
+      if (addOperation.current === operationId) setAddingToCart(false);
     }
   };
 
@@ -171,7 +194,8 @@ export default function ShowTicketWorkspace({
                 <button
                   aria-controls="ticket-workspace-calendar"
                   aria-expanded={calendarOpen}
-                  className="inline-flex items-center justify-center gap-2 rounded-full bg-gradient-to-r from-cyan-600 to-teal-700 px-7 py-3.5 font-black text-white shadow-lg shadow-cyan-950/10 transition hover:brightness-95"
+                  className="inline-flex items-center justify-center gap-2 rounded-full bg-gradient-to-r from-cyan-600 to-teal-700 px-7 py-3.5 font-black text-white shadow-lg shadow-cyan-950/10 transition hover:brightness-95 disabled:cursor-not-allowed disabled:opacity-40"
+                  disabled={addingToCart}
                   type="button"
                   onClick={() => setCalendarOpen((open) => !open)}
                 >
@@ -190,7 +214,7 @@ export default function ShowTicketWorkspace({
                       return (
                         <button
                           className={`rounded-2xl border p-4 text-left transition ${selected ? 'border-cyan-600 bg-cyan-50 text-cyan-950' : 'border-cyan-100 bg-white hover:border-cyan-400'} disabled:cursor-not-allowed disabled:border-slate-100 disabled:bg-slate-50 disabled:text-slate-400`}
-                          disabled={selected}
+                          disabled={addingToCart || selected}
                           key={itemId}
                           type="button"
                           onClick={() => onScheduleChange(itemId)}
@@ -220,9 +244,11 @@ export default function ShowTicketWorkspace({
                       </div>
                       <button
                         className="rounded-full bg-gradient-to-r from-cyan-600 to-teal-700 px-7 py-3 font-black text-white transition hover:brightness-95 disabled:cursor-not-allowed disabled:bg-none disabled:bg-slate-200 disabled:text-slate-500"
-                        disabled={availability.disabled || quantity > 0}
+                        disabled={addingToCart || availability.disabled || quantity > 0}
                         type="button"
                         onClick={() => {
+                          if (addingToCart) return;
+                          selectionVersion.current += 1;
                           setCartError('');
                           setState((current) => selectTicketType(current, type, schedule));
                         }}
@@ -256,11 +282,11 @@ export default function ShowTicketWorkspace({
                             <p className="font-black text-cyan-700">{formatCurrency(line.lineTotal)}</p>
                           </div>
                           <div className="mt-4 flex items-center gap-3">
-                            <button aria-label={`Decrease ${label} quantity`} className="flex h-9 w-9 items-center justify-center rounded-full border border-cyan-300 font-black text-cyan-800 transition hover:bg-cyan-50" type="button" onClick={() => changeQuantity(line.ticketType, -1)}>
+                            <button aria-label={`Decrease ${label} quantity`} className="flex h-9 w-9 items-center justify-center rounded-full border border-cyan-300 font-black text-cyan-800 transition hover:bg-cyan-50 disabled:cursor-not-allowed disabled:opacity-35" disabled={addingToCart} type="button" onClick={() => changeQuantity(line.ticketType, -1)}>
                               <span className="material-symbols-outlined text-lg">remove</span>
                             </button>
                             <span className="w-8 text-center font-black text-slate-950">{line.quantity}</span>
-                            <button aria-label={`Increase ${label} quantity`} className="flex h-9 w-9 items-center justify-center rounded-full bg-gradient-to-r from-cyan-600 to-teal-700 font-black text-white disabled:cursor-not-allowed disabled:opacity-35" disabled={line.quantity >= availability.maximum} type="button" onClick={() => changeQuantity(line.ticketType, 1)}>
+                            <button aria-label={`Increase ${label} quantity`} className="flex h-9 w-9 items-center justify-center rounded-full bg-gradient-to-r from-cyan-600 to-teal-700 font-black text-white disabled:cursor-not-allowed disabled:opacity-35" disabled={addingToCart || line.quantity >= availability.maximum} type="button" onClick={() => changeQuantity(line.ticketType, 1)}>
                               <span className="material-symbols-outlined text-lg">add</span>
                             </button>
                           </div>
