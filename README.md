@@ -1,181 +1,86 @@
-# AquaShow Management System
+# AquaShow Management System (ASMS)
 
-## Overview
+## 1. Project Overview
+AquaShow Management System (ASMS) is a comprehensive web application designed for a water park to efficiently manage shows, ticket bookings, and customer check-ins. 
 
-AquaShow Management System (ASMS) is a web application for a water park to manage:
+### Key Features
+- **Show Management**: Browse available shows, venues, and schedules.
+- **Ticket Booking & Cart**: Select tickets for different age groups, manage cart, and proceed to checkout.
+- **Payment Integration**: Secure online payment processing via PayOS.
+- **Ticketing & Validation**: Generate QR code tickets post-payment and validate them at check-in counters.
+- **Role-based Access Control**: Manage Users, Staff, and Admin roles securely using JWT and Google OAuth.
+- **Automated Notifications**: Asynchronous email notifications via Gmail integration.
 
-- Shows
-- Show schedules
-- Ticket booking
-- PayOS payment
-- QR ticket generation
-- QR ticket validation and check-in
-- Users and roles
-- Reports
+### System Architecture & Database
+The project follows a Layered MVC Architecture for the backend and a component-based structure for the frontend.
+- **Database**: **PostgreSQL** for persistent and relational data storage (Users, Bookings, Tickets).
+- **Caching**: **Redis** for fast show/schedule caching and temporary ticket holding during checkout.
+- **Message Queue**: **RabbitMQ** for handling asynchronous background tasks like post-payment ticket generation and email delivery.
 
-## Current Status
+---
 
-The project currently includes:
+## 2. Technologies & Project Structure
 
-- Base monorepo structure
-- Backend Spring Boot base setup
-- Backend health check API
-- Frontend React/Vite base setup
-- Frontend health check page
-- Docker infrastructure for PostgreSQL, Redis, and RabbitMQ
-
-Business modules are not implemented yet.
-
-## Tech Stack
-
-| Area | Technologies |
+### Tech Stack
+| Component | Technologies |
 | --- | --- |
-| Frontend | ReactJS, Vite, Tailwind CSS, axios, react-router-dom |
-| Backend | Java 21, Spring Boot 3.x, Spring Security, Spring Data JPA, Maven |
-| Infrastructure | PostgreSQL, Redis, RabbitMQ, Docker Compose |
-| Planned Integrations | PayOS, Gmail SMTP/API, Google OAuth, JWT authentication |
+| **Frontend** | ReactJS, Vite, Tailwind CSS, Axios, React Router |
+| **Backend** | Java 21, Spring Boot 3.x, Spring Security, JWT, Hibernate |
+| **Database & Infra** | PostgreSQL, Redis, RabbitMQ, Docker Compose |
+| **3rd Party Services** | PayOS API, Google OAuth, Gmail SMTP |
 
-## Project Structure
-
+### Folder Structure
 ```text
 aqua_show_management/
-├── docs/
-├── backend/
-├── frontend/
-├── docker-compose.yml
-├── .env.example
-├── .gitignore
-└── README.md
+├── backend/          # Java Spring Boot REST API
+├── frontend/         # React/Vite User Interface
+├── docs/             # Project documentation, architecture, and database schemas
+├── docker-compose.yml# Docker infrastructure setup
+└── README.md         # Project documentation
 ```
 
-- `docs/` contains project documentation.
-- `backend/` contains the Spring Boot API.
-- `frontend/` contains the React/Vite UI.
-- `docker-compose.yml` starts local infrastructure services.
+---
 
-## Required Tools
+## 3. How to Run the Project
 
-- Java 21
-- Maven
-- Node.js LTS
-- Docker Desktop
-- Git
+### Prerequisites
+- **Java 21** & **Maven**
+- **Node.js** (LTS version)
+- **Docker Desktop**
+- **Git**
 
-## Environment Files
-
-- `.env.example` is the root template file.
-- `.env` is local-only and must not be committed.
-- `frontend/.env.example` is the frontend template file.
-- `frontend/.env.local` is local-only and must not be committed.
-
-## Local Infrastructure
-
-Start local infrastructure:
-
+### Step 1: Start Infrastructure (Database, Redis, RabbitMQ)
+Run the following command at the root of the project to start all required databases and message brokers:
 ```powershell
 docker compose up -d
 ```
 
-Check service status:
+### Step 2: Configure Environment Variables
+Copy the template files and fill in your actual credentials (database passwords, API keys, etc.):
+- **Root**: `cp .env.example .env`
+- **Frontend**: `cd frontend && cp .env.example .env.local`
 
-```powershell
-docker compose ps
-```
-
-## Run Backend
-
+### Step 3: Run the Backend
 ```powershell
 cd backend
 mvn spring-boot:run
 ```
+*The backend API will be available at `http://localhost:8080` (Health Check: `http://localhost:8080/api/health`).*
 
-Backend URL:
-
-```text
-http://localhost:8080
-```
-
-Health API:
-
-```text
-http://localhost:8080/api/health
-```
-
-## Run Frontend
-
+### Step 4: Run the Frontend
 ```powershell
 cd frontend
 npm install
 npm run dev
 ```
+*The frontend UI will be available at `http://localhost:5173`.*
 
-Frontend URL:
+---
 
-```text
-http://localhost:5173
-```
+## 4. Team Members & Contributions
 
-Health page:
-
-```text
-http://localhost:5173/health
-```
-
-## Local Service Information
-
-### PostgreSQL
-
-- Host: localhost
-- Port: 5432
-- Database: asms_db
-- Username: asms_user
-- Password: asms_password
-
-### Redis
-
-- Host: localhost
-- Port: 6379
-
-### RabbitMQ
-
-- Host: localhost
-- AMQP Port: 5672
-- Management UI: http://localhost:15672
-- Username: asms_user
-- Password: asms_password
-
-## Verification
-
-Check Docker services:
-
-```powershell
-docker compose ps
-```
-
-Check backend health:
-
-```powershell
-curl http://localhost:8080/api/health
-```
-
-Run backend tests:
-
-```powershell
-cd backend
-mvn test
-```
-
-Build frontend:
-
-```powershell
-cd frontend
-npm run build
-```
-
-## Notes
-
-- Do not commit real secrets.
-- Default credentials are for local development only.
-- `.env` and `frontend/.env.local` are ignored by Git.
-- Current implementation is base setup only.
-- Business modules will be implemented in later phases.
+| Name | Main Module | Key Objectives & Contributions |
+| --- | --- | --- |
+| **Lê Gia Bảo** | Show, Venue, Schedule & Management | Display shows and schedules; manage shows, venues, schedules, and bookings; reporting; user and role management. |
+| **Đào Minh Đức** | Identity, Profile, Cart, Booking & Ticket Holding | Registration and email verification; normal/Google login, password recovery; profile management; multi-show ticket cart; create booking, temporary ticket hold with Redis; view tickets and booking history. |
+| **Phan Bùi Bá Đạt** | Payment, Ticketing & Notification | PayOS payment; callback processing and reconciliation; generate QR tickets; send/resend ticket emails; QR validation, ensure single check-in and record check-in logs. |
