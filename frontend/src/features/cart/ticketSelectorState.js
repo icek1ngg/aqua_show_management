@@ -15,7 +15,16 @@ const priceFields = {
 };
 
 function emptyQuantities() {
-  return { STANDARD: 0, VIP: 0, FAMILY: 0 };
+  return {
+    STANDARD: { adult: 0, child: 0, senior: 0 },
+    VIP: { adult: 0, child: 0, senior: 0 },
+    FAMILY: { adult: 0, child: 0, senior: 0 },
+  };
+}
+
+export function getTotalQuantity(quantitiesObj) {
+  if (!quantitiesObj) return 0;
+  return (quantitiesObj.adult || 0) + (quantitiesObj.child || 0) + (quantitiesObj.senior || 0);
 }
 
 export function createSelectorState(scheduleId = '') {
@@ -65,31 +74,52 @@ export function chooseBookableSchedule(schedules, preferredId = '', now = Date.n
 }
 
 export function setTypeQuantity(state, ticketType, quantity, effectiveAvailability) {
-  const type = normalizeTicketType(ticketType);
-  if (!SELECTOR_TICKET_TYPES.includes(type)) {
-    return state;
-  }
-  const maximum = Math.min(10, Math.max(0, Math.trunc(Number(effectiveAvailability) || 0)));
-  const safeQuantity = Math.min(maximum, Math.max(0, Math.trunc(Number(quantity) || 0)));
-  return {
-    ...state,
-    quantities: { ...state.quantities, [type]: safeQuantity },
-  };
+  // Legacy compatibility function: delegates to adult age group
+  return setTypeAgeQuantity(state, ticketType, 'adult', quantity, effectiveAvailability);
 }
 
 export function selectTicketType(state, ticketType, schedule) {
   const availability = ticketTypeAvailability(schedule, ticketType);
   if (availability.disabled) return state;
-  return setTypeQuantity(state, ticketType, 1, availability.available);
+  return setTypeAgeQuantity(state, ticketType, 'adult', 1, availability.available);
 }
 
-export function buildCartItem(schedule, ticketType, quantity) {
+export function setTypeAgeQuantity(state, ticketType, ageType, quantity, effectiveAvailability) {
   const type = normalizeTicketType(ticketType);
+  if (!SELECTOR_TICKET_TYPES.includes(type) || !['adult', 'child', 'senior'].includes(ageType)) {
+    return state;
+  }
+  const currentQuantities = state.quantities[type] || { adult: 0, child: 0, senior: 0 };
+  const currentTotal = getTotalQuantity(currentQuantities);
+  const maximumTotal = Math.min(10, Math.max(0, Math.trunc(Number(effectiveAvailability) || 0)));
+  
+  let safeQuantity = Math.max(0, Math.trunc(Number(quantity) || 0));
+  if (currentTotal - (currentQuantities[ageType] || 0) + safeQuantity > maximumTotal) {
+    safeQuantity = maximumTotal - (currentTotal - (currentQuantities[ageType] || 0));
+  }
+
+  return {
+    ...state,
+    quantities: {
+      ...state.quantities,
+      [type]: { ...currentQuantities, [ageType]: safeQuantity },
+    },
+  };
+}
+
+export function buildCartItem(schedule, ticketType, quantities) {
+  const type = normalizeTicketType(ticketType);
+  const totalQty = getTotalQuantity(quantities);
   return {
     scheduleId: String(schedule.scheduleId),
     showId: String(schedule.showId),
     ticketType: type,
-    quantity: Math.trunc(Number(quantity)),
+    quantity: Math.trunc(Number(totalQty)),
+    ages: {
+      adult: Math.trunc(Number(quantities.adult || 0)),
+      child: Math.trunc(Number(quantities.child || 0)),
+      senior: Math.trunc(Number(quantities.senior || 0)),
+    },
     showTitle: schedule.showTitle,
     imageUrl: schedule.showImageUrl || null,
     venueName: schedule.venueName,
@@ -105,7 +135,7 @@ export function selectedTicketSummary(schedule, state) {
     return { lines: [], totalQuantity: 0, totalAmount: 0 };
   }
   const lines = SELECTOR_TICKET_TYPES
-    .filter((type) => Number(state?.quantities?.[type]) > 0)
+    .filter((type) => getTotalQuantity(state?.quantities?.[type]) > 0)
     .map((type) => {
       const item = buildCartItem(schedule, type, state.quantities[type]);
       return { ...item, lineTotal: item.unitPrice * item.quantity };
@@ -119,13 +149,17 @@ export function selectedTicketSummary(schedule, state) {
 
 export function reconcileSelectorState(state, schedule) {
   if (!schedule) return createSelectorState();
+  const nextState = { ...createSelectorState(scheduleId(schedule)), quantities: { ...emptyQuantities() } };
   return SELECTOR_TICKET_TYPES.reduce(
-    (current, type) => setTypeQuantity(
-      current,
-      type,
-      state?.quantities?.[type],
-      ticketTypeAvailability(schedule, type).available,
-    ),
-    { ...createSelectorState(scheduleId(schedule)), quantities: { ...emptyQuantities() } },
+    (current, type) => {
+      let updated = current;
+      const available = ticketTypeAvailability(schedule, type).available;
+      const q = state?.quantities?.[type] || { adult: 0, child: 0, senior: 0 };
+      updated = setTypeAgeQuantity(updated, type, 'adult', q.adult, available);
+      updated = setTypeAgeQuantity(updated, type, 'child', q.child, available);
+      updated = setTypeAgeQuantity(updated, type, 'senior', q.senior, available);
+      return updated;
+    },
+    nextState,
   );
 }

@@ -40,8 +40,8 @@ export function CartProvider({ children }) {
     setItems((currentItems) => addCartItems(currentItems, additions));
   }, []);
 
-  const updateQuantity = useCallback((key, quantity, maxQuantity) => {
-    setItems((currentItems) => updateCartItemQuantity(currentItems, key, quantity, maxQuantity));
+  const updateQuantity = useCallback((key, quantity, maxQuantity, ages) => {
+    setItems((currentItems) => updateCartItemQuantity(currentItems, key, quantity, maxQuantity, ages));
   }, []);
 
   const removeItem = useCallback((key) => {

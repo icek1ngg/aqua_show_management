@@ -1,39 +1,17 @@
-import { useEffect, useMemo, useState } from 'react';
-import { Link, useNavigate, useParams } from 'react-router-dom';
+import { useEffect, useMemo, useRef, useState } from 'react';
+import { Link, useLocation, useNavigate, useParams } from 'react-router-dom';
 
-import { showTicketTarget } from '../features/cart/showTicketNavigation.js';
-import { getShowDetail, getShowSchedules } from '../services/showService.js';
+import { chooseShowDetailSchedule, localDateKey } from '../features/cart/showDetailSchedule.js';
+import { createWorkspaceRequestTracker, detailWorkspaceNotice } from '../features/cart/showDetailWorkspaceState.js';
+import ShowTicketWorkspace from '../features/cart/ShowTicketWorkspace.jsx';
+import { getSchedule, getShowDetail, getShowSchedules } from '../services/showService.js';
 import MainLayout from '../shared/layouts/MainLayout.jsx';
-import { formatCurrency } from '../shared/utils/ticketPricing.js';
 
 const fallbackImages = [
   'https://lh3.googleusercontent.com/aida-public/AB6AXuAFeYRb8WkcNVQn2b1wxiXnDpTIB3-X8eybricRUgfMxWVfemwimDD2m_G_GiZUhW_oUx8L2aM98YoUGaHihmAaEQqP0rm5iBI3SgODMA9PSd0NfnZtfx2VUcNOrSewM73gS500HW-XbrSUG3zdcNdC8So1mOYMSf6xlwzSi_2NT6bph-dzQzqAEnmZZpyFgL9wvluMYa1G1kdZYz21Dkj9Bo62tfTY4Is8GpWRAQkP_Snkfi9PJX5FN0eml38fvqfFWooX13Cp5nq7',
   'https://lh3.googleusercontent.com/aida-public/AB6AXuBO-bCRxh2UwsQxWXeJUJQuejBAWT31c892YxMXztuGu0Qiet3S5wmaOfgfsTn_SUPEWKv1X6fk9ozFjATdo_XwJcKrUzd71xcZ23D4tZ6ZfLoCndPt_59a3YYz2GVMhx8HcTh4y1COQv2ckVTX-Ev3Z51bAF_Wt_3tcuciZ2ncN6t3rYm5JSzfG1n1igwxynE0qtDFsI-0VUrQxpgdC8ljcDDjgcU38xlZM1Q9kwJP4n6qCjB5ol5BT-Giw4ZnuRXZsEhTZHuJwkHO',
   'https://lh3.googleusercontent.com/aida-public/AB6AXuDKH4HodTfmDcO_ukYHvV3We2Q-2-5SLttCRwvL1CHxFklUt2phbyk4eI8rW-F9i9D6p6tO5PjQ76MSUDCwcyfMf9Y6EZIBLp5rA8zMy0vK2w3KHTDrxtu1aYv0iekjR0uol3OLMKn4v8zbnacHaaDt2J2KTkhRPYEvP5a303MDwaudUvNvhiBGtqL7QTtl3PgB5MzXTvsxKVFzspE7KOCOXvzvvoXkIkME5dBTAIIAIJUl7kIhTuJ_GVGs5HlpAx8Mr6LdkF1vpBxz',
 ];
-
-function localDateKey(value = new Date()) {
-  const date = value instanceof Date ? value : new Date(value);
-  if (Number.isNaN(date.getTime())) return '';
-  const year = date.getFullYear();
-  const month = String(date.getMonth() + 1).padStart(2, '0');
-  const day = String(date.getDate()).padStart(2, '0');
-  return `${year}-${month}-${day}`;
-}
-
-function formatDay(value) {
-  const date = new Date(value);
-  if (Number.isNaN(date.getTime())) return 'Date TBA';
-  return date.toLocaleDateString('en-US', { weekday: 'long', month: 'long', day: 'numeric', year: 'numeric' });
-}
-
-function formatTimeRange(startValue, endValue) {
-  const options = { hour: '2-digit', minute: '2-digit', hour12: false };
-  const start = new Date(startValue);
-  const end = new Date(endValue);
-  if (Number.isNaN(start.getTime()) || Number.isNaN(end.getTime())) return 'Time TBA';
-  return `${start.toLocaleTimeString('en-US', options)} — ${end.toLocaleTimeString('en-US', options)}`;
-}
 
 function getErrorState(error) {
   if ([400, 404].includes(error?.response?.status)) {
@@ -44,18 +22,6 @@ function getErrorState(error) {
     message: error?.response?.data?.message || error?.message || 'Please try again in a moment.',
     icon: 'error',
   };
-}
-
-function availabilityFor(schedule) {
-  const available = Number(schedule.availableTickets);
-  const start = new Date(schedule.startTime);
-  if (Number.isNaN(start.getTime()) || start.getTime() <= Date.now() + 30 * 60 * 1000) {
-    return { unavailable: true, label: 'Booking closed', button: 'CLOSED' };
-  }
-  if (Number.isFinite(available) && available <= 0) {
-    return { unavailable: true, label: 'SOLD OUT', button: 'SOLD OUT' };
-  }
-  return { unavailable: false, label: Number.isFinite(available) ? `${available} Tickets Left` : 'Availability TBA', button: 'SELECT' };
 }
 
 function LoadingDetail() {
@@ -79,7 +45,7 @@ function StateMessage({ state, onRetry }) {
           <p className="mt-3 text-on-surface-variant">{state.message}</p>
           <div className="mt-7 flex justify-center gap-3">
             {onRetry && <button className="rounded-full bg-primary px-6 py-3 font-bold text-white" onClick={onRetry} type="button">Try again</button>}
-            <Link className="rounded-full border border-outline-variant px-6 py-3 font-bold text-primary" to="/shows">Back to shows</Link>
+            <Link className="rounded-full border border-outline-variant px-6 py-3 font-bold text-primary" to="/#shows">Back to shows</Link>
           </div>
         </div>
       </div>
@@ -90,35 +56,112 @@ function StateMessage({ state, onRetry }) {
 export default function ShowDetailPage() {
   const { showId } = useParams();
   const navigate = useNavigate();
+  const location = useLocation();
+
   const [show, setShow] = useState(null);
   const [schedules, setSchedules] = useState([]);
+  const [selectedSchedule, setSelectedSchedule] = useState(null);
+
   const [isLoading, setIsLoading] = useState(true);
   const [loadError, setLoadError] = useState(null);
+  
+  const [workspaceLoading, setWorkspaceLoading] = useState(false);
+  const [workspaceError, setWorkspaceError] = useState('');
+  const [workspaceNotice, setWorkspaceNotice] = useState('');
+
   const [reloadKey, setReloadKey] = useState(0);
-  const [selectedDate, setSelectedDate] = useState('');
-  const [calendarOpen, setCalendarOpen] = useState(false);
   const [currentSlide, setCurrentSlide] = useState(0);
   const [lightboxOpen, setLightboxOpen] = useState(false);
+
+  const workspaceRequest = useRef(createWorkspaceRequestTracker());
+
+  const requestedDate = new URLSearchParams(location.search).get('date') || '';
 
   useEffect(() => {
     let active = true;
     setIsLoading(true);
     setLoadError(null);
+    setWorkspaceLoading(true);
+    setWorkspaceError('');
+
+    const requestId = workspaceRequest.current.begin();
+
     Promise.all([getShowDetail(showId), getShowSchedules(showId)])
-      .then(([detail, list]) => {
-        if (!active) return;
+      .then(async ([detail, list]) => {
+        if (!active || !workspaceRequest.current.isCurrent(requestId)) return;
+        
+        const scheduleList = Array.isArray(list) ? list : detail?.schedules || [];
+        const choice = chooseShowDetailSchedule(scheduleList, requestedDate);
+        
+        let authoritative = null;
+        try {
+          authoritative = choice.schedule
+            ? await getSchedule(choice.schedule.id || choice.schedule.scheduleId)
+            : null;
+        } catch (error) {
+          if (active && workspaceRequest.current.isCurrent(requestId)) {
+             setWorkspaceError(error?.response?.data?.message || error?.message || 'Could not load schedule availability.');
+          }
+        }
+        
+        if (!active || !workspaceRequest.current.isCurrent(requestId)) return;
+
         setShow(detail);
-        setSchedules(Array.isArray(list) ? list : detail?.schedules || []);
+        setSchedules(scheduleList);
+        setSelectedSchedule(authoritative);
+        setWorkspaceNotice(detailWorkspaceNotice({
+          requestedDateUnavailable: choice.requestedDateUnavailable,
+          requestedDate: choice.effectiveDate,
+        }));
       })
       .catch((error) => {
-        if (!active) return;
+        if (!active || !workspaceRequest.current.isCurrent(requestId)) return;
         setShow(null);
         setSchedules([]);
+        setSelectedSchedule(null);
         setLoadError(getErrorState(error));
       })
-      .finally(() => active && setIsLoading(false));
-    return () => { active = false; };
-  }, [reloadKey, showId]);
+      .finally(() => {
+        if (active && workspaceRequest.current.isCurrent(requestId)) {
+          setIsLoading(false);
+          setWorkspaceLoading(false);
+          if (location.hash === '#ticket-workspace') {
+             setTimeout(() => {
+                const el = document.getElementById('ticket-workspace');
+                if (el) el.scrollIntoView({ behavior: 'smooth' });
+             }, 0);
+          }
+        }
+      });
+      
+    return () => { 
+      active = false;
+      workspaceRequest.current.invalidate();
+    };
+  }, [reloadKey, showId, requestedDate, location.hash]);
+
+  const handleWorkspaceScheduleChange = async (scheduleIdParam) => {
+    const requestId = workspaceRequest.current.begin();
+    setWorkspaceLoading(true);
+    setWorkspaceError('');
+    setWorkspaceNotice('');
+
+    try {
+       const authoritative = await getSchedule(scheduleIdParam);
+       if (!workspaceRequest.current.isCurrent(requestId)) return;
+       setSelectedSchedule(authoritative);
+       const date = localDateKey(authoritative.startTime);
+       navigate(`/shows/${encodeURIComponent(String(show.id))}?date=${date}#ticket-workspace`);
+    } catch (error) {
+       if (workspaceRequest.current.isCurrent(requestId)) {
+          setWorkspaceError(error?.response?.data?.message || error?.message || 'Could not load schedule availability.');
+       }
+    } finally {
+       if (workspaceRequest.current.isCurrent(requestId)) {
+          setWorkspaceLoading(false);
+       }
+    }
+  };
 
   const heroImages = useMemo(() => [...new Set([show?.imageUrl, ...fallbackImages].filter(Boolean))].slice(0, 3), [show?.imageUrl]);
 
@@ -133,14 +176,6 @@ export default function ShowDetailPage() {
     return () => { document.body.style.overflow = ''; };
   }, [lightboxOpen]);
 
-  const effectiveDate = selectedDate || localDateKey();
-  const filteredSchedules = useMemo(
-    () => schedules
-      .filter((schedule) => localDateKey(schedule.startTime) === effectiveDate)
-      .sort((a, b) => new Date(a.startTime).getTime() - new Date(b.startTime).getTime()),
-    [effectiveDate, schedules],
-  );
-
   if (isLoading) return <LoadingDetail />;
   if (loadError) return <StateMessage state={loadError} onRetry={loadError.icon === 'error' ? () => setReloadKey((key) => key + 1) : null} />;
   if (!show) return <StateMessage state={{ title: 'Show not found', message: 'This show is unavailable.', icon: 'search_off' }} />;
@@ -152,8 +187,6 @@ export default function ShowDetailPage() {
           .show-glass { background: rgba(255,255,255,.72); backdrop-filter: blur(16px); border: 1px solid rgba(255,255,255,.5); }
           .show-hero-gradient { background: linear-gradient(180deg, rgba(0,105,107,.12), rgba(0,0,0,.74)); }
           .show-portal-glow { box-shadow: 0 0 30px rgba(0,206,209,.16); }
-          .show-booking-action { background-color: #ff6b00 !important; color: #ffffff !important; }
-          .show-booking-action:hover { background-color: #e85f00 !important; }
         `}</style>
 
         {lightboxOpen && (
@@ -173,7 +206,7 @@ export default function ShowDetailPage() {
           <div className="pointer-events-none absolute bottom-0 left-0 right-0 mx-auto max-w-container-max px-4 pb-16 sm:px-8 lg:px-margin-desktop">
             <div className="flex flex-col gap-4">
               <nav className="flex items-center gap-2 text-xs font-bold uppercase tracking-widest text-white/90">
-                <Link className="pointer-events-auto hover:text-primary-container" onClick={(event) => event.stopPropagation()} to="/shows">Shows</Link>
+                <Link className="pointer-events-auto hover:text-primary-container" onClick={(event) => event.stopPropagation()} to="/#shows">Shows</Link>
                 <span className="material-symbols-outlined text-[14px]">chevron_right</span>
                 <span className="text-primary-container">{show.title}</span>
               </nav>
@@ -201,71 +234,18 @@ export default function ShowDetailPage() {
               </div>
             </div>
 
-            <div className="flex flex-col items-start gap-8">
-                <div className="flex w-full min-w-0 flex-col gap-8" id="upcoming-times">
-                <div className="flex flex-wrap items-end justify-between gap-4">
-                  <div>
-                    <h2 className="text-2xl font-extrabold text-primary">Upcoming Times</h2>
-                    <p className="mt-1 text-xs font-bold uppercase tracking-wide text-outline">{selectedDate ? formatDay(`${selectedDate}T00:00:00`) : `Today · ${formatDay(new Date())}`}</p>
-                  </div>
-                  <div className="relative">
-                    <button className="flex items-center gap-1.5 text-xs font-bold uppercase tracking-wider text-brand-orange hover:underline" onClick={() => setCalendarOpen((open) => !open)} type="button">
-                      View Calendar <span className="material-symbols-outlined text-[18px]">calendar_today</span>
-                    </button>
-                    {calendarOpen && (
-                      <div className="absolute right-0 top-8 z-20 w-72 rounded-2xl border border-outline-variant/40 bg-white p-4 shadow-xl">
-                        <label className="text-[10px] font-black uppercase tracking-widest text-outline" htmlFor="show-date">Choose a date</label>
-                        <input className="mt-2 w-full rounded-xl border-outline-variant text-primary focus:border-primary focus:ring-primary" id="show-date" min={localDateKey()} onChange={(event) => { setSelectedDate(event.target.value); setCalendarOpen(false); }} type="date" value={selectedDate} />
-                        {selectedDate && <button className="mt-3 text-xs font-bold text-brand-orange hover:underline" onClick={() => { setSelectedDate(''); setCalendarOpen(false); }} type="button">Back to today</button>}
-                      </div>
-                    )}
-                  </div>
-                </div>
+            <ShowTicketWorkspace
+              error={workspaceError}
+              loading={workspaceLoading}
+              notice={workspaceNotice}
+              schedule={selectedSchedule}
+              schedules={schedules}
+              selectedScheduleId={selectedSchedule?.id || selectedSchedule?.scheduleId || ''}
+              show={show}
+              onRetry={() => setReloadKey((key) => key + 1)}
+              onScheduleChange={handleWorkspaceScheduleChange}
+            />
 
-                <div className="flex flex-col gap-6">
-                  {filteredSchedules.length === 0 ? (
-                    <div className="show-glass rounded-2xl p-10 text-center shadow-md">
-                      <span className="material-symbols-outlined text-5xl text-primary">event_busy</span>
-                      <h3 className="mt-3 text-xl font-extrabold text-on-surface">No showtimes on this date</h3>
-                      <p className="mt-2 text-sm text-on-surface-variant">Open the calendar to choose another date.</p>
-                    </div>
-                  ) : filteredSchedules.map((schedule) => {
-                    const availability = availabilityFor(schedule);
-                    return (
-                      <article className={`show-glass relative overflow-hidden rounded-2xl border border-transparent p-6 shadow-md transition-all ${availability.unavailable ? 'opacity-60 grayscale-[.5]' : 'hover:shadow-xl'}`} key={schedule.id}>
-                        <div className="mb-6 flex items-start justify-between gap-4">
-                          <div>
-                            <span className={`block text-2xl font-black ${availability.unavailable ? 'text-outline' : 'text-primary'}`}>{formatTimeRange(schedule.startTime, schedule.endTime)}</span>
-                            <span className="mt-1 flex items-center gap-1 text-xs font-bold uppercase tracking-wide text-on-surface-variant"><span className="material-symbols-outlined text-[16px] text-brand-orange">location_on</span>{schedule.venueName || 'Venue TBA'}</span>
-                          </div>
-                          <div className="text-right"><span className="text-2xl font-black text-on-surface">{formatCurrency(schedule.price)}</span><span className="mt-1 block text-[10px] font-black uppercase tracking-widest text-outline">per ticket</span></div>
-                        </div>
-                        <div className="flex items-center justify-between gap-4 border-t border-outline-variant/30 pt-6">
-                          <div><span className="block text-[10px] font-black uppercase tracking-widest text-outline">Availability</span><span className={`block text-sm font-bold ${availability.unavailable ? 'text-error' : 'text-primary'}`}>{availability.label}</span></div>
-                          <button
-                            className={`rounded-full px-10 py-3 text-sm font-black transition-all ${availability.unavailable ? 'cursor-not-allowed bg-outline-variant text-on-surface-variant' : 'show-booking-action shadow-lg shadow-brand-orange/20 hover:scale-105 active:scale-95'}`}
-                            disabled={availability.unavailable}
-                            onClick={() => {
-                              const target = showTicketTarget({ showId: show.id, scheduleId: schedule.id });
-                              navigate(target.to, { state: target.state });
-                            }}
-                            type="button"
-                          >
-                            {availability.unavailable ? availability.button : 'Book Now'}
-                          </button>
-                        </div>
-                      </article>
-                    );
-                  })}
-                </div>
-
-                <div className="flex gap-4 rounded-2xl border border-primary/10 bg-primary/5 p-6">
-                  <span className="material-symbols-outlined text-3xl text-primary" style={{ fontVariationSettings: "'FILL' 1" }}>info</span>
-                  <div><span className="text-sm font-bold uppercase tracking-widest text-primary">Visitor Advisory</span><p className="mt-1 text-xs font-medium leading-relaxed text-on-surface-variant">Please arrive 20 minutes before showtime. This performance may feature strobe lights and loud audio effects.</p></div>
-                </div>
-              </div>
-
-            </div>
           </div>
         </section>
       </div>

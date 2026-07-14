@@ -3,8 +3,8 @@ import { Link, NavLink, useLocation, useNavigate } from 'react-router-dom';
 
 import { useAuth } from '../../../features/auth/AuthContext.jsx';
 import CartBadge from '../../../features/cart/CartBadge.jsx';
-import { showTicketTarget } from '../../../features/cart/showTicketNavigation.js';
 import Logo from './Logo.jsx';
+import TicketBookingDrawer from './TicketBookingDrawer.jsx';
 import { canShowUserCart } from './navbarCartEligibility.js';
 
 const sectionNavigationLinks = [
@@ -177,6 +177,7 @@ export default function Navbar() {
   const navigate = useNavigate();
   const [isMobileOpen, setIsMobileOpen] = useState(false);
   const [isMobileUserMenuOpen, setIsMobileUserMenuOpen] = useState(false);
+  const [bookingDrawerOpen, setBookingDrawerOpen] = useState(false);
   const isStaff = hasRole(user, 'STAFF');
   const canShowCart = canShowUserCart(user, loading);
 
@@ -186,10 +187,9 @@ export default function Navbar() {
   };
   const handleBookNow = () => {
     closeMobileMenu();
-    const target = showTicketTarget();
-    navigate(target.to, { state: target.state });
+    setBookingDrawerOpen(true);
   };
-  const isHomepageRoute = ['/', '/shows', '/public/shows'].includes(location.pathname);
+  const isHomepageRoute = location.pathname === '/';
   const scrollToSection = (sectionId) => {
     if (sectionId === 'home') {
       window.scrollTo({ top: 0, behavior: 'smooth' });
@@ -234,7 +234,7 @@ export default function Navbar() {
                 type="button"
                 onClick={handleBookNow}
               >
-                Book Now
+                Book tickets
               </button>
             ) : null}
           </div>
@@ -318,14 +318,14 @@ export default function Navbar() {
                   type="button"
                   onClick={handleBookNow}
                 >
-                  Book Now
+                  Book tickets
                 </button>
               ) : null}
             </div>
           </div>
         )}
       </header>
-
+      <TicketBookingDrawer open={bookingDrawerOpen} onClose={() => setBookingDrawerOpen(false)} />
     </>
   );
 }

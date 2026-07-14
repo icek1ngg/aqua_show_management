@@ -14,9 +14,9 @@ import {
   isScheduleBookable,
   SELECTOR_TICKET_TYPES,
   selectSchedule,
-  selectTicketType,
   selectedTicketSummary,
-  setTypeQuantity,
+  getTotalQuantity,
+  setTypeAgeQuantity,
   ticketTypeAvailability,
 } from './ticketSelectorState.js';
 
@@ -59,6 +59,7 @@ export default function ShowTicketWorkspace({
   selectedScheduleId,
   loading,
   error,
+  notice = '',
   onScheduleChange,
   onRetry,
 }) {
@@ -69,6 +70,7 @@ export default function ShowTicketWorkspace({
   const [addingToCart, setAddingToCart] = useState(false);
   const [cartError, setCartError] = useState('');
   const [authoritativeSchedule, setAuthoritativeSchedule] = useState(schedule);
+  const [expandedCard, setExpandedCard] = useState(null);
   const selectionVersion = useRef(0);
   const confirmationLifecycle = useRef(null);
   if (!confirmationLifecycle.current) {
@@ -103,15 +105,16 @@ export default function ShowTicketWorkspace({
     () => schedules.filter((item) => isScheduleBookable(item)),
     [schedules],
   );
-  const changeQuantity = (type, delta) => {
+  const changeAgeQuantity = (type, ageType, newQuantity) => {
     if (addingToCart) return;
     selectionVersion.current += 1;
     setCartError('');
     const availability = ticketTypeAvailability(displayedSchedule, type);
-    setState((current) => setTypeQuantity(
+    setState((current) => setTypeAgeQuantity(
       current,
       type,
-      Number(current.quantities[type] || 0) + delta,
+      ageType,
+      newQuantity,
       availability.available,
     ));
   };
@@ -160,15 +163,21 @@ export default function ShowTicketWorkspace({
       <div className="mx-auto max-w-7xl px-4 sm:px-6 lg:px-8">
         <div className="mb-8 flex flex-col gap-3 sm:flex-row sm:items-end sm:justify-between">
           <div>
-            <p className="text-sm font-black uppercase tracking-[0.22em] text-cyan-700">Upcoming Times</p>
+            <p className="text-sm font-black uppercase tracking-[0.22em] text-cyan-700">Select Tickets</p>
             <h2 className="mt-2 text-3xl font-black tracking-tight text-slate-950 sm:text-4xl">
-              {displayedSchedule ? formatDate(displayedSchedule.startTime) : show?.title || 'Choose your show'}
+              {displayedSchedule ? formatDate(displayedSchedule.startTime) : show?.title}
             </h2>
           </div>
           <p className="max-w-xl text-sm font-semibold text-slate-600">
-            {show ? `Select tickets for ${show.title}. Quantities are managed in your summary.` : 'Choose a show above to see its nearest available time.'}
+            {show ? `Select tickets for ${show.title}. Quantities are managed in your summary.` : ''}
           </p>
         </div>
+
+        {notice && (
+          <p className="mb-6 rounded-2xl border border-amber-200 bg-amber-50 p-4 font-bold text-amber-900" role="status">
+            {notice}
+          </p>
+        )}
 
         {contentState === 'loading' ? (
           <div aria-busy="true" aria-live="polite" className="rounded-[2rem] border border-cyan-100 bg-white p-12 text-center shadow-sm" role="status">
@@ -186,12 +195,28 @@ export default function ShowTicketWorkspace({
         ) : contentState === 'empty' ? (
           <div className="rounded-[2rem] border border-cyan-100 bg-white p-10 text-center shadow-sm">
             <span className="material-symbols-outlined text-5xl text-cyan-700">event_busy</span>
-            <h3 className="mt-3 text-2xl font-black text-slate-950">
-              {show ? 'No upcoming schedules' : 'Select a show to get started'}
-            </h3>
+            <h3 className="mt-3 text-2xl font-black text-slate-950">No upcoming schedules</h3>
             <p className="mx-auto mt-2 max-w-xl text-slate-600">
-              {show ? 'This show does not currently have a future schedule with tickets available.' : 'Use any Book Now action or the show picker above.'}
+              This show does not currently have a future schedule with tickets available.
             </p>
+            {notice && bookableSchedules.length > 0 && (
+              <div className="mx-auto mt-6 grid max-w-3xl gap-3 sm:grid-cols-2">
+                {bookableSchedules.map((item) => {
+                  const itemId = scheduleId(item);
+                  return (
+                    <button
+                      className="rounded-2xl border border-cyan-200 bg-white p-4 text-left transition hover:border-cyan-500 hover:bg-cyan-50"
+                      key={itemId}
+                      type="button"
+                      onClick={() => onScheduleChange(itemId)}
+                    >
+                      <span className="block font-black text-slate-950">{formatDate(item.startTime)}</span>
+                      <span className="mt-1 block text-sm font-bold text-cyan-700">{formatTime(item.startTime)}</span>
+                    </button>
+                  );
+                })}
+              </div>
+            )}
           </div>
         ) : (
           <>
@@ -253,28 +278,32 @@ export default function ShowTicketWorkspace({
               <div className="space-y-4">
                 {SELECTOR_TICKET_TYPES.map((type) => {
                   const availability = ticketTypeAvailability(displayedSchedule, type);
-                  const quantity = Number(state.quantities[type]) || 0;
+                  const quantities = state.quantities[type] || { adult: 0, child: 0, senior: 0 };
+                  const totalQty = getTotalQuantity(quantities);
                   const label = getTicketTypeLabel(type);
+                  const isExpanded = expandedCard === type;
+
                   return (
-                    <article className={`flex flex-col gap-5 rounded-[1.75rem] border p-6 sm:flex-row sm:items-center sm:justify-between ${availability.disabled ? 'border-slate-100 bg-slate-50' : 'border-cyan-100 bg-white shadow-sm'}`} key={type}>
-                      <div>
-                        <h3 className="text-xl font-black text-slate-950">{label}</h3>
-                        <p className="mt-1 text-lg font-black text-cyan-700">{formatCurrency(ticketPrice(displayedSchedule, type))}</p>
-                        <p className="mt-1 text-sm font-semibold text-slate-500">{availability.available} available</p>
+                    <article className={`flex flex-col gap-5 rounded-[1.75rem] border p-6 ${availability.disabled ? 'border-slate-100 bg-slate-50' : 'border-cyan-100 bg-white shadow-sm hover:border-cyan-300'} transition cursor-pointer`} key={type} onClick={() => !availability.disabled && setExpandedCard(type)}>
+                      <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between w-full">
+                        <div>
+                          <h3 className="text-xl font-black text-slate-950">{label}</h3>
+                          <p className="mt-1 text-lg font-black text-cyan-700">{formatCurrency(ticketPrice(displayedSchedule, type))}</p>
+                          <p className="mt-1 text-sm font-semibold text-slate-500">{availability.available} available</p>
+                        </div>
+                        <button
+                          className="rounded-full bg-gradient-to-r from-cyan-600 to-teal-700 px-7 py-3 font-black text-white transition hover:brightness-95 disabled:cursor-not-allowed disabled:bg-none disabled:bg-slate-200 disabled:text-slate-500"
+                          disabled={addingToCart || availability.disabled}
+                          type="button"
+                          onClick={(e) => {
+                            e.stopPropagation();
+                            if (addingToCart || availability.disabled) return;
+                            setExpandedCard(type);
+                          }}
+                        >
+                          {availability.disabled ? 'Sold Out' : totalQty > 0 ? `${totalQty} selected` : 'Select'}
+                        </button>
                       </div>
-                      <button
-                        className="rounded-full bg-gradient-to-r from-cyan-600 to-teal-700 px-7 py-3 font-black text-white transition hover:brightness-95 disabled:cursor-not-allowed disabled:bg-none disabled:bg-slate-200 disabled:text-slate-500"
-                        disabled={addingToCart || availability.disabled || quantity > 0}
-                        type="button"
-                        onClick={() => {
-                          if (addingToCart) return;
-                          selectionVersion.current += 1;
-                          setCartError('');
-                          setState((current) => selectTicketType(current, type, displayedSchedule));
-                        }}
-                      >
-                        {availability.disabled ? 'Sold Out' : quantity > 0 ? `${label} selected` : 'Select'}
-                      </button>
                     </article>
                   );
                 })}
@@ -301,14 +330,10 @@ export default function ShowTicketWorkspace({
                             </div>
                             <p className="font-black text-cyan-700">{formatCurrency(line.lineTotal)}</p>
                           </div>
-                          <div className="mt-4 flex items-center gap-3">
-                            <button aria-label={`Decrease ${label} quantity`} className="flex h-9 w-9 items-center justify-center rounded-full border border-cyan-300 font-black text-cyan-800 transition hover:bg-cyan-50 disabled:cursor-not-allowed disabled:opacity-35" disabled={addingToCart} type="button" onClick={() => changeQuantity(line.ticketType, -1)}>
-                              <span className="material-symbols-outlined text-lg">remove</span>
-                            </button>
-                            <span className="w-8 text-center font-black text-slate-950">{line.quantity}</span>
-                            <button aria-label={`Increase ${label} quantity`} className="flex h-9 w-9 items-center justify-center rounded-full bg-gradient-to-r from-cyan-600 to-teal-700 font-black text-white disabled:cursor-not-allowed disabled:opacity-35" disabled={addingToCart || line.quantity >= availability.maximum} type="button" onClick={() => changeQuantity(line.ticketType, 1)}>
-                              <span className="material-symbols-outlined text-lg">add</span>
-                            </button>
+                          <div className="mt-3 text-sm text-slate-600 space-y-1">
+                            {line.ages.adult > 0 && <div>Adult: <span className="font-bold text-slate-950">{line.ages.adult}</span></div>}
+                            {line.ages.child > 0 && <div>Child: <span className="font-bold text-slate-950">{line.ages.child}</span></div>}
+                            {line.ages.senior > 0 && <div>Senior: <span className="font-bold text-slate-950">{line.ages.senior}</span></div>}
                           </div>
                         </div>
                       );
@@ -321,7 +346,7 @@ export default function ShowTicketWorkspace({
                   <div className="flex items-end justify-between gap-4"><span className="font-black text-slate-950">Temporary total</span><span className="text-2xl font-black text-cyan-700">{formatCurrency(summary.totalAmount)}</span></div>
                   {cartError && <p className="text-sm font-bold text-red-700" role="alert">{cartError}</p>}
                   <button className="w-full rounded-full bg-gradient-to-r from-cyan-600 to-teal-700 px-6 py-4 font-black text-white shadow-lg shadow-cyan-950/15 transition hover:brightness-95 disabled:cursor-not-allowed disabled:opacity-40" disabled={addingToCart || summary.lines.length === 0} type="button" onClick={handleAddToCart}>
-                    {addingToCart ? 'Confirming Availability...' : 'Add to Cart & Continue'}
+                    {addingToCart ? 'Confirming Availability...' : 'Continue'}
                   </button>
                 </div>
               </aside>
@@ -329,6 +354,81 @@ export default function ShowTicketWorkspace({
           </>
         )}
       </div>
+
+      {expandedCard && (
+        <div aria-label="Select Ages" aria-modal="true" className="fixed inset-0 z-[80]" role="dialog">
+          <button aria-label="Close drawer" className="absolute inset-0 bg-slate-950/45" onClick={() => setExpandedCard(null)} type="button" />
+          <aside className="absolute right-0 top-0 flex h-full w-full max-w-md flex-col bg-white p-6 shadow-2xl overflow-y-auto">
+            <div className="flex items-start justify-between mb-8">
+              <div>
+                <p className="text-xs font-black uppercase tracking-[0.2em] text-cyan-600 mb-1">[{show?.title}]</p>
+                <h2 className="text-2xl font-black text-slate-900 pr-4">{getTicketTypeLabel(expandedCard)} Admission Ticket to Wave Park</h2>
+              </div>
+              <button aria-label="Close" className="flex h-10 w-10 shrink-0 items-center justify-center rounded-full bg-gray-50 hover:bg-gray-100 transition" onClick={() => setExpandedCard(null)} type="button">
+                <span className="material-symbols-outlined text-gray-500">close</span>
+              </button>
+            </div>
+
+            <div className="flex flex-col flex-1">
+              <h3 className="flex items-center gap-2 font-bold text-slate-700 mb-4">
+                <span className="material-symbols-outlined">group</span>
+                Quantity to purchase
+              </h3>
+              
+              <div className="space-y-4">
+                {['adult', 'child', 'senior'].map((ageType) => {
+                  const ageLabel = ageType === 'adult' ? 'Adult' : ageType === 'child' ? 'Child' : 'Senior';
+                  const ageDesc = ageType === 'adult' ? 'Over 140cm' : ageType === 'child' ? '80-139cm' : 'Over 60 years old';
+                  const icon = ageType === 'child' ? 'child_care' : 'person';
+                  const quantities = state.quantities[expandedCard] || { adult: 0, child: 0, senior: 0 };
+                  const qty = quantities[ageType] || 0;
+                  const unitPrice = ticketPrice(displayedSchedule, expandedCard);
+                  const availability = ticketTypeAvailability(displayedSchedule, expandedCard);
+                  const totalQty = getTotalQuantity(quantities);
+                  
+                  return (
+                    <div key={ageType} className="flex flex-col sm:flex-row sm:items-center justify-between rounded-2xl border border-slate-200 p-4 hover:border-cyan-200 transition">
+                      <div className="flex items-center gap-4">
+                        <span className="material-symbols-outlined text-3xl text-slate-400">{icon}</span>
+                        <div>
+                          <p className="font-bold text-slate-900">{ageLabel}</p>
+                          <p className="text-xs text-slate-400">{ageDesc}</p>
+                        </div>
+                      </div>
+                      <div className="mt-4 sm:mt-0 flex flex-1 items-center justify-between sm:justify-end gap-3 sm:gap-6">
+                        <span className="font-bold text-slate-700 whitespace-nowrap">~{formatCurrency(unitPrice)}</span>
+                        <div className="flex items-center gap-3">
+                          <button aria-label={`Decrease ${ageLabel}`} className="flex h-8 w-8 items-center justify-center rounded-full bg-slate-100 font-black text-slate-600 transition hover:bg-slate-200 disabled:opacity-35" disabled={addingToCart || qty <= 0} type="button" onClick={() => changeAgeQuantity(expandedCard, ageType, qty - 1)}>
+                            <span className="material-symbols-outlined text-sm">remove</span>
+                          </button>
+                          <span className="w-6 text-center font-bold text-slate-900">{qty}</span>
+                          <button aria-label={`Increase ${ageLabel}`} className="flex h-8 w-8 items-center justify-center rounded-full bg-slate-100 font-black text-slate-600 transition hover:bg-slate-200 disabled:opacity-35" disabled={addingToCart || totalQty >= availability.maximum} type="button" onClick={() => changeAgeQuantity(expandedCard, ageType, qty + 1)}>
+                            <span className="material-symbols-outlined text-sm">add</span>
+                          </button>
+                        </div>
+                      </div>
+                    </div>
+                  );
+                })}
+              </div>
+            </div>
+            
+            <div className="mt-8 border-t border-slate-100 pt-6 flex items-center justify-between">
+              <div className="font-black text-2xl text-orange-600">
+                 {formatCurrency((getTotalQuantity(state.quantities[expandedCard] || {}) || 0) * ticketPrice(displayedSchedule, expandedCard))}
+              </div>
+              <div className="flex items-center gap-3">
+                <button className="flex h-12 w-12 items-center justify-center rounded-full border border-slate-200 text-slate-400 hover:text-cyan-600 transition" type="button" onClick={() => setExpandedCard(null)}>
+                  <span className="material-symbols-outlined">shopping_cart</span>
+                </button>
+                <button className="rounded-full bg-slate-100 px-8 py-3 font-bold text-slate-400 hover:bg-cyan-600 hover:text-white transition" type="button" onClick={() => setExpandedCard(null)}>
+                  Done
+                </button>
+              </div>
+            </div>
+          </aside>
+        </div>
+      )}
     </section>
   );
 }

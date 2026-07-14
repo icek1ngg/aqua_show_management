@@ -1,12 +1,9 @@
 import { useEffect, useMemo, useRef, useState } from 'react';
 import { Link, useLocation, useNavigate } from 'react-router-dom';
 
-import ShowTicketWorkspace from '../cart/ShowTicketWorkspace.jsx';
 import { showTicketTarget } from '../cart/showTicketNavigation.js';
-import { chooseBookableSchedule } from '../cart/ticketSelectorState.js';
-import { getSchedule, getShowDetail, getShowSchedules, getShows } from '../../services/showService.js';
+import { getShows } from '../../services/showService.js';
 import MainLayout from '../../shared/layouts/MainLayout.jsx';
-import { createTicketWorkspaceResolution } from './ticketWorkspaceRoute.js';
 
 const fallbackShowImage =
   'https://lh3.googleusercontent.com/aida-public/AB6AXuANv7I9nTUaKmdiA6IfaIaY0YwJUIWoqM0X6m_tgMmcJ71PacmGbCJL7U7jN8rhBXSUuV7fovx9LDsAc6N5PhTyiCp6LssLe6FgDdZmMcwFIlWNhrmPMXPWNaNGaENraIJuHz9U8O5qXFdHXwD12d0tWFF6pkX61XHVJWiPscKVSeVXPJHPLntIinpKKiq48E_jrrE2A6BF6g5CVGhbzwWhTMCs07mHdwovKDWCZJwE9QP5SidUIrVjslByRhoxaZve3By201M-MkjJ';
@@ -95,6 +92,8 @@ function scrollToSection(sectionId) {
   document.getElementById(normalizedSectionId)?.scrollIntoView({ behavior: 'smooth', block: 'start' });
 }
 
+import TicketSearchBar from './TicketSearchBar.jsx';
+
 export default function HomePage() {
   const location = useLocation();
   const navigate = useNavigate();
@@ -113,15 +112,6 @@ export default function HomePage() {
   const [isLoadingShows, setIsLoadingShows] = useState(true);
   const [showsError, setShowsError] = useState('');
   const [reloadKey, setReloadKey] = useState(0);
-  const [selectedShowId, setSelectedShowId] = useState('');
-  const [workspaceShow, setWorkspaceShow] = useState(null);
-  const [workspaceSchedules, setWorkspaceSchedules] = useState([]);
-  const [workspaceSchedule, setWorkspaceSchedule] = useState(null);
-  const [workspaceLoading, setWorkspaceLoading] = useState(false);
-  const [workspaceError, setWorkspaceError] = useState('');
-  const workspaceRequest = useRef(0);
-  const workspaceRetryAction = useRef(null);
-  const handledWorkspaceLocation = useRef('');
 
   useEffect(() => {
     const sectionId = normalizeSectionId(
@@ -210,109 +200,10 @@ export default function HomePage() {
     [shows],
   );
   const firstBookableShow = upcomingSchedules.find((show) => show.nextScheduleId);
-  const selectedShow = shows.find((show) => show.id === selectedShowId);
 
-  const handleBookingShowChange = (event) => {
-    const nextShowId = event.target.value;
-    setSelectedShowId(nextShowId);
+  const goToShowTickets = (show) => {
+    navigate(showTicketTarget({ showId: show?.id }));
   };
-
-  const activateTicketWorkspace = async (show, preferredScheduleId = '') => {
-    if (!show?.id) return;
-    workspaceRetryAction.current = () => activateTicketWorkspace(show, preferredScheduleId);
-    const requestId = ++workspaceRequest.current;
-    setWorkspaceShow(show);
-    setWorkspaceSchedules([]);
-    setWorkspaceSchedule(null);
-    setWorkspaceLoading(true);
-    setWorkspaceError('');
-    try {
-      const list = await getShowSchedules(show.id);
-      const schedules = Array.isArray(list) ? list : [];
-      const selected = chooseBookableSchedule(schedules, preferredScheduleId);
-      const detail = selected ? await getSchedule(selected.id || selected.scheduleId) : null;
-      if (workspaceRequest.current !== requestId) return;
-      setWorkspaceSchedules(schedules);
-      setWorkspaceSchedule(detail);
-      requestAnimationFrame(() => document.getElementById('ticket-workspace')?.scrollIntoView({ behavior: 'smooth', block: 'start' }));
-    } catch (loadError) {
-      if (workspaceRequest.current === requestId) setWorkspaceError(getShowsErrorMessage(loadError));
-    } finally {
-      if (workspaceRequest.current === requestId) setWorkspaceLoading(false);
-    }
-  };
-
-  const handleWorkspaceScheduleChange = async (scheduleId) => {
-    if (!scheduleId) return;
-    workspaceRetryAction.current = () => handleWorkspaceScheduleChange(scheduleId);
-    const requestId = ++workspaceRequest.current;
-    setWorkspaceSchedule(null);
-    setWorkspaceLoading(true);
-    setWorkspaceError('');
-    try {
-      const detail = await getSchedule(scheduleId);
-      if (workspaceRequest.current === requestId) setWorkspaceSchedule(detail);
-    } catch (loadError) {
-      if (workspaceRequest.current === requestId) setWorkspaceError(getShowsErrorMessage(loadError));
-    } finally {
-      if (workspaceRequest.current === requestId) setWorkspaceLoading(false);
-    }
-  };
-
-  const runTicketWorkspaceResolution = (resolution, locationKey) => {
-    const requestId = ++workspaceRequest.current;
-    workspaceRetryAction.current = () => runTicketWorkspaceResolution(resolution, locationKey);
-    setWorkspaceShow(null);
-    setWorkspaceSchedules([]);
-    setWorkspaceSchedule(null);
-    setWorkspaceLoading(true);
-    setWorkspaceError('');
-    resolution.resolveTarget()
-      .then((target) => {
-        if (
-          workspaceRequest.current !== requestId
-          || handledWorkspaceLocation.current !== locationKey
-        ) return;
-        if (!target?.show) {
-          setWorkspaceLoading(false);
-          return;
-        }
-        activateTicketWorkspace(target.show, target.scheduleId);
-      })
-      .catch((loadError) => {
-        if (
-          workspaceRequest.current === requestId
-          && handledWorkspaceLocation.current === locationKey
-        ) {
-          setWorkspaceLoading(false);
-          setWorkspaceError(getShowsErrorMessage(loadError));
-        }
-      });
-  };
-
-  const goToTicketWorkspace = (show, scheduleId = '') => {
-    const target = showTicketTarget({ showId: show?.id, scheduleId });
-    navigate(target.to, { state: target.state });
-  };
-
-  useEffect(() => {
-    const requestedShowId = location.state?.ticketSelectionShowId;
-    if (
-      (!requestedShowId && shows.length === 0)
-      || handledWorkspaceLocation.current === location.key
-      || (location.pathname !== '/shows' && location.pathname !== '/public/shows')
-    ) return;
-    const locationKey = location.key;
-    handledWorkspaceLocation.current = locationKey;
-    runTicketWorkspaceResolution(createTicketWorkspaceResolution({
-      shows,
-      requestedShowId,
-      requestedScheduleId: location.state?.ticketSelectionScheduleId || '',
-      fallbackShow: firstBookableShow,
-      loadShow: getShowDetail,
-      loadSchedules: getShowSchedules,
-    }), locationKey);
-  }, [firstBookableShow, location.key, location.pathname, location.state, shows]);
 
   const handleShowSearch = (event) => {
     event.preventDefault();
@@ -328,12 +219,12 @@ export default function HomePage() {
 
   return (
     <MainLayout>
-      <section className="relative flex min-h-[600px] scroll-mt-24 items-center overflow-hidden lg:min-h-[720px]" id="home">
+      <section className="relative flex min-h-[600px] scroll-mt-24 items-center lg:min-h-[720px]" id="home">
         <div className="absolute inset-0 z-0">
           <img
             alt="Water park pool with turquoise slides"
             className="h-full w-full object-cover"
-            src="https://lh3.googleusercontent.com/aida-public/AB6AXuCgzaSFnyz7iKGePZ5TabB9udRC0EcNUR3yhdm7OyJ3OiwcUtjU0AHotDlyrp9pA5qRT5z8GNIN8EzOHNBu13xLQNct58ZuRMuLrJMoxb9hHewFYarnfzmif7OdsjSa---CyMk438S72vZPxg-WaVLK9tC-cLUchVjqaxCEHGGYL5sOkylNY525zr42reb2ZjlNRNyOkbPDMhnNOlqaEtQ4jaOI314DgcQ1O175xjmG8frEXsnc5kfVX2-NpBxsb6obzW4Im-5pGp8"
+            src="/grand-voyage-banner.jpg"
           />
           <div className="absolute inset-0 bg-gradient-to-r from-slate-950/75 via-cyan-950/35 to-transparent" />
         </div>
@@ -351,54 +242,19 @@ export default function HomePage() {
               Experience the harmony of light, water, and music.
             </p>
             <div className="mt-10 flex flex-wrap gap-4">
-              <button className="rounded-full bg-gradient-to-r from-cyan-500 to-teal-700 px-10 py-4 font-bold text-white shadow-2xl shadow-cyan-950/30 transition hover:-translate-y-0.5 hover:shadow-cyan-950/40 active:translate-y-0 disabled:opacity-40" disabled={!firstBookableShow} type="button" onClick={() => goToTicketWorkspace(firstBookableShow, firstBookableShow?.nextScheduleId)}>
-                Book Tickets
-              </button>
               <button className="rounded-full border-2 border-white/30 bg-white/10 px-10 py-4 font-bold text-white backdrop-blur-md transition hover:bg-white/20" type="button" onClick={() => scrollToSection('shows')}>
                 Explore Shows
               </button>
             </div>
           </div>
+          
+          <div className="mt-12 md:mt-16 w-full relative z-20">
+            <TicketSearchBar />
+          </div>
         </div>
       </section>
 
-      <div className="relative z-20 mx-auto -mt-24 max-w-7xl px-4 sm:px-6 lg:px-8">
-        <div className="flex flex-col items-end gap-6 rounded-[2rem] border border-cyan-100/80 bg-white p-6 shadow-2xl shadow-cyan-950/10 md:flex-row md:p-8">
-          <div className="grid w-full grid-cols-1 gap-6">
-            <label className="space-y-2">
-              <span className="flex items-center gap-2 px-1 text-sm font-bold text-slate-600">
-                <span className="material-symbols-outlined text-cyan-700">water_drop</span>
-                Select Show
-              </span>
-              <select
-                className="w-full rounded-full border border-cyan-100 bg-cyan-50/70 px-5 py-3 text-slate-700 focus:border-cyan-400 focus:outline-none focus:ring-2 focus:ring-cyan-200"
-                value={selectedShowId}
-                onChange={handleBookingShowChange}
-              >
-                <option value="">{isLoadingShows ? 'Loading active shows...' : 'Choose an active show'}</option>
-                {shows.filter((show) => show.nextScheduleId).map((show) => (
-                  <option key={show.id} value={show.id}>
-                    {show.title}
-                  </option>
-                ))}
-              </select>
-            </label>
 
-          </div>
-
-          {selectedShow ? (
-            <button className="flex w-full items-center justify-center gap-2 whitespace-nowrap rounded-full bg-cyan-700 px-10 py-4 font-bold text-white shadow-lg shadow-cyan-900/20 transition hover:bg-cyan-800 md:w-auto" type="button" onClick={() => goToTicketWorkspace(selectedShow, selectedShow.nextScheduleId)}>
-              <span className="material-symbols-outlined">search</span>
-              Book Now
-            </button>
-          ) : (
-            <button className="flex w-full cursor-not-allowed items-center justify-center gap-2 whitespace-nowrap rounded-full bg-slate-300 px-10 py-4 font-bold text-slate-600 md:w-auto" disabled type="button">
-              <span className="material-symbols-outlined">search</span>
-              Book Now
-            </button>
-          )}
-        </div>
-      </div>
 
       <section className="mx-auto max-w-7xl scroll-mt-24 px-4 py-20 sm:px-6 lg:px-8" id="shows">
         <div className="mb-12 flex flex-col gap-4 sm:flex-row sm:items-end sm:justify-between">
@@ -501,9 +357,8 @@ export default function HomePage() {
                           </p>
                         )}
                       </div>
-                      <div className="grid grid-cols-2 gap-3">
+                      <div className="grid grid-cols-1 gap-3">
                         <Link className="rounded-full border-2 border-cyan-700 py-3.5 text-center font-bold text-cyan-700 transition hover:bg-cyan-50" to={`/shows/${show.id}`}>View Details</Link>
-                        <button className="rounded-full bg-cyan-700 py-3.5 text-center font-bold text-white transition hover:bg-cyan-800 disabled:opacity-40" disabled={!show.nextScheduleId} type="button" onClick={() => goToTicketWorkspace(show, show.nextScheduleId)}>Book Now</button>
                       </div>
                     </div>
                   </article>
@@ -540,16 +395,7 @@ export default function HomePage() {
         )}
       </section>
 
-      <ShowTicketWorkspace
-        error={workspaceError}
-        loading={workspaceLoading}
-        schedule={workspaceSchedule}
-        schedules={workspaceSchedules}
-        selectedScheduleId={workspaceSchedule?.id || workspaceSchedule?.scheduleId || ''}
-        show={workspaceShow}
-        onRetry={() => workspaceRetryAction.current?.()}
-        onScheduleChange={handleWorkspaceScheduleChange}
-      />
+
 
       <section className="scroll-mt-24 bg-white/60 py-20" id="schedule">
         <div className="mx-auto max-w-7xl px-4 sm:px-6 lg:px-8">
@@ -603,8 +449,8 @@ export default function HomePage() {
                     <span className={`h-2 w-2 rounded-full ${status.dotClass}`} />
                     {status.label}
                   </span>
-                  <button className="rounded-full bg-cyan-700 px-8 py-3.5 font-bold text-white shadow-md transition hover:bg-cyan-800" type="button" onClick={() => goToTicketWorkspace(schedule, schedule.nextScheduleId)}>
-                    Book Now
+                  <button className="rounded-full bg-cyan-700 px-8 py-3.5 font-bold text-white shadow-md transition hover:bg-cyan-800" type="button" onClick={() => goToShowTickets(schedule)}>
+                    Book tickets
                   </button>
                 </div>
               </article>
@@ -633,7 +479,7 @@ export default function HomePage() {
                 Family Bundle
               </h3>
               <p className="max-w-sm text-lg text-white/80">Get 4 tickets for the price of 3 plus free snacks and drinks for the kids.</p>
-              <Link className="mt-4 block w-fit rounded-full bg-yellow-300 px-10 py-4 font-black text-slate-950 transition hover:shadow-xl active:scale-95" to="/shows">
+              <Link className="mt-4 block w-fit rounded-full bg-yellow-300 px-10 py-4 font-black text-slate-950 transition hover:shadow-xl active:scale-95" to="/#shows">
                 Grab Offer
               </Link>
             </div>
@@ -653,7 +499,7 @@ export default function HomePage() {
                 Early Access
               </h3>
               <p className="max-w-sm text-lg text-white/80">Enjoy unlimited entries and priority seating for all premium shows this season.</p>
-              <Link className="mt-4 block w-fit rounded-full bg-white px-10 py-4 font-black text-cyan-800 transition hover:shadow-xl active:scale-95" to="/shows">
+              <Link className="mt-4 block w-fit rounded-full bg-white px-10 py-4 font-black text-cyan-800 transition hover:shadow-xl active:scale-95" to="/#shows">
                 Explore Perks
               </Link>
             </div>

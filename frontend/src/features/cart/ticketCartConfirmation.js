@@ -5,9 +5,13 @@ import {
 } from './ticketSelectorState.js';
 
 function selectionChanged(state, reconciledState) {
-  return SELECTOR_TICKET_TYPES.some((type) => (
-    Number(state?.quantities?.[type] || 0) !== Number(reconciledState.quantities[type] || 0)
-  ));
+  return SELECTOR_TICKET_TYPES.some((type) => {
+    const original = state?.quantities?.[type] || { adult: 0, child: 0, senior: 0 };
+    const reconciled = reconciledState.quantities[type] || { adult: 0, child: 0, senior: 0 };
+    return original.adult !== reconciled.adult ||
+           original.child !== reconciled.child ||
+           original.senior !== reconciled.senior;
+  });
 }
 
 export function createConfirmationLifecycle() {

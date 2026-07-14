@@ -146,15 +146,15 @@ export default function CreateBookingPage() {
         <div className="mx-auto max-w-7xl">
           <section className="mx-auto mb-10 max-w-3xl rounded-2xl border border-slate-100 bg-white p-4 shadow-sm">
             <div className="flex items-center justify-between gap-3">
-              <div className="flex items-center gap-3"><span className="flex h-10 w-10 items-center justify-center rounded-xl bg-orange-500 font-black text-white">01</span><span className="font-black text-slate-900">Cart</span></div>
-              <div className="h-px flex-1 border-t border-dashed border-orange-300" />
+              <div className="flex items-center gap-3"><span className="flex h-10 w-10 items-center justify-center rounded-xl bg-cyan-600 font-black text-white">01</span><span className="font-black text-slate-900">Cart</span></div>
+              <div className="h-px flex-1 border-t border-dashed border-cyan-300" />
               <div className="flex items-center gap-3 opacity-45"><span className="flex h-10 w-10 items-center justify-center rounded-xl bg-slate-400 font-black text-white">02</span><span className="font-black text-slate-900">Payment</span></div>
             </div>
           </section>
 
           <div className="mb-8 flex flex-wrap items-end justify-between gap-4">
             <div><p className="text-xs font-black uppercase tracking-[0.24em] text-cyan-700">AquaPulse Checkout</p><h1 className="mt-2 text-4xl font-black text-slate-950">Your Ticket Cart</h1><p className="mt-2 font-semibold text-slate-500">Choose which tickets to include in this payment.</p></div>
-            <Link className="rounded-full border-2 border-cyan-700 px-6 py-3 font-black text-cyan-700 transition hover:bg-cyan-50" to="/shows">Add More Tickets</Link>
+            <Link className="rounded-full border-2 border-cyan-700 px-6 py-3 font-black text-cyan-700 transition hover:bg-cyan-50" to="/#shows">Add More Tickets</Link>
           </div>
 
           {items.length === 0 ? (
@@ -162,7 +162,7 @@ export default function CreateBookingPage() {
               <span className="material-symbols-outlined text-7xl text-cyan-300">shopping_cart</span>
               <h2 className="mt-4 text-2xl font-black text-slate-950">Your cart is empty</h2>
               <p className="mt-2 font-semibold text-slate-500">Select tickets from an upcoming AquaPulse show.</p>
-              <Link className="mt-7 inline-flex rounded-full bg-cyan-700 px-8 py-4 font-black text-white" to="/shows">Browse Shows</Link>
+              <Link className="mt-7 inline-flex rounded-full bg-cyan-700 px-8 py-4 font-black text-white" to="/#shows">Browse Shows</Link>
             </section>
           ) : (
             <div className="grid items-start gap-8 lg:grid-cols-[minmax(0,1fr)_380px]">

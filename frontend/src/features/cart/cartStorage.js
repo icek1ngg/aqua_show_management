@@ -31,10 +31,25 @@ function clampQuantity(quantity, maxQuantity = CART_MAX_QUANTITY) {
 }
 
 function normalizeItem(item, maxQuantity = CART_MAX_QUANTITY) {
+  let initialQuantity = item?.quantity;
+  let ages = item?.ages;
+
+  if (!ages) {
+    ages = { adult: initialQuantity ? Number(initialQuantity) : 1, child: 0, senior: 0 };
+  }
+  
+  const total = (ages.adult || 0) + (ages.child || 0) + (ages.senior || 0);
+  const clampedQuantity = clampQuantity(total, maxQuantity);
+  
+  if (total !== clampedQuantity) {
+    ages = { adult: clampedQuantity, child: 0, senior: 0 };
+  }
+
   return {
     ...item,
     ticketType: normalizeTicketType(item?.ticketType),
-    quantity: clampQuantity(item?.quantity, maxQuantity),
+    quantity: clampedQuantity,
+    ages,
   };
 }
 
@@ -51,10 +66,25 @@ export function addCartItem(items, item, maxQuantity = CART_MAX_QUANTITY) {
     if (index !== existingIndex) {
       return candidate;
     }
+    const newAges = {
+      adult: (candidate.ages?.adult || 0) + (normalizedItem.ages?.adult || 0),
+      child: (candidate.ages?.child || 0) + (normalizedItem.ages?.child || 0),
+      senior: (candidate.ages?.senior || 0) + (normalizedItem.ages?.senior || 0),
+    };
+    const totalAges = newAges.adult + newAges.child + newAges.senior;
+    const clampedQuantity = clampQuantity(totalAges, maxQuantity);
+    
+    if (totalAges !== clampedQuantity) {
+      newAges.adult = clampedQuantity;
+      newAges.child = 0;
+      newAges.senior = 0;
+    }
+
     return {
       ...candidate,
       ...normalizedItem,
-      quantity: clampQuantity(Number(candidate.quantity) + Number(normalizedItem.quantity), maxQuantity),
+      quantity: clampedQuantity,
+      ages: newAges,
     };
   });
 }
@@ -66,12 +96,27 @@ export function addCartItems(items, additions) {
   );
 }
 
-export function updateCartItemQuantity(items, key, quantity, maxQuantity = CART_MAX_QUANTITY) {
-  return items.map((item) => (
-    cartItemKey(item) === key
-      ? { ...item, quantity: clampQuantity(quantity, maxQuantity) }
-      : item
-  ));
+export function updateCartItemQuantity(items, key, quantity, maxQuantity = CART_MAX_QUANTITY, ages = null) {
+  return items.map((item) => {
+    if (cartItemKey(item) === key) {
+      let newAges = ages;
+      if (!newAges) {
+        const currentTotal = (item.ages?.adult || 0) + (item.ages?.child || 0) + (item.ages?.senior || 0);
+        if (item.ages && currentTotal === quantity) {
+          newAges = item.ages;
+        } else {
+          newAges = { adult: quantity, child: 0, senior: 0 };
+        }
+      }
+      let total = (newAges.adult || 0) + (newAges.child || 0) + (newAges.senior || 0);
+      let clampedQuantity = clampQuantity(total, maxQuantity);
+      if (total !== clampedQuantity) {
+        newAges = { adult: clampedQuantity, child: 0, senior: 0 };
+      }
+      return { ...item, quantity: clampedQuantity, ages: newAges };
+    }
+    return item;
+  });
 }
 
 export function removeCartItem(items, key) {
