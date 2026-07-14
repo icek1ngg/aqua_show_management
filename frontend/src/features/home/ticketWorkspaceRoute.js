@@ -10,3 +10,25 @@ export async function resolveTicketWorkspaceShow(
     .find((show) => String(show?.id || '') === requestedId);
   return catalogShow || loadShow(requestedId);
 }
+
+export function createTicketWorkspaceResolution({
+  shows,
+  requestedShowId = '',
+  requestedScheduleId = '',
+  fallbackShow = null,
+  loadShow,
+}) {
+  const intent = {
+    requestedShowId: String(requestedShowId || ''),
+    requestedScheduleId: String(requestedScheduleId || ''),
+  };
+  return {
+    intent,
+    resolve: () => resolveTicketWorkspaceShow(
+      shows,
+      intent.requestedShowId,
+      fallbackShow,
+      loadShow,
+    ),
+  };
+}
