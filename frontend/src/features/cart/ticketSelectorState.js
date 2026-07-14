@@ -101,6 +101,9 @@ export function buildCartItem(schedule, ticketType, quantity) {
 }
 
 export function selectedTicketSummary(schedule, state) {
+  if (!schedule) {
+    return { lines: [], totalQuantity: 0, totalAmount: 0 };
+  }
   const lines = SELECTOR_TICKET_TYPES
     .filter((type) => Number(state?.quantities?.[type]) > 0)
     .map((type) => {
@@ -112,4 +115,17 @@ export function selectedTicketSummary(schedule, state) {
     totalQuantity: lines.reduce((sum, line) => sum + line.quantity, 0),
     totalAmount: lines.reduce((sum, line) => sum + line.lineTotal, 0),
   };
+}
+
+export function reconcileSelectorState(state, schedule) {
+  if (!schedule) return createSelectorState();
+  return SELECTOR_TICKET_TYPES.reduce(
+    (current, type) => setTypeQuantity(
+      current,
+      type,
+      state?.quantities?.[type],
+      ticketTypeAvailability(schedule, type).available,
+    ),
+    { ...createSelectorState(scheduleId(schedule)), quantities: { ...emptyQuantities() } },
+  );
 }

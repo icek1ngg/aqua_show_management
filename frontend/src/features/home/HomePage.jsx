@@ -267,17 +267,17 @@ export default function HomePage() {
     setWorkspaceSchedule(null);
     setWorkspaceLoading(true);
     setWorkspaceError('');
-    resolution.resolve()
-      .then((requestedShow) => {
+    resolution.resolveTarget()
+      .then((target) => {
         if (
           workspaceRequest.current !== requestId
           || handledWorkspaceLocation.current !== locationKey
         ) return;
-        if (!requestedShow) {
+        if (!target?.show) {
           setWorkspaceLoading(false);
           return;
         }
-        activateTicketWorkspace(requestedShow, resolution.intent.requestedScheduleId);
+        activateTicketWorkspace(target.show, target.scheduleId);
       })
       .catch((loadError) => {
         if (
@@ -307,10 +307,10 @@ export default function HomePage() {
     runTicketWorkspaceResolution(createTicketWorkspaceResolution({
       shows,
       requestedShowId,
-      requestedScheduleId: location.state?.ticketSelectionScheduleId
-        || (!requestedShowId ? firstBookableShow?.nextScheduleId : ''),
+      requestedScheduleId: location.state?.ticketSelectionScheduleId || '',
       fallbackShow: firstBookableShow,
       loadShow: getShowDetail,
+      loadSchedules: getShowSchedules,
     }), locationKey);
   }, [firstBookableShow, location.key, location.pathname, location.state, shows]);
 

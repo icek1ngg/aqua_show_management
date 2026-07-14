@@ -3,6 +3,7 @@ import assert from 'node:assert/strict';
 
 import {
   createTicketWorkspaceResolution,
+  resolveNearestBookableWorkspace,
   resolveTicketWorkspaceShow,
 } from './ticketWorkspaceRoute.js';
 
@@ -65,11 +66,56 @@ test('retries a failed route lookup with the same requested show and schedule', 
     },
   });
 
-  await assert.rejects(resolution.resolve, /temporary catalog failure/);
-  assert.deepEqual(await resolution.resolve(), { id: 'show-7', title: 'Recovered Show' });
+  await assert.rejects(resolution.resolveTarget, /temporary catalog failure/);
+  assert.deepEqual(await resolution.resolveTarget(), {
+    show: { id: 'show-7', title: 'Recovered Show' },
+    scheduleId: 'schedule-9',
+  });
   assert.deepEqual(loadedIds, ['show-7', 'show-7']);
   assert.deepEqual(resolution.intent, {
     requestedShowId: 'show-7',
     requestedScheduleId: 'schedule-9',
   });
+});
+
+test('generic routing chooses the earliest bookable schedule across loaded shows', async () => {
+  const shows = [
+    { id: 'sold-out-show' },
+    { id: 'later-show' },
+    { id: 'nearest-show' },
+    { id: 'cutoff-show' },
+  ];
+  const schedulesByShow = {
+    'sold-out-show': [
+      { id: 'sold-out', startTime: '2026-07-14T12:00:00Z', availableTickets: 0 },
+    ],
+    'later-show': [
+      { id: 'later', startTime: '2026-07-15T12:00:00Z', availableTickets: 4 },
+    ],
+    'nearest-show': [
+      { id: 'nearest', startTime: '2026-07-14T11:00:00Z', availableTickets: 2 },
+    ],
+    'cutoff-show': [
+      { id: 'inside-cutoff', startTime: '2026-07-14T08:20:00Z', availableTickets: 5 },
+    ],
+  };
+
+  const target = await resolveNearestBookableWorkspace(
+    shows,
+    async (showId) => schedulesByShow[showId],
+    new Date('2026-07-14T08:00:00Z').getTime(),
+  );
+
+  assert.deepEqual(target, { show: shows[2], scheduleId: 'nearest' });
+});
+
+test('generic routing skips a show whose schedule lookup fails', async () => {
+  const shows = [{ id: 'broken-show' }, { id: 'bookable-show' }];
+
+  const target = await resolveNearestBookableWorkspace(shows, async (showId) => {
+    if (showId === 'broken-show') throw new Error('temporary schedule failure');
+    return [{ id: 'bookable', startTime: '2026-07-14T12:00:00Z', availableTickets: 2 }];
+  }, new Date('2026-07-14T08:00:00Z').getTime());
+
+  assert.deepEqual(target, { show: shows[1], scheduleId: 'bookable' });
 });

@@ -1,11 +1,14 @@
 import { useEffect, useMemo, useState } from 'react';
 import { useNavigate } from 'react-router-dom';
 
+import { getSchedule } from '../../services/showService.js';
 import { formatCurrency, getTicketTypeLabel } from '../../shared/utils/ticketPricing.js';
 import { useCart } from './CartContext.jsx';
+import { ticketWorkspaceContentState } from './showTicketWorkspaceState.js';
 import {
   createSelectorState,
   isScheduleBookable,
+  reconcileSelectorState,
   SELECTOR_TICKET_TYPES,
   selectSchedule,
   selectTicketType,
@@ -60,13 +63,22 @@ export default function ShowTicketWorkspace({
   const navigate = useNavigate();
   const [state, setState] = useState(() => createSelectorState(selectedScheduleId));
   const [calendarOpen, setCalendarOpen] = useState(false);
+  const [addingToCart, setAddingToCart] = useState(false);
+  const [cartError, setCartError] = useState('');
 
   useEffect(() => {
     setState((current) => selectSchedule(current, selectedScheduleId));
+    setCartError('');
   }, [selectedScheduleId]);
 
   const summary = useMemo(() => selectedTicketSummary(schedule, state), [schedule, state]);
+  const contentState = ticketWorkspaceContentState({ loading, error, schedule });
+  const bookableSchedules = useMemo(
+    () => schedules.filter((item) => isScheduleBookable(item)),
+    [schedules],
+  );
   const changeQuantity = (type, delta) => {
+    setCartError('');
     const availability = ticketTypeAvailability(schedule, type);
     setState((current) => setTypeQuantity(
       current,
@@ -76,10 +88,28 @@ export default function ShowTicketWorkspace({
     ));
   };
 
-  const handleAddToCart = () => {
-    if (summary.lines.length === 0) return;
-    addItems(summary.lines);
-    navigate('/bookings/create');
+  const handleAddToCart = async () => {
+    if (addingToCart || summary.lines.length === 0) return;
+    const currentScheduleId = scheduleId(schedule);
+    if (!currentScheduleId) return;
+    setAddingToCart(true);
+    setCartError('');
+    try {
+      const freshSchedule = await getSchedule(currentScheduleId);
+      const reconciledState = reconcileSelectorState(state, freshSchedule);
+      const freshSummary = selectedTicketSummary(freshSchedule, reconciledState);
+      setState(reconciledState);
+      if (freshSummary.lines.length === 0) {
+        setCartError('Those tickets are no longer available. Select an available ticket type and try again.');
+        return;
+      }
+      addItems(freshSummary.lines);
+      navigate('/bookings/create');
+    } catch {
+      setCartError('Could not confirm current ticket availability. Please try again.');
+    } finally {
+      setAddingToCart(false);
+    }
   };
 
   return (
@@ -97,12 +127,12 @@ export default function ShowTicketWorkspace({
           </p>
         </div>
 
-        {loading ? (
-          <div className="rounded-[2rem] border border-cyan-100 bg-white p-12 text-center shadow-sm">
-            <div className="mx-auto h-10 w-10 animate-spin rounded-full border-4 border-cyan-100 border-t-cyan-700" />
+        {contentState === 'loading' ? (
+          <div aria-busy="true" aria-live="polite" className="rounded-[2rem] border border-cyan-100 bg-white p-12 text-center shadow-sm" role="status">
+            <div aria-hidden="true" className="mx-auto h-10 w-10 animate-spin rounded-full border-4 border-cyan-100 border-t-cyan-700" />
             <p className="mt-4 font-black text-cyan-800">Loading live schedule availability...</p>
           </div>
-        ) : error ? (
+        ) : contentState === 'error' ? (
           <div className="rounded-[2rem] border border-red-100 bg-white p-10 text-center shadow-sm">
             <span className="material-symbols-outlined text-5xl text-red-500">error</span>
             <p className="mt-3 font-bold text-red-700">{error}</p>
@@ -110,7 +140,7 @@ export default function ShowTicketWorkspace({
               Try Again
             </button>
           </div>
-        ) : !schedule ? (
+        ) : contentState === 'empty' ? (
           <div className="rounded-[2rem] border border-cyan-100 bg-white p-10 text-center shadow-sm">
             <span className="material-symbols-outlined text-5xl text-cyan-700">event_busy</span>
             <h3 className="mt-3 text-2xl font-black text-slate-950">
@@ -139,6 +169,7 @@ export default function ShowTicketWorkspace({
                   </div>
                 </div>
                 <button
+                  aria-controls="ticket-workspace-calendar"
                   aria-expanded={calendarOpen}
                   className="inline-flex items-center justify-center gap-2 rounded-full bg-gradient-to-r from-cyan-600 to-teal-700 px-7 py-3.5 font-black text-white shadow-lg shadow-cyan-950/10 transition hover:brightness-95"
                   type="button"
@@ -150,23 +181,22 @@ export default function ShowTicketWorkspace({
               </div>
 
               {calendarOpen && (
-                <div className="mt-6 border-t border-cyan-100 pt-5">
+                <div className="mt-6 border-t border-cyan-100 pt-5" id="ticket-workspace-calendar">
                   <p className="mb-3 text-sm font-black text-slate-700">Choose another available time</p>
                   <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-3">
-                    {schedules.map((item) => {
+                    {bookableSchedules.map((item) => {
                       const itemId = scheduleId(item);
-                      const bookable = isScheduleBookable(item);
                       const selected = itemId === String(selectedScheduleId || '');
                       return (
                         <button
                           className={`rounded-2xl border p-4 text-left transition ${selected ? 'border-cyan-600 bg-cyan-50 text-cyan-950' : 'border-cyan-100 bg-white hover:border-cyan-400'} disabled:cursor-not-allowed disabled:border-slate-100 disabled:bg-slate-50 disabled:text-slate-400`}
-                          disabled={!bookable || selected}
+                          disabled={selected}
                           key={itemId}
                           type="button"
                           onClick={() => onScheduleChange(itemId)}
                         >
                           <span className="block font-black">{formatDate(item.startTime)}</span>
-                          <span className="mt-1 block text-sm font-bold">{formatTime(item.startTime)}{bookable ? '' : ' · Unavailable'}</span>
+                          <span className="mt-1 block text-sm font-bold">{formatTime(item.startTime)}</span>
                         </button>
                       );
                     })}
@@ -192,7 +222,10 @@ export default function ShowTicketWorkspace({
                         className="rounded-full bg-gradient-to-r from-cyan-600 to-teal-700 px-7 py-3 font-black text-white transition hover:brightness-95 disabled:cursor-not-allowed disabled:bg-none disabled:bg-slate-200 disabled:text-slate-500"
                         disabled={availability.disabled || quantity > 0}
                         type="button"
-                        onClick={() => setState((current) => selectTicketType(current, type, schedule))}
+                        onClick={() => {
+                          setCartError('');
+                          setState((current) => selectTicketType(current, type, schedule));
+                        }}
                       >
                         {availability.disabled ? 'Sold Out' : quantity > 0 ? `${label} selected` : 'Select'}
                       </button>
@@ -240,8 +273,9 @@ export default function ShowTicketWorkspace({
                 <div className="mt-6 space-y-3 border-t border-cyan-100 pt-5">
                   <div className="flex justify-between text-sm font-bold text-slate-600"><span>Tickets</span><span>{summary.totalQuantity}</span></div>
                   <div className="flex items-end justify-between gap-4"><span className="font-black text-slate-950">Temporary total</span><span className="text-2xl font-black text-cyan-700">{formatCurrency(summary.totalAmount)}</span></div>
-                  <button className="w-full rounded-full bg-gradient-to-r from-cyan-600 to-teal-700 px-6 py-4 font-black text-white shadow-lg shadow-cyan-950/15 transition hover:brightness-95 disabled:cursor-not-allowed disabled:opacity-40" disabled={summary.lines.length === 0} type="button" onClick={handleAddToCart}>
-                    Add to Cart &amp; Continue
+                  {cartError && <p className="text-sm font-bold text-red-700" role="alert">{cartError}</p>}
+                  <button className="w-full rounded-full bg-gradient-to-r from-cyan-600 to-teal-700 px-6 py-4 font-black text-white shadow-lg shadow-cyan-950/15 transition hover:brightness-95 disabled:cursor-not-allowed disabled:opacity-40" disabled={addingToCart || summary.lines.length === 0} type="button" onClick={handleAddToCart}>
+                    {addingToCart ? 'Confirming Availability...' : 'Add to Cart & Continue'}
                   </button>
                 </div>
               </aside>

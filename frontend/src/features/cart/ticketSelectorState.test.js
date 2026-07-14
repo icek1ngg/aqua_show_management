@@ -5,6 +5,7 @@ import {
   buildCartItem,
   chooseBookableSchedule,
   createSelectorState,
+  reconcileSelectorState,
   selectSchedule,
   selectTicketType,
   selectedTicketSummary,
@@ -143,4 +144,35 @@ test('summary calculates line totals, ticket count, and temporary total', () => 
   ]);
   assert.equal(summary.totalQuantity, 3);
   assert.equal(summary.totalAmount, 8750);
+});
+
+test('selected quantities with a null schedule produce an empty summary', () => {
+  const selected = selectTicketType(createSelectorState('schedule-2'), 'STANDARD', schedule);
+
+  assert.deepEqual(selectedTicketSummary(null, selected), {
+    lines: [],
+    totalQuantity: 0,
+    totalAmount: 0,
+  });
+});
+
+test('reconciles selected quantities to fresh authoritative availability', () => {
+  let selected = selectTicketType(createSelectorState('schedule-2'), 'STANDARD', schedule);
+  selected = setTypeQuantity(selected, 'STANDARD', 4, schedule.standardAvailableTickets);
+  const freshSchedule = { ...schedule, standardAvailableTickets: 2 };
+
+  const reconciled = reconcileSelectorState(selected, freshSchedule);
+
+  assert.equal(reconciled.quantities.STANDARD, 2);
+  assert.equal(selectedTicketSummary(freshSchedule, reconciled).totalQuantity, 2);
+});
+
+test('removes selected lines that have no fresh authoritative availability', () => {
+  const selected = selectTicketType(createSelectorState('schedule-2'), 'FAMILY', schedule);
+  const freshSchedule = { ...schedule, familyAvailableTickets: 0 };
+
+  const reconciled = reconcileSelectorState(selected, freshSchedule);
+
+  assert.equal(reconciled.quantities.FAMILY, 0);
+  assert.equal(selectedTicketSummary(freshSchedule, reconciled).lines.length, 0);
 });
