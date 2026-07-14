@@ -3,8 +3,8 @@ import { Link, NavLink, useLocation, useNavigate } from 'react-router-dom';
 
 import { useAuth } from '../../../features/auth/AuthContext.jsx';
 import CartBadge from '../../../features/cart/CartBadge.jsx';
+import { showTicketTarget } from '../../../features/cart/showTicketNavigation.js';
 import Logo from './Logo.jsx';
-import TicketSearchDrawer from './TicketSearchDrawer.jsx';
 import { canShowUserCart } from './navbarCartEligibility.js';
 
 const sectionNavigationLinks = [
@@ -177,27 +177,18 @@ export default function Navbar() {
   const navigate = useNavigate();
   const [isMobileOpen, setIsMobileOpen] = useState(false);
   const [isMobileUserMenuOpen, setIsMobileUserMenuOpen] = useState(false);
-  const [isTicketDrawerOpen, setIsTicketDrawerOpen] = useState(false);
   const isStaff = hasRole(user, 'STAFF');
   const canShowCart = canShowUserCart(user, loading);
-
-  useEffect(() => {
-    const handleOpenDrawer = () => {
-      setIsTicketDrawerOpen(true);
-    };
-    window.addEventListener('aquapulse:open-ticket-drawer', handleOpenDrawer);
-    return () => window.removeEventListener('aquapulse:open-ticket-drawer', handleOpenDrawer);
-  }, []);
 
   const closeMobileMenu = () => {
     setIsMobileOpen(false);
     setIsMobileUserMenuOpen(false);
   };
-  const openTicketDrawer = () => {
-    setIsMobileOpen(false);
-    setIsTicketDrawerOpen(true);
+  const handleBookNow = () => {
+    closeMobileMenu();
+    const target = showTicketTarget();
+    navigate(target.to, { state: target.state });
   };
-  const closeTicketDrawer = () => setIsTicketDrawerOpen(false);
   const isHomepageRoute = ['/', '/shows', '/public/shows'].includes(location.pathname);
   const scrollToSection = (sectionId) => {
     if (sectionId === 'home') {
@@ -241,7 +232,7 @@ export default function Navbar() {
               <button
                 className="rounded-full bg-gradient-to-r from-cyan-500 via-teal-500 to-cyan-700 px-6 py-3 text-sm font-bold text-white shadow-lg shadow-cyan-700/20 transition hover:-translate-y-0.5 hover:shadow-cyan-700/30 active:translate-y-0"
                 type="button"
-                onClick={openTicketDrawer}
+                onClick={handleBookNow}
               >
                 Book Now
               </button>
@@ -325,7 +316,7 @@ export default function Navbar() {
                 <button
                   className="rounded-full bg-gradient-to-r from-cyan-500 via-teal-500 to-cyan-700 px-5 py-3 text-center text-sm font-bold text-white shadow-lg shadow-cyan-700/20"
                   type="button"
-                  onClick={openTicketDrawer}
+                  onClick={handleBookNow}
                 >
                   Book Now
                 </button>
@@ -335,7 +326,6 @@ export default function Navbar() {
         )}
       </header>
 
-      {!isStaff ? <TicketSearchDrawer open={isTicketDrawerOpen} onClose={closeTicketDrawer} /> : null}
     </>
   );
 }
