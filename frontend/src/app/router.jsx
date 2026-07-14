@@ -1,4 +1,5 @@
-import { createBrowserRouter } from 'react-router-dom';
+import { Navigate, createBrowserRouter } from 'react-router-dom';
+import { SHOWS_ROUTE_REDIRECT } from '../features/cart/showTicketNavigation.js';
 
 import App from './App.jsx';
 import ForgotPasswordPage from '../features/auth/ForgotPasswordPage.jsx';
@@ -59,11 +60,11 @@ export const router = createBrowserRouter([
       },
       {
         path: 'public/shows',
-        element: <HomePage />,
+        element: <Navigate replace to={SHOWS_ROUTE_REDIRECT} />,
       },
       {
         path: 'shows',
-        element: <HomePage />,
+        element: <Navigate replace to={SHOWS_ROUTE_REDIRECT} />,
       },
       {
         path: 'shows/:showId',
