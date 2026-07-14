@@ -59,6 +59,7 @@ export default function ShowTicketWorkspace({
   selectedScheduleId,
   loading,
   error,
+  notice = '',
   onScheduleChange,
   onRetry,
 }) {
@@ -160,15 +161,21 @@ export default function ShowTicketWorkspace({
       <div className="mx-auto max-w-7xl px-4 sm:px-6 lg:px-8">
         <div className="mb-8 flex flex-col gap-3 sm:flex-row sm:items-end sm:justify-between">
           <div>
-            <p className="text-sm font-black uppercase tracking-[0.22em] text-cyan-700">Upcoming Times</p>
+            <p className="text-sm font-black uppercase tracking-[0.22em] text-cyan-700">Select Tickets</p>
             <h2 className="mt-2 text-3xl font-black tracking-tight text-slate-950 sm:text-4xl">
-              {displayedSchedule ? formatDate(displayedSchedule.startTime) : show?.title || 'Choose your show'}
+              {displayedSchedule ? formatDate(displayedSchedule.startTime) : show?.title}
             </h2>
           </div>
           <p className="max-w-xl text-sm font-semibold text-slate-600">
-            {show ? `Select tickets for ${show.title}. Quantities are managed in your summary.` : 'Choose a show above to see its nearest available time.'}
+            {show ? `Select tickets for ${show.title}. Quantities are managed in your summary.` : ''}
           </p>
         </div>
+
+        {notice && (
+          <p className="mb-6 rounded-2xl border border-amber-200 bg-amber-50 p-4 font-bold text-amber-900" role="status">
+            {notice}
+          </p>
+        )}
 
         {contentState === 'loading' ? (
           <div aria-busy="true" aria-live="polite" className="rounded-[2rem] border border-cyan-100 bg-white p-12 text-center shadow-sm" role="status">
@@ -186,12 +193,28 @@ export default function ShowTicketWorkspace({
         ) : contentState === 'empty' ? (
           <div className="rounded-[2rem] border border-cyan-100 bg-white p-10 text-center shadow-sm">
             <span className="material-symbols-outlined text-5xl text-cyan-700">event_busy</span>
-            <h3 className="mt-3 text-2xl font-black text-slate-950">
-              {show ? 'No upcoming schedules' : 'Select a show to get started'}
-            </h3>
+            <h3 className="mt-3 text-2xl font-black text-slate-950">No upcoming schedules</h3>
             <p className="mx-auto mt-2 max-w-xl text-slate-600">
-              {show ? 'This show does not currently have a future schedule with tickets available.' : 'Use any Book Now action or the show picker above.'}
+              This show does not currently have a future schedule with tickets available.
             </p>
+            {notice && bookableSchedules.length > 0 && (
+              <div className="mx-auto mt-6 grid max-w-3xl gap-3 sm:grid-cols-2">
+                {bookableSchedules.map((item) => {
+                  const itemId = scheduleId(item);
+                  return (
+                    <button
+                      className="rounded-2xl border border-cyan-200 bg-white p-4 text-left transition hover:border-cyan-500 hover:bg-cyan-50"
+                      key={itemId}
+                      type="button"
+                      onClick={() => onScheduleChange(itemId)}
+                    >
+                      <span className="block font-black text-slate-950">{formatDate(item.startTime)}</span>
+                      <span className="mt-1 block text-sm font-bold text-cyan-700">{formatTime(item.startTime)}</span>
+                    </button>
+                  );
+                })}
+              </div>
+            )}
           </div>
         ) : (
           <>
