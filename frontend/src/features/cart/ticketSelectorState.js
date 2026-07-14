@@ -40,6 +40,24 @@ export function ticketTypeAvailability(schedule, ticketType) {
   };
 }
 
+function scheduleId(schedule) {
+  return String(schedule?.id || schedule?.scheduleId || '');
+}
+
+export function isScheduleBookable(schedule, now = Date.now()) {
+  const start = new Date(schedule?.startTime).getTime();
+  if (!Number.isFinite(start) || start <= Number(now) + 30 * 60 * 1000) return false;
+  return SELECTOR_TICKET_TYPES.some((type) => ticketTypeAvailability(schedule, type).available > 0);
+}
+
+export function chooseBookableSchedule(schedules, preferredId = '', now = Date.now()) {
+  const bookable = (Array.isArray(schedules) ? schedules : [])
+    .filter((item) => isScheduleBookable(item, now))
+    .sort((first, second) => new Date(first.startTime).getTime() - new Date(second.startTime).getTime());
+  const preferred = bookable.find((item) => scheduleId(item) === String(preferredId || ''));
+  return preferred || bookable[0] || null;
+}
+
 export function setTypeQuantity(state, ticketType, quantity, effectiveAvailability) {
   const type = normalizeTicketType(ticketType);
   if (!SELECTOR_TICKET_TYPES.includes(type)) {
@@ -51,6 +69,12 @@ export function setTypeQuantity(state, ticketType, quantity, effectiveAvailabili
     ...state,
     quantities: { ...state.quantities, [type]: safeQuantity },
   };
+}
+
+export function selectTicketType(state, ticketType, schedule) {
+  const availability = ticketTypeAvailability(schedule, ticketType);
+  if (availability.disabled) return state;
+  return setTypeQuantity(state, ticketType, 1, availability.available);
 }
 
 export function buildCartItem(schedule, ticketType, quantity) {
@@ -67,5 +91,19 @@ export function buildCartItem(schedule, ticketType, quantity) {
     endTime: schedule.endTime,
     unitPrice: Number(schedule[priceFields[type]]) || 0,
     availableTickets: ticketTypeAvailability(schedule, type).available,
+  };
+}
+
+export function selectedTicketSummary(schedule, state) {
+  const lines = SELECTOR_TICKET_TYPES
+    .filter((type) => Number(state?.quantities?.[type]) > 0)
+    .map((type) => {
+      const item = buildCartItem(schedule, type, state.quantities[type]);
+      return { ...item, lineTotal: item.unitPrice * item.quantity };
+    });
+  return {
+    lines,
+    totalQuantity: lines.reduce((sum, line) => sum + line.quantity, 0),
+    totalAmount: lines.reduce((sum, line) => sum + line.lineTotal, 0),
   };
 }

@@ -3,11 +3,16 @@ import assert from 'node:assert/strict';
 
 import {
   buildCartItem,
+  chooseBookableSchedule,
   createSelectorState,
   selectSchedule,
+  selectTicketType,
+  selectedTicketSummary,
   setTypeQuantity,
   ticketTypeAvailability,
 } from './ticketSelectorState.js';
+
+const NOW = new Date('2026-07-14T08:00:00Z').getTime();
 
 const schedule = {
   scheduleId: 'schedule-2',
@@ -66,4 +71,61 @@ test('cart item keeps trusted identifiers and display snapshots', () => {
     unitPrice: 3750,
     availableTickets: 4,
   });
+});
+
+test('chooses the earliest future schedule with any ticket type available', () => {
+  const schedules = [
+    { id: 'sold-out', startTime: '2026-07-14T10:00:00Z', standardAvailableTickets: 0, vipAvailableTickets: 0, familyAvailableTickets: 0 },
+    { id: 'later', startTime: '2026-07-15T12:00:00Z', standardAvailableTickets: 2 },
+    { id: 'nearest', startTime: '2026-07-14T12:00:00Z', vipAvailableTickets: 1 },
+  ];
+
+  assert.equal(chooseBookableSchedule(schedules, '', NOW)?.id, 'nearest');
+});
+
+test('honors a valid preferred schedule before the nearest default', () => {
+  const schedules = [
+    { id: 'nearest', startTime: '2026-07-14T12:00:00Z', standardAvailableTickets: 3 },
+    { id: 'preferred', startTime: '2026-07-15T12:00:00Z', familyAvailableTickets: 2 },
+  ];
+
+  assert.equal(chooseBookableSchedule(schedules, 'preferred', NOW)?.id, 'preferred');
+});
+
+test('rejects schedules inside the thirty minute booking cutoff', () => {
+  const schedules = [
+    { id: 'closed', startTime: '2026-07-14T08:20:00Z', standardAvailableTickets: 3 },
+  ];
+
+  assert.equal(chooseBookableSchedule(schedules, '', NOW), null);
+});
+
+test('selecting a ticket type adds it with quantity one', () => {
+  const selected = selectTicketType(createSelectorState('schedule-2'), 'STANDARD', schedule);
+  assert.equal(selected.quantities.STANDARD, 1);
+});
+
+test('selecting a sold-out ticket type leaves state unchanged', () => {
+  const initial = createSelectorState('schedule-2');
+  assert.deepEqual(selectTicketType(initial, 'VIP', schedule), initial);
+});
+
+test('decreasing a selected quantity to zero removes it from the summary', () => {
+  const selected = selectTicketType(createSelectorState('schedule-2'), 'FAMILY', schedule);
+  const removed = setTypeQuantity(selected, 'FAMILY', 0, schedule.familyAvailableTickets);
+  assert.equal(selectedTicketSummary(schedule, removed).lines.length, 0);
+});
+
+test('summary calculates line totals, ticket count, and temporary total', () => {
+  let state = selectTicketType(createSelectorState('schedule-2'), 'STANDARD', schedule);
+  state = setTypeQuantity(state, 'STANDARD', 2, schedule.standardAvailableTickets);
+  state = selectTicketType(state, 'FAMILY', schedule);
+
+  const summary = selectedTicketSummary(schedule, state);
+  assert.deepEqual(summary.lines.map(({ ticketType, quantity, lineTotal }) => ({ ticketType, quantity, lineTotal })), [
+    { ticketType: 'STANDARD', quantity: 2, lineTotal: 5000 },
+    { ticketType: 'FAMILY', quantity: 1, lineTotal: 3750 },
+  ]);
+  assert.equal(summary.totalQuantity, 3);
+  assert.equal(summary.totalAmount, 8750);
 });
