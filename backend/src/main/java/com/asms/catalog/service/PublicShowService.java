@@ -1,8 +1,12 @@
 package com.asms.catalog.service;
 
+import com.asms.booking.enums.TicketType;
+import com.asms.booking.service.RedisTicketHoldService;
+import com.asms.booking.service.TicketPricingService;
+import com.asms.catalog.dto.CatalogDtos.BookingScheduleResponse;
+import com.asms.catalog.dto.CatalogDtos.ScheduleBriefResponse;
 import com.asms.catalog.dto.CatalogDtos.ShowDetailResponse;
 import com.asms.catalog.dto.CatalogDtos.ShowListItemResponse;
-import com.asms.catalog.dto.CatalogDtos.ScheduleBriefResponse;
 import com.asms.catalog.entity.Show;
 import com.asms.catalog.entity.ShowSchedule;
 import com.asms.catalog.enums.ScheduleStatus;
@@ -25,10 +29,19 @@ public class PublicShowService {
 
     private final ShowRepository showRepository;
     private final ShowScheduleRepository scheduleRepository;
+    private final RedisTicketHoldService ticketHoldService;
+    private final TicketPricingService ticketPricingService;
 
-    public PublicShowService(ShowRepository showRepository, ShowScheduleRepository scheduleRepository) {
+    public PublicShowService(
+            ShowRepository showRepository,
+            ShowScheduleRepository scheduleRepository,
+            RedisTicketHoldService ticketHoldService,
+            TicketPricingService ticketPricingService
+    ) {
         this.showRepository = showRepository;
         this.scheduleRepository = scheduleRepository;
+        this.ticketHoldService = ticketHoldService;
+        this.ticketPricingService = ticketPricingService;
     }
 
     @Transactional(readOnly = true)
@@ -59,11 +72,20 @@ public class PublicShowService {
     }
 
     @Transactional(readOnly = true)
-    public ScheduleBriefResponse getSchedule(UUID scheduleId) {
-        return scheduleRepository.findById(scheduleId)
-                .filter((schedule) -> schedule.getStatus() == ScheduleStatus.ACTIVE && schedule.getShow().getStatus() == ShowStatus.ACTIVE)
-                .map(CatalogMapper::toScheduleBrief)
+    public BookingScheduleResponse getSchedule(UUID scheduleId) {
+        ShowSchedule schedule = scheduleRepository.findById(scheduleId)
+                .filter((candidate) -> candidate.getStatus() == ScheduleStatus.ACTIVE && candidate.getShow().getStatus() == ShowStatus.ACTIVE)
                 .orElseThrow(() -> new NotFoundException("Schedule not found"));
+        String id = schedule.getId().toString();
+        return CatalogMapper.toBookingSchedule(
+                schedule,
+                ticketPricingService.unitPrice(schedule.getStandardPrice(), TicketType.STANDARD),
+                ticketPricingService.unitPrice(schedule.getStandardPrice(), TicketType.VIP),
+                ticketPricingService.unitPrice(schedule.getStandardPrice(), TicketType.FAMILY),
+                ticketHoldService.effectiveAvailability(id, TicketType.STANDARD, schedule.getStandardAvailableTickets()),
+                ticketHoldService.effectiveAvailability(id, TicketType.VIP, schedule.getVipAvailableTickets()),
+                ticketHoldService.effectiveAvailability(id, TicketType.FAMILY, schedule.getFamilyAvailableTickets())
+        );
     }
 
     private ShowListItemResponse toListItem(Show show) {

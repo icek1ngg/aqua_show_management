@@ -48,14 +48,20 @@ function normalizeBooking(booking) {
     return null;
   }
 
+  const items = Array.isArray(booking.items) && booking.items.length > 0
+    ? booking.items.map((item) => ({ ...item, ticketTypeLabel: getTicketTypeLabel(item.ticketType) }))
+    : [];
+  const firstItem = items[0] || null;
+
   return {
     id: booking.id,
     bookingCode: booking.bookingCode || booking.id,
-    showName: booking.showName || 'AquaPulse Show',
-    showDate: booking.showDate,
-    ticketType: getTicketTypeLabel(booking.ticketType),
-    quantity: booking.quantity ?? 0,
-    unitPrice: booking.unitPrice,
+    showName: firstItem?.showName || booking.showName || 'AquaPulse Show',
+    showDate: firstItem?.startTime || booking.showDate,
+    ticketType: firstItem?.ticketTypeLabel || getTicketTypeLabel(booking.ticketType),
+    quantity: booking.totalQuantity ?? booking.quantity ?? 0,
+    unitPrice: firstItem?.unitPrice ?? booking.unitPrice,
+    items,
     totalAmount: booking.totalAmount,
     status: booking.status || 'PROCESSING',
     createdAt: booking.createdAt,
@@ -451,7 +457,7 @@ export default function PaymentPage() {
                         <div className="absolute inset-0 bg-gradient-to-t from-cyan-950/80 via-cyan-950/20 to-transparent" />
                         <div className="absolute bottom-6 left-6 right-6 text-white">
                           <p className="text-sm font-black uppercase tracking-[0.2em] text-cyan-100">Booking #{booking.bookingCode}</p>
-                          <h2 className="mt-2 text-3xl font-black">{booking.showName}</h2>
+                          <h2 className="mt-2 text-3xl font-black">{booking.showName}{booking.items.length > 1 ? ` +${booking.items.length - 1} more` : ''}</h2>
                         </div>
                       </div>
                       <div className="grid grid-cols-1 gap-4 p-6 md:grid-cols-3">
@@ -460,6 +466,20 @@ export default function PaymentPage() {
                         <DetailTile icon="payments" label="Total" value={formatCurrency(booking.totalAmount)} />
                       </div>
                     </article>
+
+                    {booking.items.length > 0 ? (
+                      <article className="rounded-[1.5rem] border border-cyan-100 bg-white p-6 shadow-sm">
+                        <h3 className="text-xl font-black text-slate-950">Selected tickets</h3>
+                        <div className="mt-4 space-y-3">
+                          {booking.items.map((item) => (
+                            <div className="flex flex-col justify-between gap-2 rounded-2xl bg-cyan-50/70 p-4 sm:flex-row sm:items-center" key={item.id || `${item.scheduleId}:${item.ticketType}`}>
+                              <div><p className="font-black text-slate-900">{item.showName}</p><p className="text-sm font-semibold text-slate-500">{item.ticketTypeLabel} · {item.quantity} ticket{item.quantity === 1 ? '' : 's'} · {item.venueName}</p></div>
+                              <p className="font-black text-cyan-700">{formatCurrency(item.lineTotal)}</p>
+                            </div>
+                          ))}
+                        </div>
+                      </article>
+                    ) : null}
 
                     <article className="rounded-[1.5rem] border border-cyan-100 bg-white p-6 shadow-sm">
                       <div className="flex flex-col justify-between gap-4 sm:flex-row sm:items-start">
@@ -502,9 +522,9 @@ export default function PaymentPage() {
                   <p className="text-xs font-black uppercase tracking-[0.18em] text-slate-400">Checkout</p>
                   <div className="mt-5 space-y-3 text-sm font-semibold text-slate-600">
                     <PaymentInfoRow label="Booking code" value={booking?.bookingCode} />
-                    <PaymentInfoRow label="Show date" value={formatDate(booking?.showDate)} />
-                    <PaymentInfoRow label="Quantity" value={booking ? String(booking.quantity) : ''} />
-                    <PaymentInfoRow label="Unit price" value={formatCurrency(booking?.unitPrice)} />
+                    <PaymentInfoRow label="First show date" value={formatDate(booking?.showDate)} />
+                    <PaymentInfoRow label="Total tickets" value={booking ? String(booking.quantity) : ''} />
+                    <PaymentInfoRow label="Show lines" value={booking ? String(Math.max(1, booking.items.length)) : ''} />
                   </div>
                   <div className="mt-6 border-t-2 border-dashed border-cyan-100 pt-6">
                     <div className="flex items-end justify-between gap-4">

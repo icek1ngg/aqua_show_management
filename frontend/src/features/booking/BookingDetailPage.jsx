@@ -99,14 +99,31 @@ function getBookingErrorMessage(error) {
 
 function normalizeBooking(booking) {
   const normalizedStatus = normalizeBookingPaymentStatus(booking, booking?.payment);
+  const fallbackItem = {
+    id: booking.id,
+    showName: booking.showName || 'AquaPulse Show',
+    startTime: booking.showDate,
+    ticketType: booking.ticketType,
+    quantity: booking.quantity ?? 0,
+    unitPrice: booking.unitPrice,
+    lineTotal: booking.totalAmount,
+    imageUrl: fallbackImageUrl,
+  };
+  const items = (Array.isArray(booking.items) && booking.items.length > 0 ? booking.items : [fallbackItem]).map((item) => ({
+    ...item,
+    showName: item.showName || 'AquaPulse Show',
+    ticketTypeLabel: getTicketTypeLabel(item.ticketType),
+    imageUrl: item.imageUrl || fallbackImageUrl,
+  }));
+  const firstItem = items[0];
   return {
     id: booking.id,
     bookingCode: booking.bookingCode || booking.id,
-    showName: booking.showName || 'AquaPulse Show',
-    showDate: booking.showDate,
-    ticketType: getTicketTypeLabel(booking.ticketType),
-    quantity: booking.quantity ?? 0,
-    unitPrice: booking.unitPrice,
+    showName: firstItem.showName,
+    showDate: firstItem.startTime || booking.showDate,
+    ticketType: firstItem.ticketTypeLabel,
+    quantity: booking.totalQuantity ?? items.reduce((sum, item) => sum + Number(item.quantity || 0), 0),
+    unitPrice: firstItem.unitPrice,
     totalAmount: booking.totalAmount,
     status: normalizedStatus.status,
     bookingStatus: normalizedStatus.bookingStatus,
@@ -117,6 +134,7 @@ function normalizeBooking(booking) {
     tickets: booking.tickets || null,
     emailNotification: booking.emailNotification || null,
     imageUrl: fallbackImageUrl,
+    items,
   };
 }
 
@@ -487,36 +505,21 @@ export default function BookingDetailPage() {
                 </div>
               </article>
 
-              <article className="overflow-hidden rounded-[2rem] border border-cyan-100 bg-white shadow-[0_16px_40px_rgba(8,145,178,0.10)]">
-                <div className="group relative aspect-video overflow-hidden lg:h-80">
-                  <img
-                    alt={displayBooking.showName}
-                    className="h-full w-full object-cover transition duration-700 group-hover:scale-105"
-                    src={displayBooking.imageUrl}
-                  />
-                  <div className="absolute inset-0 bg-gradient-to-t from-black/65 via-black/10 to-transparent" />
-                  <span className="absolute bottom-6 left-6 rounded-2xl bg-[#ff6900] px-5 py-2 text-2xl font-black text-white shadow-xl">
-                    {formatCurrency(displayBooking.unitPrice)}
-                  </span>
-                </div>
-
-                <div className="p-6 md:p-8">
-                  <div className="flex flex-wrap gap-3">
-                    <span className="rounded-full bg-cyan-100 px-4 py-1.5 text-xs font-black text-cyan-800">Water Show</span>
-                    <span className="rounded-full bg-slate-100 px-4 py-1.5 text-xs font-black text-slate-600">{displayBooking.ticketType}</span>
-                  </div>
-
-                  <h3 className="mt-5 text-3xl font-black text-slate-950">{displayBooking.showName}</h3>
-                  <p className="mt-4 max-w-3xl text-base leading-8 text-slate-600">
-                    This read-only booking detail is loaded from your AquaPulse account history.
-                  </p>
-
-                  <div className="mt-8 grid grid-cols-1 gap-5 border-t border-cyan-100 pt-8 md:grid-cols-2">
-                    <InfoTile icon="schedule" label="Show Date" value={formatDate(displayBooking.showDate)} />
-                    <InfoTile icon="confirmation_number" label="Tickets" value={`${displayBooking.quantity} Ticket${displayBooking.quantity === 1 ? '' : 's'}`} />
-                    <InfoTile icon="event_seat" label="Ticket Type" value={displayBooking.ticketType} />
-                    <InfoTile icon="payments" label="Unit Price" value={formatCurrency(displayBooking.unitPrice)} />
-                  </div>
+              <article className="rounded-[2rem] border border-cyan-100 bg-white p-6 shadow-[0_16px_40px_rgba(8,145,178,0.10)] md:p-8">
+                <h3 className="text-3xl font-black text-slate-950">Selected Tickets</h3>
+                <p className="mt-2 text-slate-600">Every show and ticket type included in this booking.</p>
+                <div className="mt-6 space-y-4">
+                  {displayBooking.items.map((item) => (
+                    <div className="grid gap-4 rounded-3xl border border-cyan-100 p-4 sm:grid-cols-[96px_1fr_auto] sm:items-center" key={item.id}>
+                      <img alt={item.showName} className="h-24 w-24 rounded-2xl object-cover" src={item.imageUrl} />
+                      <div>
+                        <h4 className="text-lg font-black text-slate-950">{item.showName}</h4>
+                        <p className="mt-1 text-sm font-semibold text-slate-500">{formatDateTime(item.startTime)} · {item.venueName || 'Venue to be announced'}</p>
+                        <p className="mt-1 text-sm font-bold text-cyan-700">{item.ticketTypeLabel} · {item.quantity} ticket{Number(item.quantity) === 1 ? '' : 's'} × {formatCurrency(item.unitPrice)}</p>
+                      </div>
+                      <span className="text-lg font-black text-cyan-700">{formatCurrency(item.lineTotal)}</span>
+                    </div>
+                  ))}
                 </div>
               </article>
 
@@ -528,11 +531,8 @@ export default function BookingDetailPage() {
                 <h4 className="text-2xl font-black text-slate-950">Order Summary</h4>
                 <div className="mt-6">
                   <DetailRow label="Booking Code" value={displayBooking.bookingCode} />
-                  <DetailRow label="Show Name" value={displayBooking.showName} />
-                  <DetailRow label="Show Date" value={formatDate(displayBooking.showDate)} />
-                  <DetailRow label="Ticket Type" value={displayBooking.ticketType} />
-                  <DetailRow label="Quantity" value={displayBooking.quantity} />
-                  <DetailRow label="Unit Price" value={formatCurrency(displayBooking.unitPrice)} />
+                  <DetailRow label="Show Lines" value={displayBooking.items.length} />
+                  <DetailRow label="Total Tickets" value={displayBooking.quantity} />
                   <DetailRow label="Created At" value={formatDateTime(displayBooking.createdAt)} />
                   <DetailRow label="Expires At" value={formatDateTime(displayBooking.expiresAt)} />
                   <DetailRow label="Status" value={displayBooking.status} />

@@ -6,13 +6,17 @@ import org.springframework.data.domain.Page;
 import org.springframework.data.domain.Pageable;
 import org.springframework.data.jpa.repository.JpaRepository;
 import org.springframework.data.jpa.repository.JpaSpecificationExecutor;
+import org.springframework.data.jpa.repository.Lock;
 import org.springframework.data.jpa.repository.Query;
 import org.springframework.data.repository.query.Param;
 
 import java.time.LocalDateTime;
 import java.util.List;
+import java.util.Collection;
 import java.util.Optional;
 import java.util.UUID;
+
+import jakarta.persistence.LockModeType;
 
 public interface ShowScheduleRepository extends JpaRepository<ShowSchedule, UUID>, JpaSpecificationExecutor<ShowSchedule> {
 
@@ -37,6 +41,25 @@ public interface ShowScheduleRepository extends JpaRepository<ShowSchedule, UUID
             @Param("startTime") LocalDateTime startTime,
             @Param("endTime") LocalDateTime endTime,
             @Param("excludeId") UUID excludeId
+    );
+
+    @Lock(LockModeType.PESSIMISTIC_WRITE)
+    @Query("select s from ShowSchedule s where s.id = :id")
+    Optional<ShowSchedule> findByIdForUpdate(@Param("id") UUID id);
+
+    @Lock(LockModeType.PESSIMISTIC_WRITE)
+    @Query("select s from ShowSchedule s where s.id in :ids order by s.id")
+    List<ShowSchedule> findAllByIdForUpdate(@Param("ids") Collection<UUID> ids);
+
+    @Query("""
+            select coalesce(sum(i.quantity), 0) from BookingItem i
+            where i.scheduleId = :scheduleId
+              and str(i.ticketType) = :ticketType
+              and i.booking.status = com.asms.booking.enums.BookingStatus.PAID
+            """)
+    long countPaidTicketsByScheduleIdAndTicketType(
+            @Param("scheduleId") String scheduleId,
+            @Param("ticketType") String ticketType
     );
 
     Page<ShowSchedule> findAll(org.springframework.data.jpa.domain.Specification<ShowSchedule> specification, Pageable pageable);

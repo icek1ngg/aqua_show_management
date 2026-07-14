@@ -52,6 +52,30 @@ public final class CatalogDtos {
     ) {
     }
 
+    public record BookingScheduleResponse(
+            UUID scheduleId,
+            UUID showId,
+            String showTitle,
+            String showDescription,
+            String showImageUrl,
+            ScheduleStatus status,
+            LocalDateTime startTime,
+            LocalDateTime endTime,
+            UUID venueId,
+            String venueName,
+            String venueLocation,
+            BigDecimal standardPrice,
+            BigDecimal vipPrice,
+            BigDecimal familyPrice,
+            Integer standardCapacity,
+            Integer vipCapacity,
+            Integer familyCapacity,
+            Integer standardAvailableTickets,
+            Integer vipAvailableTickets,
+            Integer familyAvailableTickets
+    ) {
+    }
+
     public record CreateShowRequest(
             @NotBlank(message = "Title is required")
             @Size(max = 150, message = "Title must not exceed 150 characters")
@@ -139,12 +163,18 @@ public final class CatalogDtos {
             LocalDateTime startTime,
             @NotNull(message = "End time is required")
             LocalDateTime endTime,
-            @NotNull(message = "Capacity is required")
-            @Min(value = 1, message = "Capacity must be greater than 0")
-            Integer capacity,
-            @NotNull(message = "Price is required")
-            @DecimalMin(value = "0.0", inclusive = false, message = "Price must be greater than 0")
-            BigDecimal price
+            @NotNull(message = "Standard capacity is required")
+            @Min(value = 0, message = "Standard capacity must not be negative")
+            Integer standardCapacity,
+            @NotNull(message = "VIP capacity is required")
+            @Min(value = 0, message = "VIP capacity must not be negative")
+            Integer vipCapacity,
+            @NotNull(message = "Family capacity is required")
+            @Min(value = 0, message = "Family capacity must not be negative")
+            Integer familyCapacity,
+            @NotNull(message = "Standard price is required")
+            @DecimalMin(value = "0.0", inclusive = false, message = "Standard price must be greater than 0")
+            BigDecimal standardPrice
     ) {
     }
 
@@ -152,10 +182,14 @@ public final class CatalogDtos {
             UUID venueId,
             LocalDateTime startTime,
             LocalDateTime endTime,
-            @Min(value = 1, message = "Capacity must be greater than 0")
-            Integer capacity,
-            @DecimalMin(value = "0.0", inclusive = false, message = "Price must be greater than 0")
-            BigDecimal price,
+            @Min(value = 0, message = "Standard capacity must not be negative")
+            Integer standardCapacity,
+            @Min(value = 0, message = "VIP capacity must not be negative")
+            Integer vipCapacity,
+            @Min(value = 0, message = "Family capacity must not be negative")
+            Integer familyCapacity,
+            @DecimalMin(value = "0.0", inclusive = false, message = "Standard price must be greater than 0")
+            BigDecimal standardPrice,
             ScheduleStatus status
     ) {
     }
@@ -168,9 +202,15 @@ public final class CatalogDtos {
             String venueName,
             LocalDateTime startTime,
             LocalDateTime endTime,
-            Integer capacity,
-            Integer availableTickets,
-            BigDecimal price,
+            Integer standardCapacity,
+            Integer vipCapacity,
+            Integer familyCapacity,
+            Integer totalCapacity,
+            Integer standardAvailableTickets,
+            Integer vipAvailableTickets,
+            Integer familyAvailableTickets,
+            Integer totalAvailableTickets,
+            BigDecimal standardPrice,
             ScheduleStatus status,
             LocalDateTime createdAt,
             LocalDateTime updatedAt

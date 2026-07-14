@@ -4,6 +4,7 @@ import { Link, useLocation, useNavigate, useSearchParams } from 'react-router-do
 import { getBookingDetail } from '../../services/bookingService.js';
 import MainLayout from '../../shared/layouts/MainLayout.jsx';
 import { normalizeBookingPaymentStatus } from '../../shared/utils/paymentStatus.js';
+import { getTicketTypeLabel } from '../../shared/utils/ticketPricing.js';
 
 const pollIntervalMs = 1500;
 const ticketTimeoutMs = 30000;
@@ -148,13 +149,19 @@ export default function MyTicketsPage() {
   const paymentStatus = normalizeBookingPaymentStatus(booking, booking?.payment).status;
   const tickets = booking?.tickets?.items || [];
   const isPreparing = paymentStatus === 'PAID' && tickets.length === 0;
+  const bookingItems = Array.isArray(booking?.items) ? booking.items : [];
+  const ticketGroups = bookingItems.map((item) => ({
+    item,
+    tickets: tickets.filter((ticket) => ticket.bookingItemId === item.id),
+  }));
+  const ungroupedTickets = tickets.filter((ticket) => !bookingItems.some((item) => item.id === ticket.bookingItemId));
 
   return (
     <MainLayout>
       <section className="bg-gradient-to-br from-cyan-900 via-cyan-700 to-teal-500 px-4 py-14 text-white sm:px-6 lg:px-8">
         <div className="mx-auto max-w-6xl">
           <span className="inline-flex rounded-full bg-white/15 px-4 py-1.5 text-xs font-black uppercase tracking-[0.24em]">My Tickets</span>
-          <h1 className="mt-5 text-4xl font-black sm:text-5xl">{booking?.showName || 'Your AquaPulse Tickets'}</h1>
+          <h1 className="mt-5 text-4xl font-black sm:text-5xl">{bookingItems.length > 1 ? `${bookingItems.length} Shows in Your Booking` : booking?.showName || 'Your AquaPulse Tickets'}</h1>
           <p className="mt-3 max-w-2xl text-lg text-cyan-50/90">Keep this page ready when you arrive at the show entrance.</p>
         </div>
       </section>
@@ -198,8 +205,22 @@ export default function MyTicketsPage() {
           ) : null}
 
           {tickets.length > 0 ? (
-            <div className="grid gap-6 lg:grid-cols-2">
-              {tickets.map((ticket, index) => <TicketCard key={ticket.id} ticket={ticket} index={index} />)}
+            <div className="space-y-10">
+              {ticketGroups.filter((group) => group.tickets.length > 0).map(({ item, tickets: groupTickets }) => (
+                <section key={item.id}>
+                  <h2 className="text-2xl font-black text-slate-950">{item.showName}</h2>
+                  <p className="mb-4 mt-1 font-semibold text-slate-500">{formatDateTime(item.startTime)} · {getTicketTypeLabel(item.ticketType)}</p>
+                  <div className="grid gap-6 lg:grid-cols-2">
+                    {groupTickets.map((ticket, index) => <TicketCard key={ticket.id} ticket={ticket} index={index} />)}
+                  </div>
+                </section>
+              ))}
+              {ungroupedTickets.length > 0 ? (
+                <section>
+                  <h2 className="mb-4 text-2xl font-black text-slate-950">Other Tickets</h2>
+                  <div className="grid gap-6 lg:grid-cols-2">{ungroupedTickets.map((ticket, index) => <TicketCard key={ticket.id} ticket={ticket} index={index} />)}</div>
+                </section>
+              ) : null}
             </div>
           ) : null}
 

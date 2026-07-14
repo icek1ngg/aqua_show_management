@@ -1,6 +1,6 @@
 package com.asms.catalog.controller;
 
-import com.asms.catalog.dto.CatalogDtos.ScheduleBriefResponse;
+import com.asms.catalog.dto.CatalogDtos.BookingScheduleResponse;
 import com.asms.catalog.service.PublicShowService;
 import com.asms.core.response.ApiResponse;
 import org.springframework.web.bind.annotation.GetMapping;
@@ -21,7 +21,7 @@ public class PublicScheduleController {
     }
 
     @GetMapping("/{id}")
-    public ApiResponse<ScheduleBriefResponse> getSchedule(@PathVariable UUID id) {
+    public ApiResponse<BookingScheduleResponse> getSchedule(@PathVariable UUID id) {
         return ApiResponse.success("Schedule fetched successfully", publicShowService.getSchedule(id));
     }
 }

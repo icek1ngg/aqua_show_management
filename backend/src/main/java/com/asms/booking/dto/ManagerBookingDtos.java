@@ -1,5 +1,6 @@
 package com.asms.booking.dto;
 
+import com.asms.booking.dto.BookingDtos.BookingItemResponse;
 import com.asms.booking.enums.BookingStatus;
 import com.asms.payment.enums.PaymentStatus;
 import com.asms.ticketing.enums.TicketStatus;
@@ -29,7 +30,9 @@ public final class ManagerBookingDtos {
             BookingStatus status,
             PaymentStatus paymentStatus,
             Instant createdAt,
-            Instant expiresAt
+            Instant expiresAt,
+            List<BookingItemResponse> items,
+            Integer totalQuantity
     ) {
     }
 

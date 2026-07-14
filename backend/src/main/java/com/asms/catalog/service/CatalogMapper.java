@@ -1,5 +1,6 @@
 package com.asms.catalog.service;
 
+import com.asms.catalog.dto.CatalogDtos.BookingScheduleResponse;
 import com.asms.catalog.dto.CatalogDtos.ScheduleBriefResponse;
 import com.asms.catalog.dto.CatalogDtos.ScheduleManagementResponse;
 import com.asms.catalog.dto.CatalogDtos.ShowDetailResponse;
@@ -11,6 +12,7 @@ import com.asms.catalog.entity.Venue;
 import jakarta.persistence.EntityNotFoundException;
 import org.hibernate.ObjectNotFoundException;
 
+import java.math.BigDecimal;
 import java.util.List;
 
 final class CatalogMapper {
@@ -49,8 +51,43 @@ final class CatalogMapper {
                 schedule.getStartTime(),
                 schedule.getEndTime(),
                 venueName(schedule),
-                schedule.getAvailableTickets(),
-                schedule.getPrice()
+                schedule.getTotalAvailableTickets(),
+                schedule.getStandardPrice()
+        );
+    }
+
+    static BookingScheduleResponse toBookingSchedule(
+            ShowSchedule schedule,
+            BigDecimal standardPrice,
+            BigDecimal vipPrice,
+            BigDecimal familyPrice,
+            int standardAvailableTickets,
+            int vipAvailableTickets,
+            int familyAvailableTickets
+    ) {
+        Show show = schedule.getShow();
+        Venue venue = venue(schedule);
+        return new BookingScheduleResponse(
+                schedule.getId(),
+                show.getId(),
+                show.getTitle(),
+                show.getDescription(),
+                show.getImageUrl(),
+                schedule.getStatus(),
+                schedule.getStartTime(),
+                schedule.getEndTime(),
+                venue == null ? null : venue.getId(),
+                venue == null ? null : venue.getName(),
+                venue == null ? null : venue.getLocation(),
+                standardPrice,
+                vipPrice,
+                familyPrice,
+                schedule.getStandardCapacity(),
+                schedule.getVipCapacity(),
+                schedule.getFamilyCapacity(),
+                standardAvailableTickets,
+                vipAvailableTickets,
+                familyAvailableTickets
         );
     }
 
@@ -76,9 +113,15 @@ final class CatalogMapper {
                 venue == null ? null : venue.getName(),
                 schedule.getStartTime(),
                 schedule.getEndTime(),
-                schedule.getCapacity(),
-                schedule.getAvailableTickets(),
-                schedule.getPrice(),
+                schedule.getStandardCapacity(),
+                schedule.getVipCapacity(),
+                schedule.getFamilyCapacity(),
+                schedule.getTotalCapacity(),
+                schedule.getStandardAvailableTickets(),
+                schedule.getVipAvailableTickets(),
+                schedule.getFamilyAvailableTickets(),
+                schedule.getTotalAvailableTickets(),
+                schedule.getStandardPrice(),
                 schedule.getStatus(),
                 schedule.getCreatedAt(),
                 schedule.getUpdatedAt()
