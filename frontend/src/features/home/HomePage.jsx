@@ -1,8 +1,10 @@
 import { useEffect, useMemo, useRef, useState } from 'react';
-import { Link, useLocation } from 'react-router-dom';
+import { Link, useLocation, useNavigate } from 'react-router-dom';
 
-import TicketSelector from '../cart/TicketSelector.jsx';
-import { getShowSchedules, getShows } from '../../services/showService.js';
+import ShowTicketWorkspace from '../cart/ShowTicketWorkspace.jsx';
+import { showTicketTarget } from '../cart/showTicketNavigation.js';
+import { chooseBookableSchedule } from '../cart/ticketSelectorState.js';
+import { getSchedule, getShowSchedules, getShows } from '../../services/showService.js';
 import MainLayout from '../../shared/layouts/MainLayout.jsx';
 
 const fallbackShowImage =
@@ -94,6 +96,7 @@ function scrollToSection(sectionId) {
 
 export default function HomePage() {
   const location = useLocation();
+  const navigate = useNavigate();
   const [shows, setShows] = useState([]);
   const [pagination, setPagination] = useState({
     page: 0,
@@ -110,11 +113,13 @@ export default function HomePage() {
   const [showsError, setShowsError] = useState('');
   const [reloadKey, setReloadKey] = useState(0);
   const [selectedShowId, setSelectedShowId] = useState('');
-  const [selectorShow, setSelectorShow] = useState(null);
-  const [selectorSchedules, setSelectorSchedules] = useState([]);
-  const [selectorError, setSelectorError] = useState('');
-  const [isLoadingSelector, setIsLoadingSelector] = useState(false);
-  const handledSelectorLocation = useRef('');
+  const [workspaceShow, setWorkspaceShow] = useState(null);
+  const [workspaceSchedules, setWorkspaceSchedules] = useState([]);
+  const [workspaceSchedule, setWorkspaceSchedule] = useState(null);
+  const [workspaceLoading, setWorkspaceLoading] = useState(false);
+  const [workspaceError, setWorkspaceError] = useState('');
+  const workspaceRequest = useRef(0);
+  const handledWorkspaceLocation = useRef('');
 
   useEffect(() => {
     const sectionId = normalizeSectionId(
@@ -210,34 +215,69 @@ export default function HomePage() {
     setSelectedShowId(nextShowId);
   };
 
-  const openSelector = async (show, preferredScheduleId = '') => {
+  const activateTicketWorkspace = async (show, preferredScheduleId = '') => {
     if (!show?.id) return;
-    setSelectorShow(show);
-    setSelectorSchedules([]);
-    setSelectorError('');
-    setIsLoadingSelector(true);
+    const requestId = ++workspaceRequest.current;
+    setWorkspaceShow(show);
+    setWorkspaceSchedules([]);
+    setWorkspaceSchedule(null);
+    setWorkspaceLoading(true);
+    setWorkspaceError('');
     try {
-      const response = await getShowSchedules(show.id);
-      const scheduleItems = Array.isArray(response) ? response : [];
-      setSelectorSchedules(preferredScheduleId
-        ? [...scheduleItems].sort((first) => (String(first.id) === String(preferredScheduleId) ? -1 : 1))
-        : scheduleItems);
-    } catch (error) {
-      setSelectorError(getShowsErrorMessage(error));
+      const list = await getShowSchedules(show.id);
+      const schedules = Array.isArray(list) ? list : [];
+      const selected = chooseBookableSchedule(schedules, preferredScheduleId);
+      const detail = selected ? await getSchedule(selected.id || selected.scheduleId) : null;
+      if (workspaceRequest.current !== requestId) return;
+      setWorkspaceSchedules(schedules);
+      setWorkspaceSchedule(detail);
+      requestAnimationFrame(() => document.getElementById('ticket-workspace')?.scrollIntoView({ behavior: 'smooth', block: 'start' }));
+    } catch (loadError) {
+      if (workspaceRequest.current === requestId) setWorkspaceError(getShowsErrorMessage(loadError));
     } finally {
-      setIsLoadingSelector(false);
+      if (workspaceRequest.current === requestId) setWorkspaceLoading(false);
     }
   };
 
-  useEffect(() => {
-    const requestedShowId = location.state?.ticketSelectorShowId;
-    if (!requestedShowId || shows.length === 0 || handledSelectorLocation.current === location.key) return;
-    const requestedShow = shows.find((show) => String(show.id) === String(requestedShowId));
-    if (requestedShow) {
-      handledSelectorLocation.current = location.key;
-      openSelector(requestedShow, location.state?.ticketSelectorScheduleId);
+  const handleWorkspaceScheduleChange = async (scheduleId) => {
+    if (!scheduleId) return;
+    const requestId = ++workspaceRequest.current;
+    setWorkspaceSchedule(null);
+    setWorkspaceLoading(true);
+    setWorkspaceError('');
+    try {
+      const detail = await getSchedule(scheduleId);
+      if (workspaceRequest.current === requestId) setWorkspaceSchedule(detail);
+    } catch (loadError) {
+      if (workspaceRequest.current === requestId) setWorkspaceError(getShowsErrorMessage(loadError));
+    } finally {
+      if (workspaceRequest.current === requestId) setWorkspaceLoading(false);
     }
-  }, [location.key, location.state, shows]);
+  };
+
+  const goToTicketWorkspace = (show, scheduleId = '') => {
+    const target = showTicketTarget({ showId: show?.id, scheduleId });
+    navigate(target.to, { state: target.state });
+  };
+
+  useEffect(() => {
+    if (
+      shows.length === 0
+      || handledWorkspaceLocation.current === location.key
+      || (location.pathname !== '/shows' && location.pathname !== '/public/shows')
+    ) return;
+    const requestedShowId = location.state?.ticketSelectionShowId;
+    const requestedShow = requestedShowId
+      ? shows.find((show) => String(show.id) === String(requestedShowId))
+      : firstBookableShow;
+    if (requestedShow) {
+      handledWorkspaceLocation.current = location.key;
+      activateTicketWorkspace(
+        requestedShow,
+        location.state?.ticketSelectionScheduleId || (!requestedShowId ? firstBookableShow?.nextScheduleId : ''),
+      );
+    }
+  }, [firstBookableShow, location.key, location.pathname, location.state, shows]);
 
   const handleShowSearch = (event) => {
     event.preventDefault();
@@ -276,7 +316,7 @@ export default function HomePage() {
               Experience the harmony of light, water, and music.
             </p>
             <div className="mt-10 flex flex-wrap gap-4">
-              <button className="rounded-full bg-gradient-to-r from-cyan-500 to-teal-700 px-10 py-4 font-bold text-white shadow-2xl shadow-cyan-950/30 transition hover:-translate-y-0.5 hover:shadow-cyan-950/40 active:translate-y-0 disabled:opacity-40" disabled={!firstBookableShow} type="button" onClick={() => openSelector(firstBookableShow)}>
+              <button className="rounded-full bg-gradient-to-r from-cyan-500 to-teal-700 px-10 py-4 font-bold text-white shadow-2xl shadow-cyan-950/30 transition hover:-translate-y-0.5 hover:shadow-cyan-950/40 active:translate-y-0 disabled:opacity-40" disabled={!firstBookableShow} type="button" onClick={() => goToTicketWorkspace(firstBookableShow, firstBookableShow?.nextScheduleId)}>
                 Book Tickets
               </button>
               <button className="rounded-full border-2 border-white/30 bg-white/10 px-10 py-4 font-bold text-white backdrop-blur-md transition hover:bg-white/20" type="button" onClick={() => scrollToSection('shows')}>
@@ -312,14 +352,14 @@ export default function HomePage() {
           </div>
 
           {selectedShow ? (
-            <button className="flex w-full items-center justify-center gap-2 whitespace-nowrap rounded-full bg-cyan-700 px-10 py-4 font-bold text-white shadow-lg shadow-cyan-900/20 transition hover:bg-cyan-800 md:w-auto" type="button" onClick={() => openSelector(selectedShow)}>
+            <button className="flex w-full items-center justify-center gap-2 whitespace-nowrap rounded-full bg-cyan-700 px-10 py-4 font-bold text-white shadow-lg shadow-cyan-900/20 transition hover:bg-cyan-800 md:w-auto" type="button" onClick={() => goToTicketWorkspace(selectedShow, selectedShow.nextScheduleId)}>
               <span className="material-symbols-outlined">search</span>
-              Select Tickets
+              Book Now
             </button>
           ) : (
             <button className="flex w-full cursor-not-allowed items-center justify-center gap-2 whitespace-nowrap rounded-full bg-slate-300 px-10 py-4 font-bold text-slate-600 md:w-auto" disabled type="button">
               <span className="material-symbols-outlined">search</span>
-              Select Tickets
+              Book Now
             </button>
           )}
         </div>
@@ -428,7 +468,7 @@ export default function HomePage() {
                       </div>
                       <div className="grid grid-cols-2 gap-3">
                         <Link className="rounded-full border-2 border-cyan-700 py-3.5 text-center font-bold text-cyan-700 transition hover:bg-cyan-50" to={`/shows/${show.id}`}>View Details</Link>
-                        <button className="rounded-full bg-cyan-700 py-3.5 text-center font-bold text-white transition hover:bg-cyan-800 disabled:opacity-40" disabled={!show.nextScheduleId} type="button" onClick={() => openSelector(show)}>Select Tickets</button>
+                        <button className="rounded-full bg-cyan-700 py-3.5 text-center font-bold text-white transition hover:bg-cyan-800 disabled:opacity-40" disabled={!show.nextScheduleId} type="button" onClick={() => goToTicketWorkspace(show, show.nextScheduleId)}>Book Now</button>
                       </div>
                     </div>
                   </article>
@@ -464,6 +504,17 @@ export default function HomePage() {
           </>
         )}
       </section>
+
+      <ShowTicketWorkspace
+        error={workspaceError}
+        loading={workspaceLoading}
+        schedule={workspaceSchedule}
+        schedules={workspaceSchedules}
+        selectedScheduleId={workspaceSchedule?.id || workspaceSchedule?.scheduleId || ''}
+        show={workspaceShow}
+        onRetry={() => activateTicketWorkspace(workspaceShow)}
+        onScheduleChange={handleWorkspaceScheduleChange}
+      />
 
       <section className="scroll-mt-24 bg-white/60 py-20" id="schedule">
         <div className="mx-auto max-w-7xl px-4 sm:px-6 lg:px-8">
@@ -517,7 +568,7 @@ export default function HomePage() {
                     <span className={`h-2 w-2 rounded-full ${status.dotClass}`} />
                     {status.label}
                   </span>
-                  <button className="rounded-full bg-cyan-700 px-8 py-3.5 font-bold text-white shadow-md transition hover:bg-cyan-800" type="button" onClick={() => openSelector(schedule)}>
+                  <button className="rounded-full bg-cyan-700 px-8 py-3.5 font-bold text-white shadow-md transition hover:bg-cyan-800" type="button" onClick={() => goToTicketWorkspace(schedule, schedule.nextScheduleId)}>
                     Book Now
                   </button>
                 </div>
@@ -598,16 +649,6 @@ export default function HomePage() {
         </div>
       </section>
 
-      {selectorShow && (
-        <div className="fixed inset-0 z-[80] flex items-center justify-center overflow-y-auto bg-cyan-950/60 p-4 backdrop-blur-sm" role="dialog" aria-modal="true">
-          <button aria-label="Close ticket selector" className="absolute inset-0" type="button" onClick={() => setSelectorShow(null)} />
-          <div className="relative z-10 w-full max-w-3xl">
-            {isLoadingSelector ? <div className="rounded-[2rem] bg-white p-12 text-center font-black text-cyan-700">Loading schedules...</div>
-              : selectorError ? <div className="rounded-[2rem] bg-white p-10 text-center"><p className="font-bold text-red-700">{selectorError}</p><button className="mt-4 rounded-full bg-cyan-700 px-6 py-3 font-bold text-white" type="button" onClick={() => openSelector(selectorShow)}>Try Again</button></div>
-                : <TicketSelector show={selectorShow} schedules={selectorSchedules} onClose={() => setSelectorShow(null)} />}
-          </div>
-        </div>
-      )}
     </MainLayout>
   );
 }

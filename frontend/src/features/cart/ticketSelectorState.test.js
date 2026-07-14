@@ -40,6 +40,11 @@ test('switching schedules resets every ticket quantity', () => {
   });
 });
 
+test('selecting the current schedule preserves the current summary', () => {
+  const selected = selectTicketType(createSelectorState('schedule-2'), 'STANDARD', schedule);
+  assert.equal(selectSchedule(selected, 'schedule-2'), selected);
+});
+
 test('a sold-out ticket type is disabled', () => {
   assert.deepEqual(ticketTypeAvailability(schedule, 'VIP'), {
     available: 0,
