@@ -59,6 +59,13 @@ export function addCartItem(items, item, maxQuantity = CART_MAX_QUANTITY) {
   });
 }
 
+export function addCartItems(items, additions) {
+  return (Array.isArray(additions) ? additions : []).reduce(
+    (currentItems, item) => addCartItem(currentItems, item, item?.availableTickets),
+    items,
+  );
+}
+
 export function updateCartItemQuantity(items, key, quantity, maxQuantity = CART_MAX_QUANTITY) {
   return items.map((item) => (
     cartItemKey(item) === key

@@ -4,6 +4,7 @@ import assert from 'node:assert/strict';
 import {
   CART_STORAGE_KEY,
   addCartItem,
+  addCartItems,
   cartItemKey,
   cartTotalQuantity,
   readCart,
@@ -11,6 +12,25 @@ import {
   updateCartItemQuantity,
   writeCart,
 } from './cartStorage.js';
+
+test('adds multiple selected ticket types in one cart update', () => {
+  const result = addCartItems([], [
+    { scheduleId: 's1', ticketType: 'STANDARD', quantity: 2, availableTickets: 8 },
+    { scheduleId: 's1', ticketType: 'VIP', quantity: 1, availableTickets: 3 },
+  ]);
+  assert.deepEqual(result.map(({ ticketType, quantity }) => ({ ticketType, quantity })), [
+    { ticketType: 'STANDARD', quantity: 2 },
+    { ticketType: 'VIP', quantity: 1 },
+  ]);
+});
+
+test('bulk add merges existing lines and respects authoritative availability', () => {
+  const existing = [{ scheduleId: 's1', ticketType: 'STANDARD', quantity: 3 }];
+  const result = addCartItems(existing, [
+    { scheduleId: 's1', ticketType: 'STANDARD', quantity: 4, availableTickets: 5 },
+  ]);
+  assert.equal(result[0].quantity, 5);
+});
 
 function createStorage(initialValue = null) {
   const values = new Map();

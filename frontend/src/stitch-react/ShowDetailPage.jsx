@@ -1,7 +1,7 @@
 import { useEffect, useMemo, useState } from 'react';
-import { Link, useParams } from 'react-router-dom';
+import { Link, useNavigate, useParams } from 'react-router-dom';
 
-import TicketSelector from '../features/cart/TicketSelector.jsx';
+import { showTicketTarget } from '../features/cart/showTicketNavigation.js';
 import { getShowDetail, getShowSchedules } from '../services/showService.js';
 import MainLayout from '../shared/layouts/MainLayout.jsx';
 import { formatCurrency } from '../shared/utils/ticketPricing.js';
@@ -89,6 +89,7 @@ function StateMessage({ state, onRetry }) {
 
 export default function ShowDetailPage() {
   const { showId } = useParams();
+  const navigate = useNavigate();
   const [show, setShow] = useState(null);
   const [schedules, setSchedules] = useState([]);
   const [isLoading, setIsLoading] = useState(true);
@@ -96,7 +97,6 @@ export default function ShowDetailPage() {
   const [reloadKey, setReloadKey] = useState(0);
   const [selectedDate, setSelectedDate] = useState('');
   const [calendarOpen, setCalendarOpen] = useState(false);
-  const [selectedScheduleId, setSelectedScheduleId] = useState('');
   const [currentSlide, setCurrentSlide] = useState(0);
   const [lightboxOpen, setLightboxOpen] = useState(false);
 
@@ -140,11 +140,6 @@ export default function ShowDetailPage() {
       .sort((a, b) => new Date(a.startTime).getTime() - new Date(b.startTime).getTime()),
     [effectiveDate, schedules],
   );
-
-  const selectorSchedules = useMemo(() => {
-    if (!selectedScheduleId) return schedules;
-    return [...schedules].sort((first) => (String(first.id) === String(selectedScheduleId) ? -1 : 1));
-  }, [schedules, selectedScheduleId]);
 
   if (isLoading) return <LoadingDetail />;
   if (loadError) return <StateMessage state={loadError} onRetry={loadError.icon === 'error' ? () => setReloadKey((key) => key + 1) : null} />;
@@ -206,8 +201,8 @@ export default function ShowDetailPage() {
               </div>
             </div>
 
-            <div className="grid grid-cols-1 items-start gap-8 md:grid-cols-[minmax(0,7fr)_minmax(280px,3fr)] lg:gap-10">
-                <div className="min-w-0 flex flex-col gap-8" id="upcoming-times">
+            <div className="flex flex-col items-start gap-8">
+                <div className="flex w-full min-w-0 flex-col gap-8" id="upcoming-times">
                 <div className="flex flex-wrap items-end justify-between gap-4">
                   <div>
                     <h2 className="text-2xl font-extrabold text-primary">Upcoming Times</h2>
@@ -220,8 +215,8 @@ export default function ShowDetailPage() {
                     {calendarOpen && (
                       <div className="absolute right-0 top-8 z-20 w-72 rounded-2xl border border-outline-variant/40 bg-white p-4 shadow-xl">
                         <label className="text-[10px] font-black uppercase tracking-widest text-outline" htmlFor="show-date">Choose a date</label>
-                        <input className="mt-2 w-full rounded-xl border-outline-variant text-primary focus:border-primary focus:ring-primary" id="show-date" min={localDateKey()} onChange={(event) => { setSelectedDate(event.target.value); setSelectedScheduleId(''); setCalendarOpen(false); }} type="date" value={selectedDate} />
-                        {selectedDate && <button className="mt-3 text-xs font-bold text-brand-orange hover:underline" onClick={() => { setSelectedDate(''); setSelectedScheduleId(''); setCalendarOpen(false); }} type="button">Back to today</button>}
+                        <input className="mt-2 w-full rounded-xl border-outline-variant text-primary focus:border-primary focus:ring-primary" id="show-date" min={localDateKey()} onChange={(event) => { setSelectedDate(event.target.value); setCalendarOpen(false); }} type="date" value={selectedDate} />
+                        {selectedDate && <button className="mt-3 text-xs font-bold text-brand-orange hover:underline" onClick={() => { setSelectedDate(''); setCalendarOpen(false); }} type="button">Back to today</button>}
                       </div>
                     )}
                   </div>
@@ -236,9 +231,8 @@ export default function ShowDetailPage() {
                     </div>
                   ) : filteredSchedules.map((schedule) => {
                     const availability = availabilityFor(schedule);
-                    const selected = String(schedule.id) === String(selectedScheduleId);
                     return (
-                      <article className={`show-glass relative overflow-hidden rounded-2xl border p-6 shadow-md transition-all ${selected ? 'border-brand-orange ring-2 ring-brand-orange/20' : 'border-transparent'} ${availability.unavailable ? 'opacity-60 grayscale-[.5]' : 'hover:shadow-xl'}`} key={schedule.id}>
+                      <article className={`show-glass relative overflow-hidden rounded-2xl border border-transparent p-6 shadow-md transition-all ${availability.unavailable ? 'opacity-60 grayscale-[.5]' : 'hover:shadow-xl'}`} key={schedule.id}>
                         <div className="mb-6 flex items-start justify-between gap-4">
                           <div>
                             <span className={`block text-2xl font-black ${availability.unavailable ? 'text-outline' : 'text-primary'}`}>{formatTimeRange(schedule.startTime, schedule.endTime)}</span>
@@ -248,7 +242,17 @@ export default function ShowDetailPage() {
                         </div>
                         <div className="flex items-center justify-between gap-4 border-t border-outline-variant/30 pt-6">
                           <div><span className="block text-[10px] font-black uppercase tracking-widest text-outline">Availability</span><span className={`block text-sm font-bold ${availability.unavailable ? 'text-error' : 'text-primary'}`}>{availability.label}</span></div>
-                          <button className={`rounded-full px-10 py-3 text-sm font-black transition-all ${availability.unavailable ? 'cursor-not-allowed bg-outline-variant text-on-surface-variant' : 'show-booking-action shadow-lg shadow-brand-orange/20 hover:scale-105 active:scale-95'}`} disabled={availability.unavailable} onClick={() => { setSelectedScheduleId(schedule.id); document.getElementById('show-ticket-selector')?.scrollIntoView({ behavior: 'smooth', block: 'center' }); }} type="button">{selected ? 'SELECTED' : availability.button}</button>
+                          <button
+                            className={`rounded-full px-10 py-3 text-sm font-black transition-all ${availability.unavailable ? 'cursor-not-allowed bg-outline-variant text-on-surface-variant' : 'show-booking-action shadow-lg shadow-brand-orange/20 hover:scale-105 active:scale-95'}`}
+                            disabled={availability.unavailable}
+                            onClick={() => {
+                              const target = showTicketTarget({ showId: show.id, scheduleId: schedule.id });
+                              navigate(target.to, { state: target.state });
+                            }}
+                            type="button"
+                          >
+                            {availability.unavailable ? availability.button : 'Book Now'}
+                          </button>
                         </div>
                       </article>
                     );
@@ -261,9 +265,6 @@ export default function ShowDetailPage() {
                 </div>
               </div>
 
-              <aside className="min-w-0 scroll-mt-24 md:sticky md:top-24" id="show-ticket-selector">
-                <TicketSelector key={selectedScheduleId || 'default'} show={show} schedules={selectorSchedules} />
-              </aside>
             </div>
           </div>
         </section>
