@@ -92,6 +92,8 @@ function scrollToSection(sectionId) {
   document.getElementById(normalizedSectionId)?.scrollIntoView({ behavior: 'smooth', block: 'start' });
 }
 
+import TicketSearchBar from './TicketSearchBar.jsx';
+
 export default function HomePage() {
   const location = useLocation();
   const navigate = useNavigate();
@@ -217,12 +219,12 @@ export default function HomePage() {
 
   return (
     <MainLayout>
-      <section className="relative flex min-h-[600px] scroll-mt-24 items-center overflow-hidden lg:min-h-[720px]" id="home">
+      <section className="relative flex min-h-[600px] scroll-mt-24 items-center lg:min-h-[720px]" id="home">
         <div className="absolute inset-0 z-0">
           <img
             alt="Water park pool with turquoise slides"
             className="h-full w-full object-cover"
-            src="https://lh3.googleusercontent.com/aida-public/AB6AXuCgzaSFnyz7iKGePZ5TabB9udRC0EcNUR3yhdm7OyJ3OiwcUtjU0AHotDlyrp9pA5qRT5z8GNIN8EzOHNBu13xLQNct58ZuRMuLrJMoxb9hHewFYarnfzmif7OdsjSa---CyMk438S72vZPxg-WaVLK9tC-cLUchVjqaxCEHGGYL5sOkylNY525zr42reb2ZjlNRNyOkbPDMhnNOlqaEtQ4jaOI314DgcQ1O175xjmG8frEXsnc5kfVX2-NpBxsb6obzW4Im-5pGp8"
+            src="/grand-voyage-banner.jpg"
           />
           <div className="absolute inset-0 bg-gradient-to-r from-slate-950/75 via-cyan-950/35 to-transparent" />
         </div>
@@ -240,13 +242,14 @@ export default function HomePage() {
               Experience the harmony of light, water, and music.
             </p>
             <div className="mt-10 flex flex-wrap gap-4">
-              <button className="rounded-full bg-gradient-to-r from-cyan-500 to-teal-700 px-10 py-4 font-bold text-white shadow-2xl shadow-cyan-950/30 transition hover:-translate-y-0.5 hover:shadow-cyan-950/40 active:translate-y-0 disabled:opacity-40" disabled={!firstBookableShow} type="button" onClick={() => goToShowTickets(firstBookableShow)}>
-                Book Tickets
-              </button>
               <button className="rounded-full border-2 border-white/30 bg-white/10 px-10 py-4 font-bold text-white backdrop-blur-md transition hover:bg-white/20" type="button" onClick={() => scrollToSection('shows')}>
                 Explore Shows
               </button>
             </div>
+          </div>
+          
+          <div className="mt-12 md:mt-16 w-full relative z-20">
+            <TicketSearchBar />
           </div>
         </div>
       </section>
@@ -354,9 +357,8 @@ export default function HomePage() {
                           </p>
                         )}
                       </div>
-                      <div className="grid grid-cols-2 gap-3">
+                      <div className="grid grid-cols-1 gap-3">
                         <Link className="rounded-full border-2 border-cyan-700 py-3.5 text-center font-bold text-cyan-700 transition hover:bg-cyan-50" to={`/shows/${show.id}`}>View Details</Link>
-                        <button className="rounded-full bg-cyan-700 py-3.5 text-center font-bold text-white transition hover:bg-cyan-800 disabled:opacity-40" disabled={!show.nextScheduleId} type="button" onClick={() => goToShowTickets(show)}>Book Now</button>
                       </div>
                     </div>
                   </article>
@@ -448,7 +450,7 @@ export default function HomePage() {
                     {status.label}
                   </span>
                   <button className="rounded-full bg-cyan-700 px-8 py-3.5 font-bold text-white shadow-md transition hover:bg-cyan-800" type="button" onClick={() => goToShowTickets(schedule)}>
-                    Book Now
+                    Book tickets
                   </button>
                 </div>
               </article>

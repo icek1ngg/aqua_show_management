@@ -131,26 +131,24 @@ public class DevDataSeeder {
         }
 
         private void seedPendingBooking(User visitor) {
-            boolean hasPending = bookingRepository.findByUserOrderByCreatedAtDesc(visitor)
-                    .stream()
-                    .anyMatch((booking) -> booking.getStatus() == BookingStatus.PENDING_PAYMENT);
-
-            if (hasPending) {
+            String holdId = "ASMS-DEMO-HOLD-PENDING";
+            if (bookingRepository.existsByBookingCode("AQB" + Math.abs(holdId.hashCode()))) {
                 return;
             }
 
-            Booking booking = baseBooking(visitor, "ASMS-DEMO-HOLD-PENDING", 2, "STANDARD", new BigDecimal("2000"));
+            Booking booking = baseBooking(visitor, holdId, 2, "STANDARD", new BigDecimal("2000"));
             booking.setStatus(BookingStatus.PENDING_PAYMENT);
             booking.setExpiresAt(Instant.now().plus(30, ChronoUnit.MINUTES));
             bookingRepository.save(booking);
         }
 
         private void seedPaidBookingWithTickets(User visitor) {
-            if (ticketRepository.findByQrCode("ASMS:DEMO:VALID").isPresent()) {
+            String holdId = "ASMS-DEMO-HOLD-PAID";
+            if (bookingRepository.existsByBookingCode("AQB" + Math.abs(holdId.hashCode()))) {
                 return;
             }
 
-            Booking paidBooking = baseBooking(visitor, "ASMS-DEMO-HOLD-PAID", 4, "STANDARD", new BigDecimal("2000"));
+            Booking paidBooking = baseBooking(visitor, holdId, 4, "STANDARD", new BigDecimal("2000"));
             paidBooking.setStatus(BookingStatus.PAID);
             paidBooking.setExpiresAt(Instant.now().plus(30, ChronoUnit.MINUTES));
             Booking savedBooking = bookingRepository.save(paidBooking);

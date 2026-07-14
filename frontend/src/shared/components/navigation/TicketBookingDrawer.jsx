@@ -9,6 +9,8 @@ import {
   createDrawerSelection,
   drawerDestination,
 } from './ticketBookingDrawerState.js';
+import CustomDropdown from '../ui/CustomDropdown.jsx';
+import CustomDatePicker from '../ui/CustomDatePicker.jsx';
 
 export default function TicketBookingDrawer({ open, onClose }) {
   const navigate = useNavigate();
@@ -92,24 +94,61 @@ export default function TicketBookingDrawer({ open, onClose }) {
   return open ? (
     <div aria-label="Book tickets" aria-modal="true" className="fixed inset-0 z-[80]" role="dialog">
       <button aria-label="Close booking drawer" className="absolute inset-0 bg-slate-950/45" onClick={onClose} type="button" />
-      <aside className="absolute right-0 top-0 flex h-full w-full max-w-md flex-col bg-white p-6 shadow-2xl">
-        <div className="flex items-center justify-between">
-          <div><p className="text-xs font-black uppercase tracking-[.2em] text-cyan-700">Book Now</p><h2 className="text-2xl font-black">Choose show and date</h2></div>
-          <button aria-label="Close booking drawer" className="h-11 w-11 rounded-full border border-cyan-100" onClick={onClose} type="button">×</button>
+      <aside className="absolute right-0 top-0 flex h-full w-full max-w-md flex-col bg-white p-6 shadow-2xl overflow-y-auto">
+        <div className="flex items-start justify-between mb-8">
+          <div>
+            <p className="text-xs font-black uppercase tracking-[0.2em] text-cyan-600 mb-1">AquaPulse</p>
+            <h2 className="text-3xl font-black bg-gradient-to-r from-cyan-800 to-teal-600 bg-clip-text text-transparent">Book Tickets</h2>
+          </div>
+          <button aria-label="Close booking drawer" className="flex h-10 w-10 items-center justify-center rounded-full bg-gray-50 hover:bg-gray-100 transition" onClick={onClose} type="button">
+            <span className="material-symbols-outlined text-gray-500">close</span>
+          </button>
         </div>
-        <label className="mt-8 font-black" htmlFor="booking-show">Show</label>
-        <select className="mt-1 block w-full rounded-md border-gray-300 shadow-sm focus:border-cyan-500 focus:ring-cyan-500 sm:text-sm border p-2" id="booking-show" value={selection.showId} onChange={(event) => setSelection((current) => changeDrawerShow(current, event.target.value))}>
-          <option value="">Choose a show</option>
-          {shows.map((show) => <option key={show.id} value={show.id}>{show.title}</option>)}
-        </select>
-        <label className="mt-6 font-black" htmlFor="booking-date">Date</label>
-        <select className="mt-1 block w-full rounded-md border-gray-300 shadow-sm focus:border-cyan-500 focus:ring-cyan-500 sm:text-sm border p-2" disabled={!selection.showId || loadingSchedules} id="booking-date" value={selection.date} onChange={(event) => setSelection((current) => changeDrawerDate(current, event.target.value, dates))}>
-          <option value="">Choose an available date</option>
-          {dates.map((date) => <option key={date} value={date}>{date}</option>)}
-        </select>
-        {(loadingShows || loadingSchedules) && <p aria-live="polite" role="status">Loading available shows...</p>}
-        {error && <div role="alert"><p>{error}</p><button type="button" onClick={() => setReloadKey((key) => key + 1)}>Try Again</button></div>}
-        <button className="mt-auto rounded-full bg-gradient-to-r from-cyan-600 to-teal-700 px-6 py-4 font-black text-white disabled:opacity-40" disabled={!destination} type="button" onClick={() => { navigate(destination); onClose(); }}>Continue</button>
+
+        {/* Form Container */}
+        <div className="flex flex-col mb-8">
+          {/* Show Selection */}
+          <div className="flex items-center py-4 border-b border-gray-200">
+            <span className="material-symbols-outlined text-cyan-600 mr-4 text-3xl">location_on</span>
+            <div className="flex flex-col w-full relative">
+              <label className="text-xs text-gray-500 font-medium mb-1 cursor-pointer">Select a destination</label>
+              <CustomDropdown 
+                options={shows.map(s => ({ value: s.id, label: s.title }))}
+                value={selection.showId}
+                onChange={(val) => setSelection((current) => changeDrawerShow(current, val))}
+                placeholder="Where to?"
+              />
+            </div>
+          </div>
+
+          {/* Date Selection */}
+          <div className="flex items-center py-4 border-b border-gray-200">
+            <span className="material-symbols-outlined text-cyan-600 mr-4 text-3xl">calendar_month</span>
+            <div className="flex flex-col w-full relative">
+              <label className="text-xs text-gray-500 font-medium mb-1 cursor-pointer">Select a date</label>
+              <CustomDatePicker 
+                availableDates={dates}
+                value={selection.date}
+                onChange={(val) => setSelection((current) => changeDrawerDate(current, val, dates))}
+                placeholder={selection.showId ? 'When?' : 'Select destination first'}
+                disabled={!selection.showId || loadingSchedules}
+                showId={selection.showId}
+              />
+            </div>
+          </div>
+        </div>
+
+        {(loadingShows || loadingSchedules) && <p aria-live="polite" className="text-sm text-cyan-600 mb-4" role="status">Loading available shows...</p>}
+        {error && <div className="mb-4 text-sm text-red-600" role="alert"><p>{error}</p><button className="underline font-bold mt-1" type="button" onClick={() => setReloadKey((key) => key + 1)}>Try Again</button></div>}
+        
+        <button 
+          className="mt-auto w-full rounded-full bg-cyan-600 px-6 py-4 font-bold text-white transition hover:bg-cyan-700 disabled:opacity-40 shadow-lg shadow-cyan-900/20" 
+          disabled={!destination} 
+          type="button" 
+          onClick={() => { navigate(destination); onClose(); }}
+        >
+          Book tickets
+        </button>
       </aside>
     </div>
   ) : null;

@@ -234,7 +234,7 @@ export default function Navbar() {
                 type="button"
                 onClick={handleBookNow}
               >
-                Book Now
+                Book tickets
               </button>
             ) : null}
           </div>
@@ -318,7 +318,7 @@ export default function Navbar() {
                   type="button"
                   onClick={handleBookNow}
                 >
-                  Book Now
+                  Book tickets
                 </button>
               ) : null}
             </div>

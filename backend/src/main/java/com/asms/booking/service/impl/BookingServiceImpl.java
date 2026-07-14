@@ -167,6 +167,7 @@ public class BookingServiceImpl implements BookingService {
     }
 
     @Override
+    @Transactional
     public PageBookingResponse getMyBookings(String currentUserEmail, int page, int size) {
         User user = resolveUser(currentUserEmail);
         int safePage = Math.max(page, 0);
@@ -190,6 +191,7 @@ public class BookingServiceImpl implements BookingService {
     }
 
     @Override
+    @Transactional
     public BookingResponse getBookingDetail(UUID id, String currentUserEmail) {
         User user = resolveUser(currentUserEmail);
         return bookingRepository.findByIdAndUser(id, user)
@@ -199,6 +201,7 @@ public class BookingServiceImpl implements BookingService {
     }
 
     @Override
+    @Transactional
     public BookingResponse getBookingByHoldId(String holdId, String currentUserEmail) {
         User user = resolveUser(currentUserEmail);
         Booking booking = bookingRepository.findByHoldId(holdId)
