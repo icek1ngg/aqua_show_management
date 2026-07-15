@@ -12,6 +12,7 @@ import org.springframework.transaction.annotation.Transactional;
 
 import java.time.LocalDateTime;
 import java.util.Objects;
+import java.util.Optional;
 import java.util.UUID;
 
 @Service
@@ -38,6 +39,23 @@ public class VerificationChallengeService {
         UUID userId = Objects.requireNonNull(user.getId(), "Verification challenge user must be persisted");
         User lockedUser = userRepository.findByIdForUpdate(userId)
                 .orElseThrow(() -> new IllegalStateException("Verification challenge user no longer exists"));
+        if (lockedUser.getStatus() != UserStatus.PENDING_VERIFICATION) {
+            throw new IllegalStateException("Verification challenge user is not pending verification");
+        }
+        return issueForLockedUser(lockedUser);
+    }
+
+    @Transactional
+    public Optional<PendingChallenge> rotateIfPending(UUID userId) {
+        User lockedUser = userRepository.findByIdForUpdate(userId)
+                .orElse(null);
+        if (lockedUser == null || lockedUser.getStatus() != UserStatus.PENDING_VERIFICATION) {
+            return Optional.empty();
+        }
+        return Optional.of(new PendingChallenge(lockedUser, issueForLockedUser(lockedUser)));
+    }
+
+    private VerificationTokenCodec.IssuedToken issueForLockedUser(User lockedUser) {
         repository.deleteByUser(lockedUser);
         repository.flush();
         VerificationTokenCodec.IssuedToken issued = codec.issue();
@@ -48,10 +66,8 @@ public class VerificationChallengeService {
     @Transactional
     public void verify(String rawToken) {
         String tokenHash = codec.hash(rawToken);
-        EmailVerificationToken observedToken = repository.findByTokenHash(tokenHash)
+        UUID userId = repository.findUserIdByTokenHash(tokenHash)
                 .orElseThrow(this::invalidToken);
-        UUID userId = Objects.requireNonNull(observedToken.getUser().getId(),
-                "Verification token user must be persisted");
         User lockedUser = userRepository.findByIdForUpdate(userId)
                 .orElseThrow(this::invalidToken);
         EmailVerificationToken token = repository.findByTokenHash(tokenHash)
@@ -83,5 +99,8 @@ public class VerificationChallengeService {
                 VerificationTokenException.Result.INVALID,
                 "Invalid verification token"
         );
+    }
+
+    public record PendingChallenge(User user, VerificationTokenCodec.IssuedToken token) {
     }
 }

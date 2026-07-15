@@ -94,11 +94,16 @@ public class EmailVerificationServiceImpl implements EmailVerificationService {
     }
 
     private void rotateAndDeliver(User user) {
-        VerificationTokenCodec.IssuedToken issued = challengeService.rotate(user);
         try {
-            verificationEmailSender.send(user, issued.rawToken());
+            challengeService.rotateIfPending(user.getId())
+                    .ifPresent(challenge -> verificationEmailSender.send(
+                            challenge.user(),
+                            challenge.token().rawToken()
+                    ));
         } catch (MailSendingException exception) {
             log.error("Failed to resend verification email for user {}", user.getId(), exception);
+        } catch (RuntimeException exception) {
+            log.error("Unexpected verification resend failure for user {}", user.getId());
         }
     }
 

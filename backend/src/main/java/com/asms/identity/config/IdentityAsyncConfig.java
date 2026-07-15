@@ -17,7 +17,6 @@ public class IdentityAsyncConfig {
         executor.setThreadNamePrefix("verification-email-");
         executor.setWaitForTasksToCompleteOnShutdown(true);
         executor.setAwaitTerminationSeconds(10);
-        executor.initialize();
         return executor;
     }
 }

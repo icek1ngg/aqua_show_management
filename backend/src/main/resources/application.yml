@@ -52,6 +52,10 @@ spring:
           auth: true
           starttls:
             enable: true
+          # Bound each network phase below the executor's 10-second shutdown window.
+          connectiontimeout: 5000
+          timeout: 5000
+          writetimeout: 5000
 
   security:
     oauth2:
