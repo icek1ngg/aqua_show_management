@@ -23,9 +23,11 @@ import java.util.UUID;
 public class AdminUserService {
 
     private final UserRepository userRepository;
+    private final AuthSessionService authSessionService;
 
-    public AdminUserService(UserRepository userRepository) {
+    public AdminUserService(UserRepository userRepository, AuthSessionService authSessionService) {
         this.userRepository = userRepository;
+        this.authSessionService = authSessionService;
     }
 
     @Transactional(readOnly = true)
@@ -74,6 +76,8 @@ public class AdminUserService {
         if (request.status() != null) {
             user.setStatus(request.status());
         }
+        user.invalidateAuthentication();
+        authSessionService.revokeAll(user);
         return toDetailResponse(user);
     }
 
@@ -87,6 +91,8 @@ public class AdminUserService {
             throw new BadRequestException("Cannot disable the last active admin");
         }
         user.setStatus(UserStatus.DISABLED);
+        user.invalidateAuthentication();
+        authSessionService.revokeAll(user);
     }
 
     @Transactional

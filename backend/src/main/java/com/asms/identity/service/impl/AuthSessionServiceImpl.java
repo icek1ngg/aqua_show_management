@@ -59,7 +59,7 @@ public class AuthSessionServiceImpl implements AuthSessionService {
         session.setCurrentTokenHash(refreshTokenCodec.hash(rawToken));
         authSessionRepository.save(session);
 
-        return new SessionIssue(rawToken, rememberMe ? lifetimeSeconds : -1);
+        return new SessionIssue(rawToken, rememberMe ? lifetimeSeconds : -1, session.getId().toString());
     }
 
     @Override
@@ -112,7 +112,7 @@ public class AuthSessionServiceImpl implements AuthSessionService {
 
         long remainingSeconds = Math.max(0, Duration.between(Instant.now(), session.getExpiresAt()).toSeconds());
         
-        return new SessionRotation(nextRawToken, remainingSeconds, user);
+        return new SessionRotation(nextRawToken, remainingSeconds, user, session.getId().toString());
     }
 
     @Override

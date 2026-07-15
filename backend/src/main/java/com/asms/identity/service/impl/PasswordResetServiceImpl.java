@@ -41,16 +41,20 @@ public class PasswordResetServiceImpl implements PasswordResetService {
     @Value("${spring.mail.username}")
     private String fromEmail;
 
+    private final com.asms.identity.service.AuthSessionService authSessionService;
+
     public PasswordResetServiceImpl(
             AuthChallengeService challengeService,
             UserRepository userRepository,
             JavaMailSender mailSender,
-            PasswordEncoder passwordEncoder
+            PasswordEncoder passwordEncoder,
+            com.asms.identity.service.AuthSessionService authSessionService
     ) {
         this.challengeService = challengeService;
         this.userRepository = userRepository;
         this.mailSender = mailSender;
         this.passwordEncoder = passwordEncoder;
+        this.authSessionService = authSessionService;
     }
 
     @Override
@@ -183,8 +187,9 @@ public class PasswordResetServiceImpl implements PasswordResetService {
             throw new BadRequestException("Account is inactive or disabled");
         }
 
-        // Update BCrypt password hash
         user.setPasswordHash(passwordEncoder.encode(newPassword));
+        user.invalidateAuthentication();
+        authSessionService.revokeAll(user);
         userRepository.save(user);
         
         // Disable other challenges

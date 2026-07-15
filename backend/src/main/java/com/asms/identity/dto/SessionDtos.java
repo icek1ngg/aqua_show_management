@@ -18,14 +18,16 @@ public final class SessionDtos {
 
     public record SessionIssue(
             String token,
-            long cookieMaxAgeSeconds
+            long cookieMaxAgeSeconds,
+            String sid
     ) {
     }
 
     public record SessionRotation(
             String token,
             long cookieMaxAgeSeconds,
-            User user
+            User user,
+            String sid
     ) {
     }
 

@@ -91,7 +91,7 @@ asms:
     base-url: "${BACKEND_BASE_URL:http://localhost:8080}"
   jwt:
     secret: "${JWT_SECRET:YOUR_LOCAL_JWT_SECRET}"
-    expiration-ms: "${JWT_EXPIRATION:86400000}"
+    expiration-ms: 900000
     refresh-token:
       short-lived-seconds: "${JWT_REFRESH_SHORT_LIVED_SECONDS:86400}"
       remember-me-seconds: "${JWT_REFRESH_REMEMBER_ME_SECONDS:2592000}"

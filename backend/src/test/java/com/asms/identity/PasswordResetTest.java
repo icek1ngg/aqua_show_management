@@ -45,11 +45,14 @@ class PasswordResetTest {
         mailSender = mock(JavaMailSender.class);
         passwordEncoder = mock(PasswordEncoder.class);
 
+        com.asms.identity.service.AuthSessionService authSessionService = mock(com.asms.identity.service.AuthSessionService.class);
+
         passwordResetService = new PasswordResetServiceImpl(
                 challengeService,
                 userRepository,
                 mailSender,
-                passwordEncoder
+                passwordEncoder,
+                authSessionService
         );
         ReflectionTestUtils.setField(passwordResetService, "frontendBaseUrl", "http://localhost:5173");
         ReflectionTestUtils.setField(passwordResetService, "fromEmail", "test@aquapulse.com");

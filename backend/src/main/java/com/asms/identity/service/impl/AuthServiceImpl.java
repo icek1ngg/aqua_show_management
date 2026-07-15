@@ -135,14 +135,15 @@ public class AuthServiceImpl implements AuthService {
             throw invalidCredentials();
         }
 
-        String accessToken = jwtService.generateToken(user);
-        LoginResponse response = new LoginResponse(accessToken, "Bearer", jwtService.getExpirationSeconds(), toProfileResponse(user));
-
         if (authSessionService == null) {
+            String accessToken = jwtService.generateToken(user, "");
+            LoginResponse response = new LoginResponse(accessToken, "Bearer", jwtService.getExpirationSeconds(), toProfileResponse(user));
             return new AuthSession(response, "", -1);
         }
 
         SessionIssue sessionIssue = authSessionService.create(user, Boolean.TRUE.equals(request.rememberMe()), clientContext);
+        String accessToken = jwtService.generateToken(user, sessionIssue.sid());
+        LoginResponse response = new LoginResponse(accessToken, "Bearer", jwtService.getExpirationSeconds(), toProfileResponse(user));
         return new AuthSession(response, sessionIssue.token(), sessionIssue.cookieMaxAgeSeconds());
     }
 
@@ -151,7 +152,7 @@ public class AuthServiceImpl implements AuthService {
     public AuthSession refresh(String refreshToken, ClientContext clientContext) {
         SessionRotation rotatedSession = authSessionService.rotate(refreshToken, clientContext);
         User user = rotatedSession.user();
-        String accessToken = jwtService.generateToken(user);
+        String accessToken = jwtService.generateToken(user, rotatedSession.sid());
         LoginResponse response = new LoginResponse(accessToken, "Bearer", jwtService.getExpirationSeconds(), toProfileResponse(user));
         return new AuthSession(response, rotatedSession.token(), rotatedSession.cookieMaxAgeSeconds());
     }

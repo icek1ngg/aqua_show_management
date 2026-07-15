@@ -76,6 +76,12 @@ public class User implements UserDetails {
     @Column(name = "legal_document_version", length = 30)
     private String legalDocumentVersion;
 
+    @Column(name = "auth_version", nullable = false)
+    private long authVersion = 0L;
+
+    @Column(name = "email_verified_at")
+    private Instant emailVerifiedAt;
+
     protected User() {
     }
 
@@ -225,6 +231,31 @@ public class User implements UserDetails {
     public void recordLegalConsent(String version) {
         termsAcceptedAt = Instant.now();
         legalDocumentVersion = version;
+    }
+
+    public long getAuthVersion() {
+        return authVersion;
+    }
+
+    public void setAuthVersion(long authVersion) {
+        this.authVersion = authVersion;
+    }
+
+    public Instant getEmailVerifiedAt() {
+        return emailVerifiedAt;
+    }
+
+    public void setEmailVerifiedAt(Instant emailVerifiedAt) {
+        this.emailVerifiedAt = emailVerifiedAt;
+    }
+
+    public void invalidateAuthentication() {
+        authVersion++;
+    }
+
+    public void markEmailVerified() {
+        status = UserStatus.ACTIVE;
+        emailVerifiedAt = Instant.now();
     }
 
     @Override

@@ -66,7 +66,7 @@ public class OAuth2AuthenticationSuccessHandler implements AuthenticationSuccess
         OAuth2User principal = (OAuth2User) authentication.getPrincipal();
         User user = findOrCreateGoogleUser(principal);
 
-        String accessToken = jwtService.generateToken(user);
+        String accessToken;
         if (authSessionService != null && refreshTokenCookieService != null) {
             SessionIssue refreshToken = authSessionService.create(
                 user, 
@@ -76,7 +76,10 @@ public class OAuth2AuthenticationSuccessHandler implements AuthenticationSuccess
                     request.getRemoteAddr()
                 )
             );
+            accessToken = jwtService.generateToken(user, refreshToken.sid());
             refreshTokenCookieService.addRefreshTokenCookie(response, refreshToken.token(), refreshToken.cookieMaxAgeSeconds());
+        } else {
+            accessToken = jwtService.generateToken(user, "");
         }
         String redirectUrl = UriComponentsBuilder
                 .fromUriString(frontendBaseUrl + "/oauth2/success")

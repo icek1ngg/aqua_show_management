@@ -30,7 +30,7 @@ public class RefreshTokenCookieService {
                 .httpOnly(true)
                 .secure(secure)
                 .sameSite(sameSite)
-                .path("/");
+                .path("/api/auth");
 
         if (maxAgeSeconds >= 0) {
             cookieBuilder.maxAge(Duration.ofSeconds(maxAgeSeconds));
@@ -45,7 +45,7 @@ public class RefreshTokenCookieService {
                 .httpOnly(true)
                 .secure(secure)
                 .sameSite(sameSite)
-                .path("/")
+                .path("/api/auth")
                 .maxAge(Duration.ZERO)
                 .build();
 

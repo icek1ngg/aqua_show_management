@@ -45,9 +45,13 @@ public class JwtAuthenticationFilter extends OncePerRequestFilter {
         // stale JSESSIONID can cause a valid MANAGER token to be evaluated with
         // the previous session user's authorities.
         if (jwtService.isValid(token)) {
-            String email = jwtService.extractSubject(token);
+            java.util.Map<String, Object> claims = jwtService.extractClaims(token);
+            String email = claims.get("sub").toString();
+            long tokenAuthVersion = claims.get("authVersion") instanceof Number n ? n.longValue() : Long.parseLong(claims.get("authVersion").toString());
+
             userRepository.findByEmailIgnoreCase(email)
                     .filter(User::isEnabled)
+                    .filter(user -> user.getAuthVersion() == tokenAuthVersion)
                     .ifPresent(user -> {
                         UsernamePasswordAuthenticationToken authentication = new UsernamePasswordAuthenticationToken(
                                 user,
