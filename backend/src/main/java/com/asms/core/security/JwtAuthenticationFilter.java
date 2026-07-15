@@ -53,10 +53,14 @@ public class JwtAuthenticationFilter extends OncePerRequestFilter {
                     .filter(User::isEnabled)
                     .filter(user -> user.getAuthVersion() == tokenAuthVersion)
                     .ifPresent(user -> {
-                        UsernamePasswordAuthenticationToken authentication = new UsernamePasswordAuthenticationToken(
+                        String sidString = claims.get("sid") != null ? claims.get("sid").toString() : null;
+                        java.util.UUID sessionId = sidString != null ? java.util.UUID.fromString(sidString) : null;
+                        
+                        com.asms.identity.security.JwtAuthenticationToken authentication = new com.asms.identity.security.JwtAuthenticationToken(
                                 user,
                                 null,
-                                user.getAuthorities()
+                                user.getAuthorities(),
+                                sessionId
                         );
                         authentication.setDetails(new WebAuthenticationDetailsSource().buildDetails(request));
                         SecurityContextHolder.getContext().setAuthentication(authentication);

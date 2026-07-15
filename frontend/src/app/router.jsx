@@ -19,6 +19,7 @@ import MyTicketsPage from '../features/ticketing/MyTicketsPage.jsx';
 import HomePage from '../features/home/HomePage.jsx';
 import EditProfilePage from '../features/profile/EditProfilePage.jsx';
 import ProfilePage from '../features/profile/ProfilePage.jsx';
+import SessionsPage from '../features/profile/SessionsPage.jsx';
 import StaffTicketValidationPage from '../features/staff/StaffTicketValidationPage.jsx';
 import AdminDashboard from '../features/admin/pages/AdminDashboard.jsx';
 import AdminManageRolesPage from '../features/admin/pages/ManageRolesPage.jsx';
@@ -92,6 +93,14 @@ export const router = createBrowserRouter([
         element: (
           <ProtectedRoute>
             <EditProfilePage />
+          </ProtectedRoute>
+        ),
+      },
+      {
+        path: 'profile/sessions',
+        element: (
+          <ProtectedRoute>
+            <SessionsPage />
           </ProtectedRoute>
         ),
       },

@@ -147,6 +147,12 @@ public class AuthSessionServiceImpl implements AuthSessionService {
     }
 
     @Override
+    @Transactional
+    public void revokeAllExceptCurrent(User user, UUID currentSessionId) {
+        authSessionRepository.deleteByUserAndIdNot(user, currentSessionId);
+    }
+
+    @Override
     @Transactional(readOnly = true)
     public List<SessionView> list(User user, UUID currentSessionId) {
         return authSessionRepository.findByUserOrderByLastSeenAtDesc(user).stream()

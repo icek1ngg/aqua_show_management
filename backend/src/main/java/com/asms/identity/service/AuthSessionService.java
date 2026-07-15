@@ -21,5 +21,7 @@ public interface AuthSessionService {
 
     void revokeAll(User user);
 
+    void revokeAllExceptCurrent(User user, UUID currentSessionId);
+
     List<SessionView> list(User user, UUID currentSessionId);
 }
