@@ -1,6 +1,7 @@
 package com.asms.identity.service.impl;
 
 import com.asms.core.exception.UnauthorizedException;
+import com.asms.core.exception.ErrorCode;
 import com.asms.identity.dto.SessionDtos.ClientContext;
 import com.asms.identity.dto.SessionDtos.SessionIssue;
 import com.asms.identity.dto.SessionDtos.SessionRotation;
@@ -16,6 +17,8 @@ import org.springframework.transaction.annotation.Transactional;
 
 import java.time.Duration;
 import java.time.Instant;
+import java.nio.charset.StandardCharsets;
+import java.security.MessageDigest;
 import java.util.List;
 import java.util.UUID;
 import java.util.stream.Collectors;
@@ -53,7 +56,7 @@ public class AuthSessionServiceImpl implements AuthSessionService {
                 context.userAgent() != null ? truncate(context.userAgent(), 255) : null,
                 context.ipAddress() != null ? truncate(context.ipAddress(), 45) : null
         );
-        authSessionRepository.saveAndFlush(session);
+        session = authSessionRepository.saveAndFlush(session);
         
         String rawToken = refreshTokenCodec.generateToken(session.getId(), session.getGeneration());
         session.setCurrentTokenHash(refreshTokenCodec.hash(rawToken));
@@ -69,25 +72,32 @@ public class AuthSessionServiceImpl implements AuthSessionService {
         try {
             decodedToken = refreshTokenCodec.decode(rawRefreshToken);
         } catch (IllegalArgumentException e) {
-            throw new UnauthorizedException("Invalid refresh token signature");
+            throw new UnauthorizedException(ErrorCode.REFRESH_TOKEN_INVALID, "Invalid refresh token");
         }
 
         AuthSession session = authSessionRepository.findByIdForUpdate(decodedToken.sessionId())
-                .orElseThrow(() -> new UnauthorizedException("Session not found"));
+                .orElseThrow(() -> new UnauthorizedException(
+                        ErrorCode.AUTH_SESSION_REVOKED,
+                        "Authentication session is no longer active"
+                ));
 
         if (!session.getExpiresAt().isAfter(Instant.now())) {
             authSessionRepository.delete(session);
-            throw new UnauthorizedException("Session expired");
+            throw new UnauthorizedException(ErrorCode.REFRESH_TOKEN_EXPIRED, "Refresh token has expired");
         }
 
         String providedHash = refreshTokenCodec.hash(rawRefreshToken);
 
-        if (decodedToken.generation() != session.getGeneration() || !providedHash.equals(session.getCurrentTokenHash())) {
+        boolean tokenHashMatches = MessageDigest.isEqual(
+                providedHash.getBytes(StandardCharsets.UTF_8),
+                session.getCurrentTokenHash().getBytes(StandardCharsets.UTF_8)
+        );
+        if (decodedToken.generation() != session.getGeneration() || !tokenHashMatches) {
             if (decodedToken.generation() < session.getGeneration()) {
                 authSessionRepository.delete(session);
-                throw new UnauthorizedException("Token reuse detected");
+                throw new UnauthorizedException(ErrorCode.REFRESH_TOKEN_REUSED, "Refresh token reuse detected");
             } else {
-                throw new UnauthorizedException("Invalid token generation");
+                throw new UnauthorizedException(ErrorCode.REFRESH_TOKEN_INVALID, "Invalid refresh token generation");
             }
         }
 

@@ -179,7 +179,7 @@ public class AuthServiceImpl implements AuthService {
     }
 
     @Override
-    @Transactional(readOnly = true)
+    @Transactional
     public AuthSession refresh(String refreshToken, ClientContext clientContext) {
         authRateLimitService.checkRefresh(clientContext.ipAddress());
         

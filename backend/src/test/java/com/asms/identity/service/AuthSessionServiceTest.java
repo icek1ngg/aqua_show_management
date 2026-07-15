@@ -1,6 +1,7 @@
 package com.asms.identity.service;
 
 import com.asms.core.exception.UnauthorizedException;
+import com.asms.core.exception.ErrorCode;
 import com.asms.identity.dto.SessionDtos.ClientContext;
 import com.asms.identity.dto.SessionDtos.SessionIssue;
 import com.asms.identity.dto.SessionDtos.SessionRotation;
@@ -38,6 +39,8 @@ class AuthSessionServiceTest {
 
     @BeforeEach
     void setUp() {
+        lenient().when(authSessionRepository.saveAndFlush(any(AuthSession.class)))
+                .thenAnswer(invocation -> invocation.getArgument(0));
         refreshTokenCodec = new RefreshTokenCodec("test-secret-key-for-hmac-sha-256-which-is-long-enough");
         authSessionService = new AuthSessionServiceImpl(
                 authSessionRepository,
@@ -112,15 +115,23 @@ class AuthSessionServiceTest {
         
         when(authSessionRepository.findByIdForUpdate(sessionId)).thenReturn(Optional.of(session));
 
-        assertThrows(UnauthorizedException.class, () -> authSessionService.rotate(rawToken, clientContext));
+        UnauthorizedException exception = assertThrows(
+                UnauthorizedException.class,
+                () -> authSessionService.rotate(rawToken, clientContext)
+        );
 
+        assertEquals(ErrorCode.REFRESH_TOKEN_REUSED, exception.getCode());
         verify(authSessionRepository).delete(session);
     }
     
     @Test
     void rotate_withInvalidSignature_shouldRejectAndNotRevoke() {
         String invalidToken = "invalid.token.format.sig";
-        assertThrows(UnauthorizedException.class, () -> authSessionService.rotate(invalidToken, clientContext));
+        UnauthorizedException exception = assertThrows(
+                UnauthorizedException.class,
+                () -> authSessionService.rotate(invalidToken, clientContext)
+        );
+        assertEquals(ErrorCode.REFRESH_TOKEN_INVALID, exception.getCode());
         verifyNoInteractions(authSessionRepository);
     }
 
@@ -133,8 +144,26 @@ class AuthSessionServiceTest {
         
         when(authSessionRepository.findByIdForUpdate(sessionId)).thenReturn(Optional.of(session));
 
-        assertThrows(UnauthorizedException.class, () -> authSessionService.rotate(rawToken, clientContext));
-        
+        UnauthorizedException exception = assertThrows(
+                UnauthorizedException.class,
+                () -> authSessionService.rotate(rawToken, clientContext)
+        );
+
+        assertEquals(ErrorCode.valueOf("REFRESH_TOKEN_EXPIRED"), exception.getCode());
         verify(authSessionRepository).delete(session);
+    }
+
+    @Test
+    void rotate_missingSession_shouldReturnStableRevokedCode() {
+        UUID sessionId = UUID.randomUUID();
+        String rawToken = refreshTokenCodec.generateToken(sessionId, 1);
+        when(authSessionRepository.findByIdForUpdate(sessionId)).thenReturn(Optional.empty());
+
+        UnauthorizedException exception = assertThrows(
+                UnauthorizedException.class,
+                () -> authSessionService.rotate(rawToken, clientContext)
+        );
+
+        assertEquals(ErrorCode.valueOf("AUTH_SESSION_REVOKED"), exception.getCode());
     }
 }
