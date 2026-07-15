@@ -70,6 +70,12 @@ public class User implements UserDetails {
     @Column(nullable = false, updatable = false)
     private Instant createdAt;
 
+    @Column(name = "terms_accepted_at")
+    private Instant termsAcceptedAt;
+
+    @Column(name = "legal_document_version", length = 30)
+    private String legalDocumentVersion;
+
     protected User() {
     }
 
@@ -206,6 +212,19 @@ public class User implements UserDetails {
 
     public Instant getCreatedAt() {
         return createdAt;
+    }
+
+    public Instant getTermsAcceptedAt() {
+        return termsAcceptedAt;
+    }
+
+    public String getLegalDocumentVersion() {
+        return legalDocumentVersion;
+    }
+
+    public void recordLegalConsent(String version) {
+        termsAcceptedAt = Instant.now();
+        legalDocumentVersion = version;
     }
 
     @Override

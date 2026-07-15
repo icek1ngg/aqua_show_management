@@ -69,6 +69,12 @@ spring:
             redirect-uri: "${GOOGLE_REDIRECT_URI:http://localhost:8080/login/oauth2/code/google}"
 
 asms:
+  auth:
+    rate-limit:
+      registration-ip-per-hour: "${AUTH_REGISTER_IP_PER_HOUR:10}"
+      registration-email-per-hour: "${AUTH_REGISTER_EMAIL_PER_HOUR:3}"
+      resend-cooldown-seconds: "${AUTH_RESEND_COOLDOWN_SECONDS:60}"
+      resend-email-per-hour: "${AUTH_RESEND_EMAIL_PER_HOUR:5}"
   frontend:
     base-url: "${FRONTEND_BASE_URL:http://localhost:5173}"
   backend:

@@ -265,7 +265,9 @@ export function AuthProvider({ children }) {
 
       return { user: nextUser, token: nextToken };
     } catch (error) {
-      throw new Error(getErrorMessage(error, 'Login failed. Please check your credentials and try again.'));
+      const nextError = new Error(getErrorMessage(error, 'Login failed. Please check your credentials and try again.'));
+      nextError.code = error.response?.data?.code || '';
+      throw nextError;
     }
   }, []);
 
@@ -273,7 +275,9 @@ export function AuthProvider({ children }) {
     try {
       return await authService.register(payload);
     } catch (error) {
-      throw new Error(getErrorMessage(error, 'Registration failed. Please review your details and try again.'));
+      const nextError = new Error(getErrorMessage(error, 'Registration failed. Please review your details and try again.'));
+      nextError.code = error.response?.data?.code || '';
+      throw nextError;
     }
   }, []);
 

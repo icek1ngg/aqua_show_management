@@ -2,6 +2,7 @@ package com.asms.identity.controller;
 
 import com.asms.core.exception.BadRequestException;
 import com.asms.core.exception.UnauthorizedException;
+import com.asms.core.exception.VerificationTokenException;
 import com.asms.core.response.ApiResponse;
 import com.asms.identity.dto.AuthDtos.AuthSession;
 import com.asms.identity.dto.AuthDtos.ForgotPasswordRequest;
@@ -15,9 +16,14 @@ import com.asms.identity.service.AuthService;
 import com.asms.identity.service.EmailVerificationService;
 import com.asms.identity.service.PasswordResetService;
 import com.asms.identity.security.RefreshTokenCookieService;
+import jakarta.servlet.http.HttpServletRequest;
 import jakarta.servlet.http.HttpServletResponse;
 import jakarta.validation.Valid;
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
 import org.springframework.beans.factory.annotation.Value;
+import org.springframework.http.HttpStatus;
+import org.springframework.http.ResponseEntity;
 import org.springframework.web.bind.annotation.CookieValue;
 import org.springframework.web.bind.annotation.GetMapping;
 import org.springframework.web.bind.annotation.PostMapping;
@@ -31,6 +37,8 @@ import java.io.IOException;
 @RestController
 @RequestMapping("/api/auth")
 public class AuthController {
+
+    private static final Logger log = LoggerFactory.getLogger(AuthController.class);
 
     private final AuthService authService;
     private final EmailVerificationService emailVerificationService;
@@ -53,8 +61,16 @@ public class AuthController {
     }
 
     @PostMapping("/register")
-    public ApiResponse<RegisterResponse> register(@Valid @RequestBody RegisterRequest request) {
-        return ApiResponse.success("Register successfully", authService.register(request));
+    public ResponseEntity<ApiResponse<RegisterResponse>> register(
+            @Valid @RequestBody RegisterRequest request,
+            HttpServletRequest servletRequest
+    ) {
+        return ResponseEntity.status(HttpStatus.CREATED).body(
+                ApiResponse.success(
+                        "Register successfully",
+                        authService.register(request, servletRequest.getRemoteAddr())
+                )
+        );
     }
 
     @PostMapping("/login")
@@ -107,9 +123,12 @@ public class AuthController {
     public void verifyEmail(@RequestParam("token") String token, HttpServletResponse response) throws IOException {
         try {
             emailVerificationService.verifyEmail(token);
-            response.sendRedirect(frontendBaseUrl + "/login?verified=true");
-        } catch (Exception e) {
-            response.sendRedirect(frontendBaseUrl + "/login?verified=false");
+            response.sendRedirect(frontendBaseUrl + "/login?verification=success");
+        } catch (VerificationTokenException exception) {
+            response.sendRedirect(frontendBaseUrl + "/login?verification=" + exception.getResult().queryValue());
+        } catch (Exception exception) {
+            log.error("Unexpected email verification failure", exception);
+            response.sendRedirect(frontendBaseUrl + "/login?verification=invalid");
         }
     }
 

@@ -23,8 +23,8 @@ public class EmailVerificationToken {
     @JoinColumn(name = "user_id", nullable = false)
     private User user;
 
-    @Column(nullable = false, unique = true)
-    private String token;
+    @Column(name = "token", nullable = false, unique = true, length = 64)
+    private String tokenHash;
 
     @Column(nullable = false)
     private LocalDateTime expiresAt;
@@ -38,10 +38,10 @@ public class EmailVerificationToken {
     protected EmailVerificationToken() {
     }
 
-    public EmailVerificationToken(User user, String token, int expiryMinutes) {
+    public EmailVerificationToken(User user, String tokenHash, int expiryMinutes) {
         this.id = UUID.randomUUID();
         this.user = user;
-        this.token = token;
+        this.tokenHash = tokenHash;
         this.createdAt = LocalDateTime.now();
         this.expiresAt = this.createdAt.plusMinutes(expiryMinutes);
     }
@@ -64,8 +64,8 @@ public class EmailVerificationToken {
         return user;
     }
 
-    public String getToken() {
-        return token;
+    public String getTokenHash() {
+        return tokenHash;
     }
 
     public LocalDateTime getExpiresAt() {
