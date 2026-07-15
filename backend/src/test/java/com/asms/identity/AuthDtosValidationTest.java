@@ -1,5 +1,6 @@
 package com.asms.identity;
 
+import com.asms.identity.dto.AuthDtos;
 import jakarta.validation.Validation;
 import jakarta.validation.Validator;
 import org.junit.jupiter.api.Test;
@@ -84,12 +85,14 @@ class AuthDtosValidationTest {
     ) {
         return newRecord(
                 "com.asms.identity.dto.AuthDtos$RegisterRequest",
-                new Class<?>[]{String.class, String.class, String.class, String.class, String.class},
+                new Class<?>[]{String.class, String.class, String.class, String.class, String.class, boolean.class, String.class},
                 lastName,
                 firstMiddleName,
                 email,
                 phoneNumber,
-                password
+                password,
+                true,
+                AuthDtos.LEGAL_DOCUMENT_VERSION
         );
     }
 

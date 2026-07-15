@@ -11,6 +11,10 @@ import java.util.Optional;
 
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.assertThatThrownBy;
+import static org.mockito.ArgumentMatchers.eq;
+import static org.mockito.ArgumentMatchers.startsWith;
+import static org.mockito.Mockito.times;
+import static org.mockito.Mockito.verify;
 
 class UserAuthProviderTest {
 
@@ -43,18 +47,25 @@ class UserAuthProviderTest {
                 }
         );
 
+        Object passwordEncoder = Mockito.mock(
+                classForName("org.springframework.security.crypto.password.PasswordEncoder")
+        );
         Object authService = classForName("com.asms.identity.service.impl.AuthServiceImpl")
                 .getConstructor(
                         classForName("com.asms.identity.repository.UserRepository"),
                         classForName("org.springframework.security.crypto.password.PasswordEncoder"),
                         classForName("com.asms.identity.security.JwtService"),
-                        classForName("com.asms.identity.service.EmailVerificationService")
+                        classForName("com.asms.identity.service.RefreshTokenService"),
+                        classForName("com.asms.identity.service.RegistrationPersistenceService"),
+                        classForName("com.asms.identity.service.VerificationEmailSender")
                 )
                 .newInstance(
                         userRepository,
-                        Mockito.mock(classForName("org.springframework.security.crypto.password.PasswordEncoder")),
+                        passwordEncoder,
                         Mockito.mock(classForName("com.asms.identity.security.JwtService")),
-                        Mockito.mock(classForName("com.asms.identity.service.EmailVerificationService"))
+                        Mockito.mock(classForName("com.asms.identity.service.RefreshTokenService")),
+                        Mockito.mock(classForName("com.asms.identity.service.RegistrationPersistenceService")),
+                        Mockito.mock(classForName("com.asms.identity.service.VerificationEmailSender"))
                 );
 
         Object loginRequest = classForName("com.asms.identity.dto.AuthDtos$LoginRequest")
@@ -70,6 +81,9 @@ class UserAuthProviderTest {
                 .isInstanceOf(InvocationTargetException.class)
                 .cause()
                 .hasMessage("Invalid email or password");
+
+        verify((org.springframework.security.crypto.password.PasswordEncoder) passwordEncoder, times(1))
+                .matches(eq("password123"), startsWith("$2"));
     }
 
     private Object newUser(

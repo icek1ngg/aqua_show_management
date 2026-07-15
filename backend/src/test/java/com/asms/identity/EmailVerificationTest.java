@@ -1,27 +1,33 @@
 package com.asms.identity;
 
-import com.asms.core.exception.BadRequestException;
-import com.asms.core.exception.NotFoundException;
+import com.asms.core.exception.ErrorCode;
 import com.asms.core.exception.UnauthorizedException;
+import com.asms.core.exception.VerificationTokenException;
 import com.asms.identity.dto.AuthDtos.LoginRequest;
-import com.asms.identity.entity.EmailVerificationToken;
 import com.asms.identity.entity.User;
 import com.asms.identity.enums.UserStatus;
-import com.asms.identity.repository.EmailVerificationTokenRepository;
 import com.asms.identity.repository.UserRepository;
 import com.asms.identity.security.JwtService;
+import com.asms.identity.service.VerificationChallengeService;
+import com.asms.identity.service.AuthRateLimitService;
+import com.asms.identity.service.VerificationEmailSender;
+import com.asms.identity.service.VerificationTokenCodec;
 import com.asms.identity.service.impl.AuthServiceImpl;
 import com.asms.identity.service.impl.EmailVerificationServiceImpl;
+import com.asms.identity.service.impl.SmtpVerificationEmailSender;
+import jakarta.mail.internet.MimeMultipart;
 import jakarta.mail.internet.MimeMessage;
+import jakarta.mail.Session;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
-import org.mockito.Mockito;
 import org.springframework.mail.javamail.JavaMailSender;
 import org.springframework.security.crypto.password.PasswordEncoder;
-import org.springframework.test.util.ReflectionTestUtils;
 
-import java.time.LocalDateTime;
 import java.util.Optional;
+import java.util.Properties;
+import java.util.UUID;
+import java.util.concurrent.atomic.AtomicReference;
+import org.springframework.test.util.ReflectionTestUtils;
 
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.assertThatThrownBy;
@@ -31,68 +37,95 @@ import static org.mockito.Mockito.*;
 class EmailVerificationTest {
 
     private UserRepository userRepository;
-    private EmailVerificationTokenRepository tokenRepository;
+    private VerificationChallengeService challengeService;
     private JavaMailSender mailSender;
+    private VerificationEmailSender verificationEmailSender;
     private EmailVerificationServiceImpl verificationService;
     private PasswordEncoder passwordEncoder;
     private JwtService jwtService;
     private AuthServiceImpl authService;
+    private AuthRateLimitService rateLimitService;
 
     @BeforeEach
     void setUp() {
         userRepository = mock(UserRepository.class);
-        tokenRepository = mock(EmailVerificationTokenRepository.class);
+        challengeService = mock(VerificationChallengeService.class);
         mailSender = mock(JavaMailSender.class);
+        verificationEmailSender = mock(VerificationEmailSender.class);
         passwordEncoder = mock(PasswordEncoder.class);
         jwtService = mock(JwtService.class);
+        rateLimitService = mock(AuthRateLimitService.class);
 
-        verificationService = new EmailVerificationServiceImpl(tokenRepository, userRepository, mailSender);
-        ReflectionTestUtils.setField(verificationService, "backendBaseUrl", "http://localhost:8080");
-        ReflectionTestUtils.setField(verificationService, "fromEmail", "test@aquapulse.com");
+        verificationService = new EmailVerificationServiceImpl(
+                challengeService,
+                userRepository,
+                verificationEmailSender,
+                rateLimitService,
+                Runnable::run
+        );
 
-        authService = new AuthServiceImpl(userRepository, passwordEncoder, jwtService, verificationService);
+        authService = new AuthServiceImpl(
+                userRepository,
+                passwordEncoder,
+                jwtService,
+                mock(com.asms.identity.service.RefreshTokenService.class),
+                mock(com.asms.identity.service.RegistrationPersistenceService.class),
+                verificationEmailSender,
+                rateLimitService
+        );
     }
 
     @Test
-    void sendVerificationEmailGeneratesAndSavesToken() throws Exception {
+    void sendVerificationEmailDeliversRawTokenWhileDelegatingPersistence() {
         User user = new User("Nguyen", "Van A", "user@example.com", "0909123456", "password");
-        MimeMessage mimeMessage = mock(MimeMessage.class);
-        when(mailSender.createMimeMessage()).thenReturn(mimeMessage);
+        VerificationTokenCodec.IssuedToken issued =
+                new VerificationTokenCodec.IssuedToken("raw-delivery-token", "persisted-token-hash");
+        when(challengeService.rotate(user)).thenReturn(issued);
 
         verificationService.sendVerificationEmail(user);
 
-        verify(tokenRepository).deleteByUser(user);
-        verify(tokenRepository).save(any(EmailVerificationToken.class));
-        verify(mailSender).send(mimeMessage);
+        verify(challengeService).rotate(user);
+        verify(verificationEmailSender).send(user, "raw-delivery-token");
     }
 
     @Test
-    void verifyEmailTransitionsStatusToActive() {
+    void smtpAdapterBuildsEncodedHtmlLinkWithoutUsingThePersistedHash() throws Exception {
         User user = new User("Nguyen", "Van A", "user@example.com", "0909123456", "password");
-        user.setStatus(UserStatus.PENDING_VERIFICATION);
-        EmailVerificationToken token = new EmailVerificationToken(user, "test-token", 30);
+        MimeMessage mimeMessage = new MimeMessage(Session.getInstance(new Properties()));
+        when(mailSender.createMimeMessage()).thenReturn(mimeMessage);
+        SmtpVerificationEmailSender smtpSender = new SmtpVerificationEmailSender(
+                mailSender, "http://localhost:8080", "test@aquapulse.com"
+        );
 
-        when(tokenRepository.findByToken("test-token")).thenReturn(Optional.of(token));
+        smtpSender.send(user, "raw token+value");
 
+        verify(mailSender).send(mimeMessage);
+        MimeMultipart mixed = (MimeMultipart) mimeMessage.getContent();
+        MimeMultipart related = (MimeMultipart) mixed.getBodyPart(0).getContent();
+        String html = (String) related.getBodyPart(0).getContent();
+        assertThat(html)
+                .contains("token=raw+token%2Bvalue")
+                .doesNotContain("raw token+value");
+    }
+
+    @Test
+    void verifyEmailDelegatesRawTokenToChallengeService() {
         verificationService.verifyEmail("test-token");
 
-        assertThat(user.getStatus()).isEqualTo(UserStatus.ACTIVE);
-        assertThat(token.isUsed()).isTrue();
-        verify(tokenRepository).save(token);
-        verify(userRepository).save(user);
+        verify(challengeService).verify("test-token");
     }
 
     @Test
-    void verifyEmailThrowsExceptionForExpiredToken() {
-        User user = new User("Nguyen", "Van A", "user@example.com", "0909123456", "password");
-        user.setStatus(UserStatus.PENDING_VERIFICATION);
-        EmailVerificationToken token = new EmailVerificationToken(user, "expired-token", -10); // already expired
-
-        when(tokenRepository.findByToken("expired-token")).thenReturn(Optional.of(token));
+    void verifyEmailPreservesCodedChallengeFailure() {
+        VerificationTokenException failure = new VerificationTokenException(
+                ErrorCode.VERIFICATION_TOKEN_EXPIRED,
+                VerificationTokenException.Result.EXPIRED,
+                "Verification token has expired"
+        );
+        doThrow(failure).when(challengeService).verify("expired-token");
 
         assertThatThrownBy(() -> verificationService.verifyEmail("expired-token"))
-                .isInstanceOf(BadRequestException.class)
-                .hasMessageContaining("expired");
+                .isSameAs(failure);
     }
 
     @Test
@@ -101,6 +134,7 @@ class EmailVerificationTest {
         user.setStatus(UserStatus.PENDING_VERIFICATION);
 
         when(userRepository.findByEmailIgnoreCase("user@example.com")).thenReturn(Optional.of(user));
+        when(passwordEncoder.matches("password", "password")).thenReturn(true);
 
         LoginRequest request = new LoginRequest("user@example.com", "password");
 
@@ -112,18 +146,53 @@ class EmailVerificationTest {
     @Test
     void resendVerificationForPendingUserSendsEmail() throws Exception {
         User user = new User("Nguyen", "Van A", "user@example.com", "0909123456", "password");
+        ReflectionTestUtils.setField(user, "id", UUID.randomUUID());
         user.setStatus(UserStatus.PENDING_VERIFICATION);
-        MimeMessage mimeMessage = mock(MimeMessage.class);
-        
         when(userRepository.findByEmailIgnoreCase("user@example.com")).thenReturn(Optional.of(user));
-        when(mailSender.createMimeMessage()).thenReturn(mimeMessage);
+        VerificationTokenCodec.IssuedToken issued =
+                new VerificationTokenCodec.IssuedToken("resend-token", "resend-token-hash");
+        when(challengeService.rotateIfPending(user.getId())).thenReturn(Optional.of(
+                new VerificationChallengeService.PendingChallenge(user, issued)
+        ));
 
         String result = verificationService.resendVerificationEmail("user@example.com");
 
-        assertThat(result).isEqualTo("Verification email has been sent.");
-        verify(tokenRepository).deleteByUser(user);
-        verify(tokenRepository).save(any(EmailVerificationToken.class));
-        verify(mailSender).send(mimeMessage);
+        assertThat(result).isEqualTo(
+                "If the email exists and requires verification, a verification email has been sent."
+        );
+        verify(challengeService).rotateIfPending(user.getId());
+        verify(verificationEmailSender).send(user, "resend-token");
+    }
+
+    @Test
+    void resendReturnsBeforeChallengeRotationAndDeliveryRun() {
+        User user = new User("Nguyen", "Van A", "user@example.com", "0909123456", "password");
+        ReflectionTestUtils.setField(user, "id", UUID.randomUUID());
+        user.setStatus(UserStatus.PENDING_VERIFICATION);
+        when(userRepository.findByEmailIgnoreCase("user@example.com")).thenReturn(Optional.of(user));
+        VerificationTokenCodec.IssuedToken issued =
+                new VerificationTokenCodec.IssuedToken("async-token", "async-token-hash");
+        when(challengeService.rotateIfPending(user.getId())).thenReturn(Optional.of(
+                new VerificationChallengeService.PendingChallenge(user, issued)
+        ));
+        AtomicReference<Runnable> queuedTask = new AtomicReference<>();
+        EmailVerificationServiceImpl asyncService = new EmailVerificationServiceImpl(
+                challengeService,
+                userRepository,
+                verificationEmailSender,
+                rateLimitService,
+                queuedTask::set
+        );
+
+        assertThat(asyncService.resendVerificationEmail("user@example.com"))
+                .isEqualTo("If the email exists and requires verification, a verification email has been sent.");
+        assertThat(queuedTask.get()).isNotNull();
+        verifyNoInteractions(challengeService, verificationEmailSender);
+
+        queuedTask.get().run();
+
+        verify(challengeService).rotateIfPending(user.getId());
+        verify(verificationEmailSender).send(user, "async-token");
     }
 
     @Test
@@ -135,8 +204,10 @@ class EmailVerificationTest {
 
         String result = verificationService.resendVerificationEmail("user@example.com");
 
-        assertThat(result).isEqualTo("Account is already verified.");
-        verifyNoInteractions(tokenRepository, mailSender);
+        assertThat(result).isEqualTo(
+                "If the email exists and requires verification, a verification email has been sent."
+        );
+        verifyNoInteractions(challengeService, verificationEmailSender);
     }
 
     @Test
@@ -145,21 +216,22 @@ class EmailVerificationTest {
 
         String result = verificationService.resendVerificationEmail("nonexistent@example.com");
 
-        assertThat(result).isEqualTo("If the email exists and is not verified, a verification email has been sent.");
-        verifyNoInteractions(tokenRepository, mailSender);
+        assertThat(result).isEqualTo(
+                "If the email exists and requires verification, a verification email has been sent."
+        );
+        verifyNoInteractions(challengeService, verificationEmailSender);
     }
 
     @Test
-    void resendVerificationForDisabledUserThrowsBadRequestException() {
+    void resendVerificationForDisabledUserReturnsGenericSuccess() {
         User user = new User("Nguyen", "Van A", "user@example.com", "0909123456", "password");
         user.setStatus(UserStatus.DISABLED);
 
         when(userRepository.findByEmailIgnoreCase("user@example.com")).thenReturn(Optional.of(user));
 
-        assertThatThrownBy(() -> verificationService.resendVerificationEmail("user@example.com"))
-                .isInstanceOf(BadRequestException.class)
-                .hasMessageContaining("Account is not eligible for email verification.");
+        assertThat(verificationService.resendVerificationEmail("user@example.com"))
+                .isEqualTo("If the email exists and requires verification, a verification email has been sent.");
         
-        verifyNoInteractions(tokenRepository, mailSender);
+        verifyNoInteractions(challengeService, verificationEmailSender);
     }
 }
