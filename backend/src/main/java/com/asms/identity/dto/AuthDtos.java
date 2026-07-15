@@ -149,6 +149,7 @@ public final class AuthDtos {
 
             @NotBlank(message = "Password is required")
             @Size(min = 6, max = 100, message = "Password must be 6 to 100 characters")
+            @Pattern(regexp = "^(?=.*[A-Za-z])(?=.*\\d).+$", message = "Password must include at least one letter and one number")
             String newPassword,
 
             @NotBlank(message = "Confirm password is required")

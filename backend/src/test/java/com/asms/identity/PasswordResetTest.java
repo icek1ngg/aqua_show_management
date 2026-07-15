@@ -34,7 +34,7 @@ class PasswordResetTest {
 
     private UserRepository userRepository;
     private AuthChallengeService challengeService;
-    private JavaMailSender mailSender;
+    private com.asms.identity.service.PasswordResetEmailSender emailSender;
     private PasswordEncoder passwordEncoder;
     private PasswordResetServiceImpl passwordResetService;
 
@@ -42,7 +42,7 @@ class PasswordResetTest {
     void setUp() {
         userRepository = mock(UserRepository.class);
         challengeService = mock(AuthChallengeService.class);
-        mailSender = mock(JavaMailSender.class);
+        emailSender = mock(com.asms.identity.service.PasswordResetEmailSender.class);
         passwordEncoder = mock(PasswordEncoder.class);
 
         com.asms.identity.service.AuthSessionService authSessionService = mock(com.asms.identity.service.AuthSessionService.class);
@@ -50,12 +50,10 @@ class PasswordResetTest {
         passwordResetService = new PasswordResetServiceImpl(
                 challengeService,
                 userRepository,
-                mailSender,
+                emailSender,
                 passwordEncoder,
                 authSessionService
         );
-        ReflectionTestUtils.setField(passwordResetService, "frontendBaseUrl", "http://localhost:5173");
-        ReflectionTestUtils.setField(passwordResetService, "fromEmail", "test@aquapulse.com");
     }
 
     @Test
@@ -63,8 +61,6 @@ class PasswordResetTest {
         User user = new User("Nguyen", "Van A", "local@example.com", "0909123456", "hashedPassword");
         user.setStatus(UserStatus.ACTIVE);
 
-        MimeMessage mimeMessage = mock(MimeMessage.class);
-        when(mailSender.createMimeMessage()).thenReturn(mimeMessage);
         when(userRepository.findByEmailIgnoreCase("local@example.com")).thenReturn(Optional.of(user));
 
         when(challengeService.issue(eq(user), eq(AuthChallengeType.PASSWORD_RESET), any()))
@@ -72,7 +68,7 @@ class PasswordResetTest {
 
         passwordResetService.requestPasswordReset("local@example.com");
 
-        verify(mailSender).send(mimeMessage);
+        verify(emailSender).sendPasswordResetEmail(user, "mocked-token");
     }
 
     @Test
@@ -81,7 +77,7 @@ class PasswordResetTest {
 
         passwordResetService.requestPasswordReset("nonexistent@example.com");
 
-        verifyNoInteractions(challengeService, mailSender);
+        verifyNoInteractions(challengeService, emailSender);
     }
 
     @Test
@@ -94,7 +90,7 @@ class PasswordResetTest {
 
         passwordResetService.requestPasswordReset("google@example.com");
 
-        verifyNoInteractions(challengeService, mailSender);
+        verifyNoInteractions(challengeService, emailSender);
     }
 
     @Test
@@ -106,7 +102,7 @@ class PasswordResetTest {
 
         passwordResetService.requestPasswordReset("disabled@example.com");
 
-        verifyNoInteractions(challengeService, mailSender);
+        verifyNoInteractions(challengeService, emailSender);
     }
 
     @Test
