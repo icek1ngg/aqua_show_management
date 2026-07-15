@@ -1,15 +1,9 @@
 import { createContext, useCallback, useContext, useEffect, useMemo, useState } from 'react';
 
 import * as authService from '../../services/authService.js';
-import {
-  clearStoredToken,
-  decodeJwtPayload,
-  getStoredToken,
-  getStoredUser,
-  getTokenExpiresAt,
-  storeUser,
-  storeToken,
-} from './authStorage.js';
+import { decodeJwtPayload, getTokenExpiresAt } from './jwtPayload.js';
+import { getAccessToken, setAccessToken, clearAccessToken } from './authTokenStore.js';
+import { performRefresh, broadcastLogout, scheduleRefresh } from './authRefreshCoordinator.js';
 
 const AuthContext = createContext(null);
 
@@ -86,8 +80,8 @@ function getErrorMessage(error, fallback) {
 }
 
 export function AuthProvider({ children }) {
-  const [user, setUser] = useState(() => getStoredUser());
-  const [token, setToken] = useState(() => getStoredToken()?.token ?? null);
+  const [user, setUser] = useState(null);
+  const [token, setToken] = useState(null);
   const [loading, setLoading] = useState(true);
 
   const logout = useCallback(async () => {
@@ -96,58 +90,28 @@ export function AuthProvider({ children }) {
     } catch {
       // Local logout must always complete even if the backend endpoint is unavailable.
     } finally {
-      clearStoredToken();
+      broadcastLogout();
       setToken(null);
       setUser(null);
     }
   }, []);
 
   const refreshCurrentUser = useCallback(async () => {
-    const storedToken = getStoredToken();
-
-    if (!storedToken?.token) {
-      try {
-        const refreshResponse = await authService.refreshAccessToken();
-        const refreshedToken = getTokenFromLoginResponse(refreshResponse);
-        if (!refreshedToken) {
-          setUser(null);
-          setToken(null);
-          return null;
-        }
-
-        const responseData = getResponseData(refreshResponse);
-        const expiresAt = getTokenExpiresAt(refreshedToken, responseData?.expiresAt, responseData?.expiresIn);
-        const nextUser = getUserFromResponse(refreshResponse) || getUserFromToken(refreshedToken);
-        storeToken({ token: refreshedToken, expiresAt, user: nextUser });
-        setToken(refreshedToken);
-        setUser(nextUser);
-        return nextUser;
-      } catch {
-        setUser(null);
-        setToken(null);
-        return null;
-      }
-    }
-
-    setToken(storedToken.token);
-
     try {
       const currentUser = await authService.getCurrentUser();
-      const nextUser = getUserFromResponse(currentUser) || getResponseData(currentUser) || getUserFromToken(storedToken.token);
+      const nextUser = getUserFromResponse(currentUser) || getResponseData(currentUser) || getUserFromToken(getAccessToken());
       setUser(nextUser);
-      storeUser(nextUser);
       return nextUser;
     } catch (error) {
       if (error.response?.status === 401) {
-        clearStoredToken();
+        broadcastLogout();
         setUser(null);
         setToken(null);
         return null;
       }
 
-      const fallbackUser = getUserFromToken(storedToken.token);
+      const fallbackUser = getUserFromToken(getAccessToken());
       setUser(fallbackUser);
-      storeUser(fallbackUser);
       return fallbackUser;
     }
   }, []);
@@ -156,62 +120,43 @@ export function AuthProvider({ children }) {
     let ignore = false;
 
     async function restoreAuthState() {
-      const storedToken = getStoredToken();
-
-      if (!storedToken?.token) {
-        try {
-          const refreshResponse = await authService.refreshAccessToken();
-          const refreshedToken = getTokenFromLoginResponse(refreshResponse);
-          if (!refreshedToken) {
-            if (!ignore) {
-              setToken(null);
-              setUser(null);
-            }
-            return;
-          }
-
-          const responseData = getResponseData(refreshResponse);
-          const expiresAt = getTokenExpiresAt(refreshedToken, responseData?.expiresAt, responseData?.expiresIn);
-          const nextUser = getUserFromResponse(refreshResponse) || getUserFromToken(refreshedToken);
-          storeToken({ token: refreshedToken, expiresAt, user: nextUser });
+      try {
+        const refreshedToken = await performRefresh();
+        if (!refreshedToken) {
           if (!ignore) {
-            setToken(refreshedToken);
+            setToken(null);
+            setUser(null);
+          }
+          return;
+        }
+
+        if (!ignore) {
+          setToken(refreshedToken);
+          setUser(getUserFromToken(refreshedToken));
+        }
+
+        // Load profile
+        try {
+          const currentUser = await authService.getCurrentUser();
+          if (!ignore) {
+            const nextUser = getUserFromResponse(currentUser) || getResponseData(currentUser) || getUserFromToken(refreshedToken);
             setUser(nextUser);
           }
-        } catch {
+        } catch (error) {
           if (!ignore) {
-            setToken(null);
-            setUser(null);
-          }
-        } finally {
-          if (!ignore) {
-            setLoading(false);
+            if (error.response?.status === 401) {
+              broadcastLogout();
+              setToken(null);
+              setUser(null);
+            } else {
+              setUser(getUserFromToken(refreshedToken));
+            }
           }
         }
-        return;
-      }
-
-      setToken(storedToken.token);
-      setUser(getStoredUser() || getUserFromToken(storedToken.token));
-
-      try {
-        const currentUser = await authService.getCurrentUser();
+      } catch {
         if (!ignore) {
-          const nextUser = getUserFromResponse(currentUser) || getResponseData(currentUser) || getUserFromToken(storedToken.token);
-          setUser(nextUser);
-          storeUser(nextUser);
-        }
-      } catch (error) {
-        if (!ignore) {
-          if (error.response?.status === 401) {
-            clearStoredToken();
-            setToken(null);
-            setUser(null);
-          } else {
-            const fallbackUser = getStoredUser() || getUserFromToken(storedToken.token);
-            setUser(fallbackUser);
-            storeUser(fallbackUser);
-          }
+          setToken(null);
+          setUser(null);
         }
       } finally {
         if (!ignore) {
@@ -233,9 +178,14 @@ export function AuthProvider({ children }) {
       setUser(null);
     };
     const handleTokenUpdated = () => {
-      const storedToken = getStoredToken();
-      setToken(storedToken?.token ?? null);
-      setUser(getStoredUser());
+      const currentToken = getAccessToken();
+      setToken(currentToken);
+      
+      // If we got a token update from another tab, we might want to fetch user, 
+      // but decoding the token is usually enough until next reload.
+      if (currentToken) {
+        setUser((prevUser) => prevUser || getUserFromToken(currentToken));
+      }
     };
 
     window.addEventListener('auth:token-cleared', handleTokenCleared);
@@ -259,7 +209,9 @@ export function AuthProvider({ children }) {
       const expiresAt = getTokenExpiresAt(nextToken, responseData?.expiresAt, responseData?.expiresIn);
       const nextUser = getUserFromResponse(response) || getUserFromToken(nextToken);
 
-      storeToken({ token: nextToken, expiresAt, user: nextUser });
+      setAccessToken(nextToken, expiresAt);
+      scheduleRefresh();
+      
       setToken(nextToken);
       setUser(nextUser);
 
@@ -285,17 +237,20 @@ export function AuthProvider({ children }) {
     try {
       const expiresAt = getTokenExpiresAt(accessToken, null, expiresIn);
       const tokenUser = getUserFromToken(accessToken);
-      storeToken({ token: accessToken, rememberMe: false, expiresAt, user: tokenUser });
+      
+      setAccessToken(accessToken, expiresAt);
+      scheduleRefresh();
+      
       setToken(accessToken);
       setUser(tokenUser);
 
       const currentUser = await authService.getCurrentUser();
       const nextUser = getUserFromResponse(currentUser) || getResponseData(currentUser) || getUserFromToken(accessToken);
       setUser(nextUser);
-      storeUser(nextUser);
+      
       return nextUser;
     } catch (error) {
-      clearStoredToken();
+      broadcastLogout();
       setToken(null);
       setUser(null);
       throw error;
