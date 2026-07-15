@@ -1,12 +1,12 @@
 package com.asms.identity.service.impl;
 
 import com.asms.core.exception.BadRequestException;
-import com.asms.identity.entity.PasswordResetToken;
 import com.asms.identity.entity.User;
 import com.asms.identity.enums.AuthProvider;
+import com.asms.identity.enums.AuthChallengeType;
 import com.asms.identity.enums.UserStatus;
-import com.asms.identity.repository.PasswordResetTokenRepository;
 import com.asms.identity.repository.UserRepository;
+import com.asms.identity.service.AuthChallengeService;
 import com.asms.identity.service.PasswordResetService;
 import jakarta.mail.internet.MimeMessage;
 import org.slf4j.Logger;
@@ -30,7 +30,7 @@ public class PasswordResetServiceImpl implements PasswordResetService {
     private static final Logger log = LoggerFactory.getLogger(PasswordResetServiceImpl.class);
     private static final SecureRandom secureRandom = new SecureRandom();
 
-    private final PasswordResetTokenRepository tokenRepository;
+    private final AuthChallengeService challengeService;
     private final UserRepository userRepository;
     private final JavaMailSender mailSender;
     private final PasswordEncoder passwordEncoder;
@@ -42,21 +42,15 @@ public class PasswordResetServiceImpl implements PasswordResetService {
     private String fromEmail;
 
     public PasswordResetServiceImpl(
-            PasswordResetTokenRepository tokenRepository,
+            AuthChallengeService challengeService,
             UserRepository userRepository,
             JavaMailSender mailSender,
             PasswordEncoder passwordEncoder
     ) {
-        this.tokenRepository = tokenRepository;
+        this.challengeService = challengeService;
         this.userRepository = userRepository;
         this.mailSender = mailSender;
         this.passwordEncoder = passwordEncoder;
-    }
-
-    private String generateSecureToken() {
-        byte[] tokenBytes = new byte[32];
-        secureRandom.nextBytes(tokenBytes);
-        return Base64.getUrlEncoder().withoutPadding().encodeToString(tokenBytes);
     }
 
     @Override
@@ -82,14 +76,13 @@ public class PasswordResetServiceImpl implements PasswordResetService {
             return;
         }
 
-        // Generate reset token (expires in 15 minutes)
-        String tokenString = generateSecureToken();
-        PasswordResetToken resetToken = new PasswordResetToken(user, tokenString, 15);
-
         try {
-            // Delete old reset tokens for this user
-            tokenRepository.deleteByUser(user);
-            tokenRepository.save(resetToken);
+            AuthChallengeService.IssuedChallenge issued = challengeService.issue(
+                    user,
+                    AuthChallengeType.PASSWORD_RESET,
+                    java.time.Duration.ofMinutes(15)
+            );
+            String tokenString = issued.rawToken();
 
             // Construct email link
             String resetLink = frontendBaseUrl + "/reset-password?token=" + tokenString;
@@ -177,18 +170,9 @@ public class PasswordResetServiceImpl implements PasswordResetService {
     @Override
     @Transactional
     public void resetPassword(String token, String newPassword) {
-        PasswordResetToken resetToken = tokenRepository.findByToken(token)
-                .orElseThrow(() -> new BadRequestException("Invalid reset token"));
+        com.asms.identity.entity.AuthChallenge challenge = challengeService.consume(token, AuthChallengeType.PASSWORD_RESET);
 
-        if (resetToken.isExpired()) {
-            throw new BadRequestException("Password reset token has expired");
-        }
-
-        if (resetToken.isUsed()) {
-            throw new BadRequestException("Password reset token has already been used");
-        }
-
-        User user = resetToken.getUser();
+        User user = challenge.getUser();
 
         // Verify user is eligible for reset
         if (user.getAuthProvider() == AuthProvider.GOOGLE && user.getPasswordHash() == null) {
@@ -202,12 +186,8 @@ public class PasswordResetServiceImpl implements PasswordResetService {
         // Update BCrypt password hash
         user.setPasswordHash(passwordEncoder.encode(newPassword));
         userRepository.save(user);
-
-        // Mark current token used
-        resetToken.setUsedAt(LocalDateTime.now());
-        tokenRepository.save(resetToken);
-
-        // Delete all other unused reset tokens for this user
-        tokenRepository.deleteByUserAndIdNot(user, resetToken.getId());
+        
+        // Disable other challenges
+        challengeService.invalidate(user, AuthChallengeType.PASSWORD_RESET);
     }
 }

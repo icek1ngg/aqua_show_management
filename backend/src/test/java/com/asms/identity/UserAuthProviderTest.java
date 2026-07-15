@@ -55,7 +55,7 @@ class UserAuthProviderTest {
                         classForName("com.asms.identity.repository.UserRepository"),
                         classForName("org.springframework.security.crypto.password.PasswordEncoder"),
                         classForName("com.asms.identity.security.JwtService"),
-                        classForName("com.asms.identity.service.RefreshTokenService"),
+                        classForName("com.asms.identity.service.AuthSessionService"),
                         classForName("com.asms.identity.service.RegistrationPersistenceService"),
                         classForName("com.asms.identity.service.VerificationEmailSender")
                 )
@@ -63,7 +63,7 @@ class UserAuthProviderTest {
                         userRepository,
                         passwordEncoder,
                         Mockito.mock(classForName("com.asms.identity.security.JwtService")),
-                        Mockito.mock(classForName("com.asms.identity.service.RefreshTokenService")),
+                        Mockito.mock(classForName("com.asms.identity.service.AuthSessionService")),
                         Mockito.mock(classForName("com.asms.identity.service.RegistrationPersistenceService")),
                         Mockito.mock(classForName("com.asms.identity.service.VerificationEmailSender"))
                 );
@@ -72,11 +72,19 @@ class UserAuthProviderTest {
                 .getDeclaredConstructor(String.class, String.class)
                 .newInstance("user@example.com", "password123");
 
+        Object clientContext = classForName("com.asms.identity.dto.SessionDtos$ClientContext")
+                .getDeclaredConstructor(String.class, String.class)
+                .newInstance(null, null);
+
         assertThatThrownBy(() -> invoke(
                 authService,
                 "login",
-                new Class<?>[]{classForName("com.asms.identity.dto.AuthDtos$LoginRequest")},
-                loginRequest
+                new Class<?>[]{
+                    classForName("com.asms.identity.dto.AuthDtos$LoginRequest"),
+                    classForName("com.asms.identity.dto.SessionDtos$ClientContext")
+                },
+                loginRequest,
+                clientContext
         ))
                 .isInstanceOf(InvocationTargetException.class)
                 .cause()

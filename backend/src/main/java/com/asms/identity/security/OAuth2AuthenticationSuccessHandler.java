@@ -3,8 +3,8 @@ package com.asms.identity.security;
 import com.asms.identity.entity.User;
 import com.asms.identity.enums.AuthProvider;
 import com.asms.identity.repository.UserRepository;
-import com.asms.identity.service.RefreshTokenService;
-import com.asms.identity.service.RefreshTokenService.RefreshTokenIssue;
+import com.asms.identity.service.AuthSessionService;
+import com.asms.identity.dto.SessionDtos.SessionIssue;
 import jakarta.servlet.ServletException;
 import jakarta.servlet.http.HttpServletRequest;
 import jakarta.servlet.http.HttpServletResponse;
@@ -25,7 +25,7 @@ public class OAuth2AuthenticationSuccessHandler implements AuthenticationSuccess
 
     private final UserRepository userRepository;
     private final JwtService jwtService;
-    private final RefreshTokenService refreshTokenService;
+    private final AuthSessionService authSessionService;
     private final RefreshTokenCookieService refreshTokenCookieService;
     private final String frontendBaseUrl;
 
@@ -33,13 +33,13 @@ public class OAuth2AuthenticationSuccessHandler implements AuthenticationSuccess
     public OAuth2AuthenticationSuccessHandler(
             UserRepository userRepository,
             JwtService jwtService,
-            RefreshTokenService refreshTokenService,
+            AuthSessionService authSessionService,
             RefreshTokenCookieService refreshTokenCookieService,
             @Value("${asms.frontend.base-url}") String frontendBaseUrl
     ) {
         this.userRepository = userRepository;
         this.jwtService = jwtService;
-        this.refreshTokenService = refreshTokenService;
+        this.authSessionService = authSessionService;
         this.refreshTokenCookieService = refreshTokenCookieService;
         this.frontendBaseUrl = removeTrailingSlash(frontendBaseUrl);
     }
@@ -51,7 +51,7 @@ public class OAuth2AuthenticationSuccessHandler implements AuthenticationSuccess
     ) {
         this.userRepository = userRepository;
         this.jwtService = jwtService;
-        this.refreshTokenService = null;
+        this.authSessionService = null;
         this.refreshTokenCookieService = null;
         this.frontendBaseUrl = removeTrailingSlash(frontendBaseUrl);
     }
@@ -67,8 +67,15 @@ public class OAuth2AuthenticationSuccessHandler implements AuthenticationSuccess
         User user = findOrCreateGoogleUser(principal);
 
         String accessToken = jwtService.generateToken(user);
-        if (refreshTokenService != null && refreshTokenCookieService != null) {
-            RefreshTokenIssue refreshToken = refreshTokenService.createRefreshToken(user, true);
+        if (authSessionService != null && refreshTokenCookieService != null) {
+            SessionIssue refreshToken = authSessionService.create(
+                user, 
+                true, 
+                new com.asms.identity.dto.SessionDtos.ClientContext(
+                    request.getHeader("User-Agent"),
+                    request.getRemoteAddr()
+                )
+            );
             refreshTokenCookieService.addRefreshTokenCookie(response, refreshToken.token(), refreshToken.cookieMaxAgeSeconds());
         }
         String redirectUrl = UriComponentsBuilder

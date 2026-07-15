@@ -64,8 +64,8 @@ public class RegistrationPersistenceService {
             throw new IllegalStateException("Persisted registration user has no ID");
         }
 
-        VerificationTokenCodec.IssuedToken token = challengeService.rotate(saved);
-        return new PendingRegistration(saved, token.rawToken());
+        String rawToken = challengeService.rotate(saved);
+        return new PendingRegistration(saved, rawToken);
     }
 
     private ConflictException duplicateEmailConflict() {

@@ -4,11 +4,13 @@ import com.asms.core.exception.ConflictException;
 import com.asms.core.exception.ErrorCode;
 import com.asms.identity.dto.AuthDtos;
 import com.asms.identity.dto.AuthDtos.RegisterRequest;
-import com.asms.identity.entity.EmailVerificationToken;
+import com.asms.identity.entity.AuthChallenge;
 import com.asms.identity.entity.User;
 import com.asms.identity.enums.UserStatus;
-import com.asms.identity.repository.EmailVerificationTokenRepository;
+import com.asms.identity.repository.AuthChallengeRepository;
 import com.asms.identity.repository.UserRepository;
+import com.asms.identity.security.AuthTokenCodec;
+import com.asms.identity.service.impl.AuthChallengeServiceImpl;
 import org.junit.jupiter.api.Test;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.boot.test.autoconfigure.orm.jpa.DataJpaTest;
@@ -27,7 +29,8 @@ import static org.mockito.Mockito.when;
         RegistrationPersistenceService.class,
         RegistrationDuplicateEmailProbe.class,
         VerificationChallengeService.class,
-        VerificationTokenCodec.class,
+        AuthChallengeServiceImpl.class,
+        AuthTokenCodec.class,
         BCryptPasswordEncoder.class
 })
 class RegistrationPersistenceServiceTest {
@@ -39,7 +42,10 @@ class RegistrationPersistenceServiceTest {
     private UserRepository userRepository;
 
     @Autowired
-    private EmailVerificationTokenRepository tokenRepository;
+    private AuthChallengeRepository tokenRepository;
+
+    @Autowired
+    private AuthTokenCodec tokenCodec;
 
     @Autowired
     private BCryptPasswordEncoder passwordEncoder;
@@ -60,9 +66,9 @@ class RegistrationPersistenceServiceTest {
         assertThat(saved.getLegalDocumentVersion()).isEqualTo(AuthDtos.LEGAL_DOCUMENT_VERSION);
 
         assertThat(tokenRepository.count()).isOne();
-        EmailVerificationToken token = tokenRepository.findAll().getFirst();
-        assertThat(token.getTokenHash()).hasSize(64).isNotEqualTo(pending.rawToken());
-        assertThat(new VerificationTokenCodec().hash(pending.rawToken())).isEqualTo(token.getTokenHash());
+        AuthChallenge token = tokenRepository.findAll().getFirst();
+        assertThat(token.getTokenHash()).hasSize(43).isNotEqualTo(pending.rawToken());
+        assertThat(tokenCodec.hash(pending.rawToken())).isEqualTo(token.getTokenHash());
     }
 
     @Test

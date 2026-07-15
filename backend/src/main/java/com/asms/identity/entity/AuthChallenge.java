@@ -1,7 +1,10 @@
 package com.asms.identity.entity;
 
+import com.asms.identity.enums.AuthChallengeType;
 import jakarta.persistence.Column;
 import jakarta.persistence.Entity;
+import jakarta.persistence.EnumType;
+import jakarta.persistence.Enumerated;
 import jakarta.persistence.FetchType;
 import jakarta.persistence.Id;
 import jakarta.persistence.JoinColumn;
@@ -13,8 +16,8 @@ import java.time.LocalDateTime;
 import java.util.UUID;
 
 @Entity
-@Table(name = "password_reset_tokens")
-public class PasswordResetToken {
+@Table(name = "auth_challenges")
+public class AuthChallenge {
 
     @Id
     private UUID id;
@@ -23,8 +26,12 @@ public class PasswordResetToken {
     @JoinColumn(name = "user_id", nullable = false)
     private User user;
 
-    @Column(nullable = false, unique = true)
-    private String token;
+    @Column(name = "challenge_type", nullable = false, length = 32)
+    @Enumerated(EnumType.STRING)
+    private AuthChallengeType type;
+
+    @Column(name = "token_hash", nullable = false, unique = true, length = 64)
+    private String tokenHash;
 
     @Column(nullable = false)
     private LocalDateTime expiresAt;
@@ -35,15 +42,16 @@ public class PasswordResetToken {
     @Column(nullable = false, updatable = false)
     private LocalDateTime createdAt;
 
-    protected PasswordResetToken() {
+    protected AuthChallenge() {
     }
 
-    public PasswordResetToken(User user, String token, int expiryMinutes) {
+    public AuthChallenge(User user, AuthChallengeType type, String tokenHash, LocalDateTime expiresAt) {
         this.id = UUID.randomUUID();
         this.user = user;
-        this.token = token;
+        this.type = type;
+        this.tokenHash = tokenHash;
         this.createdAt = LocalDateTime.now();
-        this.expiresAt = this.createdAt.plusMinutes(expiryMinutes);
+        this.expiresAt = expiresAt;
     }
 
     @PrePersist
@@ -64,8 +72,12 @@ public class PasswordResetToken {
         return user;
     }
 
-    public String getToken() {
-        return token;
+    public AuthChallengeType getType() {
+        return type;
+    }
+
+    public String getTokenHash() {
+        return tokenHash;
     }
 
     public LocalDateTime getExpiresAt() {

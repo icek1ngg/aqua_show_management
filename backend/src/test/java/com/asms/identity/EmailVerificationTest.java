@@ -11,7 +11,8 @@ import com.asms.identity.security.JwtService;
 import com.asms.identity.service.VerificationChallengeService;
 import com.asms.identity.service.AuthRateLimitService;
 import com.asms.identity.service.VerificationEmailSender;
-import com.asms.identity.service.VerificationTokenCodec;
+import com.asms.identity.service.AuthSessionService;
+
 import com.asms.identity.service.impl.AuthServiceImpl;
 import com.asms.identity.service.impl.EmailVerificationServiceImpl;
 import com.asms.identity.service.impl.SmtpVerificationEmailSender;
@@ -68,7 +69,7 @@ class EmailVerificationTest {
                 userRepository,
                 passwordEncoder,
                 jwtService,
-                mock(com.asms.identity.service.RefreshTokenService.class),
+                mock(AuthSessionService.class),
                 mock(com.asms.identity.service.RegistrationPersistenceService.class),
                 verificationEmailSender,
                 rateLimitService
@@ -78,8 +79,7 @@ class EmailVerificationTest {
     @Test
     void sendVerificationEmailDeliversRawTokenWhileDelegatingPersistence() {
         User user = new User("Nguyen", "Van A", "user@example.com", "0909123456", "password");
-        VerificationTokenCodec.IssuedToken issued =
-                new VerificationTokenCodec.IssuedToken("raw-delivery-token", "persisted-token-hash");
+        String issued = "raw-delivery-token";
         when(challengeService.rotate(user)).thenReturn(issued);
 
         verificationService.sendVerificationEmail(user);
@@ -138,7 +138,7 @@ class EmailVerificationTest {
 
         LoginRequest request = new LoginRequest("user@example.com", "password");
 
-        assertThatThrownBy(() -> authService.login(request))
+        assertThatThrownBy(() -> authService.login(request, null))
                 .isInstanceOf(UnauthorizedException.class)
                 .hasMessageContaining("Please verify your email before signing in.");
     }
@@ -149,8 +149,7 @@ class EmailVerificationTest {
         ReflectionTestUtils.setField(user, "id", UUID.randomUUID());
         user.setStatus(UserStatus.PENDING_VERIFICATION);
         when(userRepository.findByEmailIgnoreCase("user@example.com")).thenReturn(Optional.of(user));
-        VerificationTokenCodec.IssuedToken issued =
-                new VerificationTokenCodec.IssuedToken("resend-token", "resend-token-hash");
+        String issued = "resend-token";
         when(challengeService.rotateIfPending(user.getId())).thenReturn(Optional.of(
                 new VerificationChallengeService.PendingChallenge(user, issued)
         ));
@@ -170,8 +169,7 @@ class EmailVerificationTest {
         ReflectionTestUtils.setField(user, "id", UUID.randomUUID());
         user.setStatus(UserStatus.PENDING_VERIFICATION);
         when(userRepository.findByEmailIgnoreCase("user@example.com")).thenReturn(Optional.of(user));
-        VerificationTokenCodec.IssuedToken issued =
-                new VerificationTokenCodec.IssuedToken("async-token", "async-token-hash");
+        String issued = "async-token";
         when(challengeService.rotateIfPending(user.getId())).thenReturn(Optional.of(
                 new VerificationChallengeService.PendingChallenge(user, issued)
         ));

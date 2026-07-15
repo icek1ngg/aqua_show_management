@@ -10,7 +10,6 @@ import com.asms.identity.service.AuthRateLimitService;
 import com.asms.identity.service.EmailVerificationService;
 import com.asms.identity.service.VerificationChallengeService;
 import com.asms.identity.service.VerificationEmailSender;
-import com.asms.identity.service.VerificationTokenCodec;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import org.springframework.beans.factory.annotation.Autowired;
@@ -69,8 +68,8 @@ public class EmailVerificationServiceImpl implements EmailVerificationService {
 
     @Override
     public void sendVerificationEmail(User user) {
-        VerificationTokenCodec.IssuedToken issued = challengeService.rotate(user);
-        verificationEmailSender.send(user, issued.rawToken());
+        String rawToken = challengeService.rotate(user);
+        verificationEmailSender.send(user, rawToken);
     }
 
     @Override
@@ -98,7 +97,7 @@ public class EmailVerificationServiceImpl implements EmailVerificationService {
             challengeService.rotateIfPending(user.getId())
                     .ifPresent(challenge -> verificationEmailSender.send(
                             challenge.user(),
-                            challenge.token().rawToken()
+                            challenge.rawToken()
                     ));
         } catch (MailSendingException exception) {
             log.error("Failed to resend verification email for user {}", user.getId(), exception);

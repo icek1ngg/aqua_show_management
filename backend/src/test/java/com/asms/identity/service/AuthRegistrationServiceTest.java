@@ -31,6 +31,7 @@ class AuthRegistrationServiceTest {
     private RegistrationPersistenceService persistence;
     private VerificationEmailSender sender;
     private AuthRateLimitService rateLimitService;
+    private AuthSessionService authSessionService;
     private AuthServiceImpl service;
     private User user;
 
@@ -39,11 +40,12 @@ class AuthRegistrationServiceTest {
         persistence = mock(RegistrationPersistenceService.class);
         sender = mock(VerificationEmailSender.class);
         rateLimitService = mock(AuthRateLimitService.class);
+        authSessionService = mock(AuthSessionService.class);
         service = new AuthServiceImpl(
                 mock(UserRepository.class),
                 mock(PasswordEncoder.class),
                 mock(JwtService.class),
-                mock(RefreshTokenService.class),
+                authSessionService,
                 persistence,
                 sender,
                 rateLimitService

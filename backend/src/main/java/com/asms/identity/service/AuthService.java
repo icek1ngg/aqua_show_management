@@ -22,9 +22,9 @@ public interface AuthService {
         );
     }
 
-    AuthSession login(LoginRequest request);
+    AuthSession login(LoginRequest request, com.asms.identity.dto.SessionDtos.ClientContext clientContext);
 
-    AuthSession refresh(String refreshToken);
+    AuthSession refresh(String refreshToken, com.asms.identity.dto.SessionDtos.ClientContext clientContext);
 
     void logout(String refreshToken);
 }

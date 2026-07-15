@@ -74,8 +74,16 @@ public class AuthController {
     }
 
     @PostMapping("/login")
-    public ApiResponse<LoginResponse> login(@Valid @RequestBody LoginRequest request, HttpServletResponse response) {
-        AuthSession authSession = authService.login(request);
+    public ApiResponse<LoginResponse> login(
+            @Valid @RequestBody LoginRequest request, 
+            HttpServletRequest servletRequest,
+            HttpServletResponse response
+    ) {
+        com.asms.identity.dto.SessionDtos.ClientContext context = new com.asms.identity.dto.SessionDtos.ClientContext(
+                servletRequest.getHeader("User-Agent"),
+                servletRequest.getRemoteAddr()
+        );
+        AuthSession authSession = authService.login(request, context);
         refreshTokenCookieService.addRefreshTokenCookie(
                 response,
                 authSession.refreshToken(),
@@ -97,10 +105,15 @@ public class AuthController {
     @PostMapping("/refresh")
     public ApiResponse<LoginResponse> refresh(
             @CookieValue(name = RefreshTokenCookieService.REFRESH_TOKEN_COOKIE_NAME, required = false) String refreshToken,
+            HttpServletRequest servletRequest,
             HttpServletResponse response
     ) {
         try {
-            AuthSession authSession = authService.refresh(refreshToken);
+            com.asms.identity.dto.SessionDtos.ClientContext context = new com.asms.identity.dto.SessionDtos.ClientContext(
+                    servletRequest.getHeader("User-Agent"),
+                    servletRequest.getRemoteAddr()
+            );
+            AuthSession authSession = authService.refresh(refreshToken, context);
             refreshTokenCookieService.addRefreshTokenCookie(
                     response,
                     authSession.refreshToken(),

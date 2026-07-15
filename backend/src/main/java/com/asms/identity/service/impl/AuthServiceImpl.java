@@ -19,10 +19,11 @@ import com.asms.identity.service.AuthService;
 import com.asms.identity.service.AuthRateLimitService;
 import com.asms.identity.service.RegistrationPersistenceService;
 import com.asms.identity.service.RegistrationPersistenceService.PendingRegistration;
-import com.asms.identity.service.RefreshTokenService;
+import com.asms.identity.dto.SessionDtos.ClientContext;
+import com.asms.identity.service.AuthSessionService;
 import com.asms.identity.service.VerificationEmailSender;
-import com.asms.identity.service.RefreshTokenService.RefreshTokenIssue;
-import com.asms.identity.service.RefreshTokenService.RefreshTokenRotation;
+import com.asms.identity.dto.SessionDtos.SessionIssue;
+import com.asms.identity.dto.SessionDtos.SessionRotation;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.security.crypto.password.PasswordEncoder;
 import org.springframework.stereotype.Service;
@@ -39,7 +40,7 @@ public class AuthServiceImpl implements AuthService {
     private final UserRepository userRepository;
     private final PasswordEncoder passwordEncoder;
     private final JwtService jwtService;
-    private final RefreshTokenService refreshTokenService;
+    private final AuthSessionService authSessionService;
     private final RegistrationPersistenceService registrationPersistenceService;
     private final VerificationEmailSender verificationEmailSender;
     private final AuthRateLimitService authRateLimitService;
@@ -49,7 +50,7 @@ public class AuthServiceImpl implements AuthService {
             UserRepository userRepository,
             PasswordEncoder passwordEncoder,
             JwtService jwtService,
-            RefreshTokenService refreshTokenService,
+            AuthSessionService authSessionService,
             RegistrationPersistenceService registrationPersistenceService,
             VerificationEmailSender verificationEmailSender,
             AuthRateLimitService authRateLimitService
@@ -57,7 +58,7 @@ public class AuthServiceImpl implements AuthService {
         this.userRepository = userRepository;
         this.passwordEncoder = passwordEncoder;
         this.jwtService = jwtService;
-        this.refreshTokenService = refreshTokenService;
+        this.authSessionService = authSessionService;
         this.registrationPersistenceService = registrationPersistenceService;
         this.verificationEmailSender = verificationEmailSender;
         this.authRateLimitService = authRateLimitService;
@@ -67,7 +68,7 @@ public class AuthServiceImpl implements AuthService {
             UserRepository userRepository,
             PasswordEncoder passwordEncoder,
             JwtService jwtService,
-            RefreshTokenService refreshTokenService,
+            AuthSessionService authSessionService,
             RegistrationPersistenceService registrationPersistenceService,
             VerificationEmailSender verificationEmailSender
     ) {
@@ -75,7 +76,7 @@ public class AuthServiceImpl implements AuthService {
                 userRepository,
                 passwordEncoder,
                 jwtService,
-                refreshTokenService,
+                authSessionService,
                 registrationPersistenceService,
                 verificationEmailSender,
                 new AuthRateLimitService() {
@@ -111,7 +112,7 @@ public class AuthServiceImpl implements AuthService {
 
     @Override
     @Transactional
-    public AuthSession login(LoginRequest request) {
+    public AuthSession login(LoginRequest request, ClientContext clientContext) {
         User user = userRepository.findByEmailIgnoreCase(normalizeEmail(request.email())).orElse(null);
         boolean localUserWithPassword = user != null
                 && user.getAuthProvider() == AuthProvider.LOCAL
@@ -137,28 +138,28 @@ public class AuthServiceImpl implements AuthService {
         String accessToken = jwtService.generateToken(user);
         LoginResponse response = new LoginResponse(accessToken, "Bearer", jwtService.getExpirationSeconds(), toProfileResponse(user));
 
-        if (refreshTokenService == null) {
+        if (authSessionService == null) {
             return new AuthSession(response, "", -1);
         }
 
-        RefreshTokenIssue refreshToken = refreshTokenService.createRefreshToken(user, Boolean.TRUE.equals(request.rememberMe()));
-        return new AuthSession(response, refreshToken.token(), refreshToken.cookieMaxAgeSeconds());
+        SessionIssue sessionIssue = authSessionService.create(user, Boolean.TRUE.equals(request.rememberMe()), clientContext);
+        return new AuthSession(response, sessionIssue.token(), sessionIssue.cookieMaxAgeSeconds());
     }
 
     @Override
     @Transactional(readOnly = true)
-    public AuthSession refresh(String refreshToken) {
-        RefreshTokenRotation rotatedRefreshToken = refreshTokenService.rotateRefreshToken(refreshToken);
-        User user = rotatedRefreshToken.user();
+    public AuthSession refresh(String refreshToken, ClientContext clientContext) {
+        SessionRotation rotatedSession = authSessionService.rotate(refreshToken, clientContext);
+        User user = rotatedSession.user();
         String accessToken = jwtService.generateToken(user);
         LoginResponse response = new LoginResponse(accessToken, "Bearer", jwtService.getExpirationSeconds(), toProfileResponse(user));
-        return new AuthSession(response, rotatedRefreshToken.token(), rotatedRefreshToken.cookieMaxAgeSeconds());
+        return new AuthSession(response, rotatedSession.token(), rotatedSession.cookieMaxAgeSeconds());
     }
 
     @Override
     public void logout(String refreshToken) {
-        if (refreshTokenService != null) {
-            refreshTokenService.revokeRefreshToken(refreshToken);
+        if (authSessionService != null) {
+            authSessionService.revoke(refreshToken);
         }
     }
 

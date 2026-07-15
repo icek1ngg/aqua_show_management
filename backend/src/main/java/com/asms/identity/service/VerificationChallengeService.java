@@ -2,10 +2,9 @@ package com.asms.identity.service;
 
 import com.asms.core.exception.ErrorCode;
 import com.asms.core.exception.VerificationTokenException;
-import com.asms.identity.entity.EmailVerificationToken;
+import com.asms.identity.enums.AuthChallengeType;
 import com.asms.identity.entity.User;
 import com.asms.identity.enums.UserStatus;
-import com.asms.identity.repository.EmailVerificationTokenRepository;
 import com.asms.identity.repository.UserRepository;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
@@ -20,22 +19,19 @@ public class VerificationChallengeService {
 
     private static final int EXPIRY_MINUTES = 30;
 
-    private final EmailVerificationTokenRepository repository;
-    private final VerificationTokenCodec codec;
+    private final AuthChallengeService challengeService;
     private final UserRepository userRepository;
 
     public VerificationChallengeService(
-            EmailVerificationTokenRepository repository,
-            VerificationTokenCodec codec,
+            AuthChallengeService challengeService,
             UserRepository userRepository
     ) {
-        this.repository = repository;
-        this.codec = codec;
+        this.challengeService = challengeService;
         this.userRepository = userRepository;
     }
 
     @Transactional
-    public VerificationTokenCodec.IssuedToken rotate(User user) {
+    public String rotate(User user) {
         UUID userId = Objects.requireNonNull(user.getId(), "Verification challenge user must be persisted");
         User lockedUser = userRepository.findByIdForUpdate(userId)
                 .orElseThrow(() -> new IllegalStateException("Verification challenge user no longer exists"));
@@ -55,41 +51,40 @@ public class VerificationChallengeService {
         return Optional.of(new PendingChallenge(lockedUser, issueForLockedUser(lockedUser)));
     }
 
-    private VerificationTokenCodec.IssuedToken issueForLockedUser(User lockedUser) {
-        repository.deleteByUser(lockedUser);
-        repository.flush();
-        VerificationTokenCodec.IssuedToken issued = codec.issue();
-        repository.save(new EmailVerificationToken(lockedUser, issued.tokenHash(), EXPIRY_MINUTES));
-        return issued;
+    private String issueForLockedUser(User lockedUser) {
+        AuthChallengeService.IssuedChallenge issued = challengeService.issue(
+                lockedUser,
+                AuthChallengeType.EMAIL_VERIFICATION,
+                java.time.Duration.ofMinutes(EXPIRY_MINUTES)
+        );
+        return issued.rawToken();
     }
 
     @Transactional
     public void verify(String rawToken) {
-        String tokenHash = codec.hash(rawToken);
-        UUID userId = repository.findUserIdByTokenHash(tokenHash)
-                .orElseThrow(this::invalidToken);
-        User lockedUser = userRepository.findByIdForUpdate(userId)
-                .orElseThrow(this::invalidToken);
-        EmailVerificationToken token = repository.findByTokenHash(tokenHash)
-                .orElseThrow(this::invalidToken);
-
-        if (token.isUsed()) {
-            throw new VerificationTokenException(
-                    ErrorCode.VERIFICATION_TOKEN_USED,
-                    VerificationTokenException.Result.USED,
-                    "Verification token has already been used"
-            );
+        com.asms.identity.entity.AuthChallenge challenge;
+        try {
+            challenge = challengeService.consume(rawToken, AuthChallengeType.EMAIL_VERIFICATION);
+        } catch (com.asms.core.exception.BadRequestException e) {
+            String msg = e.getMessage();
+            if (msg.contains("used")) {
+                throw new VerificationTokenException(
+                        ErrorCode.VERIFICATION_TOKEN_USED,
+                        VerificationTokenException.Result.USED,
+                        "Verification token has already been used"
+                );
+            }
+            if (msg.contains("expired")) {
+                throw new VerificationTokenException(
+                        ErrorCode.VERIFICATION_TOKEN_EXPIRED,
+                        VerificationTokenException.Result.EXPIRED,
+                        "Verification token has expired"
+                );
+            }
+            throw invalidToken();
         }
-
-        if (token.isExpired()) {
-            throw new VerificationTokenException(
-                    ErrorCode.VERIFICATION_TOKEN_EXPIRED,
-                    VerificationTokenException.Result.EXPIRED,
-                    "Verification token has expired"
-            );
-        }
-
-        token.setUsedAt(LocalDateTime.now());
+        
+        User lockedUser = challenge.getUser();
         lockedUser.setStatus(UserStatus.ACTIVE);
     }
 
@@ -101,6 +96,6 @@ public class VerificationChallengeService {
         );
     }
 
-    public record PendingChallenge(User user, VerificationTokenCodec.IssuedToken token) {
+    public record PendingChallenge(User user, String rawToken) {
     }
 }

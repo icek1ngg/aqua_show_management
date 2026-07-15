@@ -4,11 +4,12 @@ import com.asms.core.exception.BadRequestException;
 import com.asms.identity.controller.AuthController;
 import com.asms.identity.dto.AuthDtos.ForgotPasswordRequest;
 import com.asms.identity.dto.AuthDtos.ResetPasswordRequest;
-import com.asms.identity.entity.PasswordResetToken;
+import com.asms.identity.entity.AuthChallenge;
 import com.asms.identity.entity.User;
+import com.asms.identity.enums.AuthChallengeType;
 import com.asms.identity.enums.AuthProvider;
 import com.asms.identity.enums.UserStatus;
-import com.asms.identity.repository.PasswordResetTokenRepository;
+import com.asms.identity.service.AuthChallengeService;
 import com.asms.identity.repository.UserRepository;
 import com.asms.identity.security.RefreshTokenCookieService;
 import com.asms.identity.service.impl.PasswordResetServiceImpl;
@@ -32,7 +33,7 @@ import static org.mockito.Mockito.*;
 class PasswordResetTest {
 
     private UserRepository userRepository;
-    private PasswordResetTokenRepository tokenRepository;
+    private AuthChallengeService challengeService;
     private JavaMailSender mailSender;
     private PasswordEncoder passwordEncoder;
     private PasswordResetServiceImpl passwordResetService;
@@ -40,12 +41,12 @@ class PasswordResetTest {
     @BeforeEach
     void setUp() {
         userRepository = mock(UserRepository.class);
-        tokenRepository = mock(PasswordResetTokenRepository.class);
+        challengeService = mock(AuthChallengeService.class);
         mailSender = mock(JavaMailSender.class);
         passwordEncoder = mock(PasswordEncoder.class);
 
         passwordResetService = new PasswordResetServiceImpl(
-                tokenRepository,
+                challengeService,
                 userRepository,
                 mailSender,
                 passwordEncoder
@@ -63,10 +64,11 @@ class PasswordResetTest {
         when(mailSender.createMimeMessage()).thenReturn(mimeMessage);
         when(userRepository.findByEmailIgnoreCase("local@example.com")).thenReturn(Optional.of(user));
 
+        when(challengeService.issue(eq(user), eq(AuthChallengeType.PASSWORD_RESET), any()))
+                .thenReturn(new AuthChallengeService.IssuedChallenge(mock(AuthChallenge.class), "mocked-token"));
+
         passwordResetService.requestPasswordReset("local@example.com");
 
-        verify(tokenRepository).deleteByUser(user);
-        verify(tokenRepository).save(any(PasswordResetToken.class));
         verify(mailSender).send(mimeMessage);
     }
 
@@ -76,7 +78,7 @@ class PasswordResetTest {
 
         passwordResetService.requestPasswordReset("nonexistent@example.com");
 
-        verifyNoInteractions(tokenRepository, mailSender);
+        verifyNoInteractions(challengeService, mailSender);
     }
 
     @Test
@@ -89,7 +91,7 @@ class PasswordResetTest {
 
         passwordResetService.requestPasswordReset("google@example.com");
 
-        verifyNoInteractions(tokenRepository, mailSender);
+        verifyNoInteractions(challengeService, mailSender);
     }
 
     @Test
@@ -101,59 +103,32 @@ class PasswordResetTest {
 
         passwordResetService.requestPasswordReset("disabled@example.com");
 
-        verifyNoInteractions(tokenRepository, mailSender);
+        verifyNoInteractions(challengeService, mailSender);
     }
 
     @Test
     void resetPasswordWithValidTokenUpdatesPasswordAndMarksTokenUsed() {
         User user = new User("Nguyen", "Van A", "local@example.com", "0909123456", "oldHashedPassword");
         user.setStatus(UserStatus.ACTIVE);
-        PasswordResetToken token = new PasswordResetToken(user, "valid-token", 15);
+        AuthChallenge challenge = new AuthChallenge(user, AuthChallengeType.PASSWORD_RESET, "hash", LocalDateTime.now().plusMinutes(15));
 
-        when(tokenRepository.findByToken("valid-token")).thenReturn(Optional.of(token));
+        when(challengeService.consume("valid-token", AuthChallengeType.PASSWORD_RESET)).thenReturn(challenge);
         when(passwordEncoder.encode("newPassword")).thenReturn("newHashedPassword");
 
         passwordResetService.resetPassword("valid-token", "newPassword");
 
         assertThat(user.getPasswordHash()).isEqualTo("newHashedPassword");
-        assertThat(token.isUsed()).isTrue();
         verify(userRepository).save(user);
-        verify(tokenRepository).save(token);
-        verify(tokenRepository).deleteByUserAndIdNot(user, token.getId());
-    }
-
-    @Test
-    void resetPasswordThrowsExceptionForExpiredToken() {
-        User user = new User("Nguyen", "Van A", "local@example.com", "0909123456", "hashedPassword");
-        PasswordResetToken token = new PasswordResetToken(user, "expired-token", -10);
-
-        when(tokenRepository.findByToken("expired-token")).thenReturn(Optional.of(token));
-
-        assertThatThrownBy(() -> passwordResetService.resetPassword("expired-token", "newPassword"))
-                .isInstanceOf(BadRequestException.class)
-                .hasMessageContaining("expired");
-    }
-
-    @Test
-    void resetPasswordThrowsExceptionForUsedToken() {
-        User user = new User("Nguyen", "Van A", "local@example.com", "0909123456", "hashedPassword");
-        PasswordResetToken token = new PasswordResetToken(user, "used-token", 15);
-        token.setUsedAt(LocalDateTime.now());
-
-        when(tokenRepository.findByToken("used-token")).thenReturn(Optional.of(token));
-
-        assertThatThrownBy(() -> passwordResetService.resetPassword("used-token", "newPassword"))
-                .isInstanceOf(BadRequestException.class)
-                .hasMessageContaining("already been used");
+        verify(challengeService).invalidate(user, AuthChallengeType.PASSWORD_RESET);
     }
 
     @Test
     void resetPasswordKeepsPendingVerificationStatus() {
         User user = new User("Nguyen", "Van A", "local@example.com", "0909123456", "hashedPassword");
         user.setStatus(UserStatus.PENDING_VERIFICATION);
-        PasswordResetToken token = new PasswordResetToken(user, "pending-token", 15);
+        AuthChallenge challenge = new AuthChallenge(user, AuthChallengeType.PASSWORD_RESET, "hash", LocalDateTime.now().plusMinutes(15));
 
-        when(tokenRepository.findByToken("pending-token")).thenReturn(Optional.of(token));
+        when(challengeService.consume("pending-token", AuthChallengeType.PASSWORD_RESET)).thenReturn(challenge);
         when(passwordEncoder.encode("newPassword")).thenReturn("newHashed");
 
         passwordResetService.resetPassword("pending-token", "newPassword");
@@ -161,13 +136,14 @@ class PasswordResetTest {
         assertThat(user.getStatus()).isEqualTo(UserStatus.PENDING_VERIFICATION);
     }
 
+
     @Test
     void resetPasswordKeepsActiveStatus() {
         User user = new User("Nguyen", "Van A", "local@example.com", "0909123456", "hashedPassword");
         user.setStatus(UserStatus.ACTIVE);
-        PasswordResetToken token = new PasswordResetToken(user, "active-token", 15);
+        AuthChallenge challenge = new AuthChallenge(user, AuthChallengeType.PASSWORD_RESET, "hash", LocalDateTime.now().plusMinutes(15));
 
-        when(tokenRepository.findByToken("active-token")).thenReturn(Optional.of(token));
+        when(challengeService.consume("active-token", AuthChallengeType.PASSWORD_RESET)).thenReturn(challenge);
         when(passwordEncoder.encode("newPassword")).thenReturn("newHashed");
 
         passwordResetService.resetPassword("active-token", "newPassword");
