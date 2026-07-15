@@ -2,9 +2,16 @@ package com.asms.identity.security;
 
 import com.asms.identity.entity.User;
 import com.asms.identity.enums.AuthProvider;
+import com.asms.identity.enums.AuthChallengeType;
+import com.asms.identity.enums.UserStatus;
+import com.asms.identity.repository.AuthChallengeRepository;
 import com.asms.identity.repository.UserRepository;
 import com.asms.identity.service.AuthSessionService;
+import com.asms.identity.service.OAuthOnboardingService;
 import com.asms.identity.dto.SessionDtos.SessionIssue;
+import org.springframework.security.authentication.DisabledException;
+import org.springframework.security.oauth2.core.OAuth2AuthenticationException;
+import org.springframework.security.oauth2.core.OAuth2Error;
 import jakarta.servlet.ServletException;
 import jakarta.servlet.http.HttpServletRequest;
 import jakarta.servlet.http.HttpServletResponse;
@@ -24,23 +31,29 @@ import java.util.Locale;
 public class OAuth2AuthenticationSuccessHandler implements AuthenticationSuccessHandler {
 
     private final UserRepository userRepository;
+    private final AuthChallengeRepository authChallengeRepository;
     private final JwtService jwtService;
     private final AuthSessionService authSessionService;
     private final RefreshTokenCookieService refreshTokenCookieService;
+    private final OAuthOnboardingService oauthOnboardingService;
     private final String frontendBaseUrl;
 
     @Autowired
     public OAuth2AuthenticationSuccessHandler(
             UserRepository userRepository,
+            AuthChallengeRepository authChallengeRepository,
             JwtService jwtService,
             AuthSessionService authSessionService,
             RefreshTokenCookieService refreshTokenCookieService,
+            OAuthOnboardingService oauthOnboardingService,
             @Value("${asms.frontend.base-url}") String frontendBaseUrl
     ) {
         this.userRepository = userRepository;
+        this.authChallengeRepository = authChallengeRepository;
         this.jwtService = jwtService;
         this.authSessionService = authSessionService;
         this.refreshTokenCookieService = refreshTokenCookieService;
+        this.oauthOnboardingService = oauthOnboardingService;
         this.frontendBaseUrl = removeTrailingSlash(frontendBaseUrl);
     }
 
@@ -50,9 +63,11 @@ public class OAuth2AuthenticationSuccessHandler implements AuthenticationSuccess
             String frontendBaseUrl
     ) {
         this.userRepository = userRepository;
+        this.authChallengeRepository = null;
         this.jwtService = jwtService;
         this.authSessionService = null;
         this.refreshTokenCookieService = null;
+        this.oauthOnboardingService = null;
         this.frontendBaseUrl = removeTrailingSlash(frontendBaseUrl);
     }
 
@@ -64,9 +79,54 @@ public class OAuth2AuthenticationSuccessHandler implements AuthenticationSuccess
             Authentication authentication
     ) throws IOException, ServletException {
         OAuth2User principal = (OAuth2User) authentication.getPrincipal();
-        User user = findOrCreateGoogleUser(principal);
+        
+        String emailVerifiedStr = stringAttribute(principal, "email_verified");
+        if (!"true".equalsIgnoreCase(emailVerifiedStr)) {
+            throw new OAuth2AuthenticationException(new OAuth2Error("unverified_email"), "Google email must be verified");
+        }
 
-        String accessToken;
+        String googleId = requiredAttribute(principal, "sub");
+        String email = normalizeEmail(requiredAttribute(principal, "email"));
+
+        User user = userRepository.findByGoogleId(googleId)
+                .orElseGet(() -> userRepository.findByEmailIgnoreCase(email).orElse(null));
+
+        if (user == null) {
+            NameParts nameParts = extractNameParts(principal, email);
+            String code = oauthOnboardingService.storeOnboardingCode(
+                    email,
+                    nameParts.firstMiddleName(),
+                    nameParts.lastName(),
+                    googleId
+            );
+            String redirectUrl = UriComponentsBuilder
+                    .fromUriString(frontendBaseUrl + "/oauth2/consent")
+                    .queryParam("code", code)
+                    .build()
+                    .toUriString();
+            response.sendRedirect(redirectUrl);
+            return;
+        }
+
+        if (user.getStatus() == UserStatus.DISABLED || user.getStatus() == UserStatus.INACTIVE) {
+            throw new DisabledException("User account is disabled or inactive");
+        }
+
+        if (user.getStatus() == UserStatus.PENDING_VERIFICATION) {
+            user.setGoogleId(googleId);
+            user.markEmailVerified();
+            if (user.getPasswordHash() == null || user.getAuthProvider() != AuthProvider.LOCAL) {
+                user.setAuthProvider(AuthProvider.GOOGLE);
+            }
+            if (authChallengeRepository != null) {
+                authChallengeRepository.deleteByUserAndType(user, AuthChallengeType.EMAIL_VERIFICATION);
+            }
+            userRepository.save(user);
+        } else if (user.getGoogleId() == null || !user.getGoogleId().equals(googleId)) {
+            user.setGoogleId(googleId);
+            userRepository.save(user);
+        }
+
         if (authSessionService != null && refreshTokenCookieService != null) {
             SessionIssue refreshToken = authSessionService.create(
                 user, 
@@ -76,52 +136,14 @@ public class OAuth2AuthenticationSuccessHandler implements AuthenticationSuccess
                     request.getRemoteAddr()
                 )
             );
-            accessToken = jwtService.generateToken(user, refreshToken.sid());
             refreshTokenCookieService.addRefreshTokenCookie(response, refreshToken.token(), refreshToken.cookieMaxAgeSeconds());
-        } else {
-            accessToken = jwtService.generateToken(user, "");
         }
-        String redirectUrl = UriComponentsBuilder
-                .fromUriString(frontendBaseUrl + "/oauth2/success")
-                .queryParam("accessToken", accessToken)
-                .queryParam("expiresIn", jwtService.getExpirationSeconds())
-                .build()
-                .toUriString();
-
+        
+        String redirectUrl = frontendBaseUrl + "/oauth2/success";
         response.sendRedirect(redirectUrl);
     }
 
-    private User findOrCreateGoogleUser(OAuth2User principal) {
-        String googleId = requiredAttribute(principal, "sub");
-        String email = normalizeEmail(requiredAttribute(principal, "email"));
 
-        return userRepository.findByGoogleId(googleId)
-                .orElseGet(() -> userRepository.findByEmailIgnoreCase(email)
-                        .map(existingUser -> linkGoogleAccount(existingUser, googleId))
-                        .orElseGet(() -> createGoogleUser(principal, googleId, email)));
-    }
-
-    private User linkGoogleAccount(User user, String googleId) {
-        user.setGoogleId(googleId);
-        if (user.getPasswordHash() == null || user.getAuthProvider() != AuthProvider.LOCAL) {
-            user.setAuthProvider(AuthProvider.GOOGLE);
-        }
-        return userRepository.save(user);
-    }
-
-    private User createGoogleUser(OAuth2User principal, String googleId, String email) {
-        NameParts nameParts = extractNameParts(principal, email);
-        User user = new User(
-                nameParts.lastName(),
-                nameParts.firstMiddleName(),
-                email,
-                "",
-                null
-        );
-        user.setGoogleId(googleId);
-        user.setAuthProvider(AuthProvider.GOOGLE);
-        return userRepository.save(user);
-    }
 
     private NameParts extractNameParts(OAuth2User principal, String email) {
         String familyName = stringAttribute(principal, "family_name");

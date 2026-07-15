@@ -44,3 +44,9 @@ export async function resetPassword({ token, newPassword, confirmPassword }) {
   const response = await apiClient.post('/auth/reset-password', { token, newPassword, confirmPassword });
   return response.data;
 }
+
+export async function completeOAuth({ code, acceptedTerms, legalDocumentVersion }) {
+  const response = await apiClient.post('/auth/oauth2/complete', { code, acceptedTerms, legalDocumentVersion });
+  return response.data;
+}
+

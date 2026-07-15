@@ -62,7 +62,7 @@ public class SecurityConfig {
                                 writeErrorResponse(response, HttpServletResponse.SC_FORBIDDEN, "Access denied"))
                 )
                 .authorizeHttpRequests(authorize -> authorize
-                        .requestMatchers(HttpMethod.POST, "/api/auth/register", "/api/auth/login", "/api/auth/refresh", "/api/auth/logout", "/api/auth/resend-verification", "/api/auth/forgot-password", "/api/auth/reset-password").permitAll()
+                        .requestMatchers(HttpMethod.POST, "/api/auth/register", "/api/auth/login", "/api/auth/refresh", "/api/auth/logout", "/api/auth/resend-verification", "/api/auth/forgot-password", "/api/auth/reset-password", "/api/auth/oauth2/complete").permitAll()
                         .requestMatchers(HttpMethod.GET, "/api/auth/verify-email").permitAll()
                         .requestMatchers(HttpMethod.GET, "/api/shows", "/api/shows/**", "/api/schedules/**").permitAll()
                         .requestMatchers(HttpMethod.POST, "/api/payments/callback").permitAll()

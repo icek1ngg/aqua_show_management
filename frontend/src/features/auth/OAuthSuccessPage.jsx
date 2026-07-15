@@ -4,36 +4,23 @@ import { useAuth } from './AuthContext.jsx';
 import { getRedirectPathAfterLogin } from './authRedirect.js';
 
 export default function OAuthSuccessPage() {
-  const [searchParams] = useSearchParams();
   const navigate = useNavigate();
-  const { completeOAuthLogin } = useAuth();
-  const loginCalledRef = useRef(false);
+  const { isAuthenticated, loading, user } = useAuth();
+  const handledRef = useRef(false);
 
   useEffect(() => {
-    if (loginCalledRef.current) return;
+    if (loading) return;
+    if (handledRef.current) return;
+    
+    handledRef.current = true;
 
-    const accessToken = searchParams.get('accessToken');
-    const expiresIn = searchParams.get('expiresIn');
-
-    if (!accessToken) {
+    if (isAuthenticated) {
+      navigate(getRedirectPathAfterLogin(user), { replace: true });
+    } else {
+      console.error('OAuth success page loaded but user is not authenticated');
       navigate('/login?oauthError=true', { replace: true });
-      return;
     }
-
-    loginCalledRef.current = true;
-
-    async function handleOAuth() {
-      try {
-        const user = await completeOAuthLogin(accessToken, expiresIn);
-        navigate(getRedirectPathAfterLogin(user), { replace: true });
-      } catch (error) {
-        console.error('OAuth success token exchange or profile loading failed:', error);
-        navigate('/login?oauthError=true', { replace: true });
-      }
-    }
-
-    handleOAuth();
-  }, [searchParams, navigate, completeOAuthLogin]);
+  }, [loading, isAuthenticated, navigate, user]);
 
   return (
     <div className="relative flex min-h-screen items-center justify-center overflow-hidden bg-cyan-950 text-white">

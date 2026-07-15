@@ -16,6 +16,9 @@ import com.asms.identity.service.AuthService;
 import com.asms.identity.service.EmailVerificationService;
 import com.asms.identity.service.PasswordResetService;
 import com.asms.identity.security.RefreshTokenCookieService;
+import com.asms.identity.dto.AuthDtos.OAuthCompleteRequest;
+import com.asms.identity.dto.AuthDtos.OAuthCompleteResponse;
+import com.asms.identity.service.OAuthOnboardingService;
 import jakarta.servlet.http.HttpServletRequest;
 import jakarta.servlet.http.HttpServletResponse;
 import jakarta.validation.Valid;
@@ -44,6 +47,7 @@ public class AuthController {
     private final EmailVerificationService emailVerificationService;
     private final PasswordResetService passwordResetService;
     private final RefreshTokenCookieService refreshTokenCookieService;
+    private final OAuthOnboardingService oauthOnboardingService;
     private final String frontendBaseUrl;
 
     public AuthController(
@@ -51,12 +55,14 @@ public class AuthController {
             EmailVerificationService emailVerificationService,
             PasswordResetService passwordResetService,
             RefreshTokenCookieService refreshTokenCookieService,
+            OAuthOnboardingService oauthOnboardingService,
             @Value("${asms.frontend.base-url}") String frontendBaseUrl
     ) {
         this.authService = authService;
         this.emailVerificationService = emailVerificationService;
         this.passwordResetService = passwordResetService;
         this.refreshTokenCookieService = refreshTokenCookieService;
+        this.oauthOnboardingService = oauthOnboardingService;
         this.frontendBaseUrl = frontendBaseUrl;
     }
 
@@ -158,5 +164,29 @@ public class AuthController {
         }
         passwordResetService.resetPassword(request.token(), request.newPassword());
         return ApiResponse.success("Password has been reset successfully.");
+    }
+
+    @PostMapping("/oauth2/complete")
+    public ApiResponse<OAuthCompleteResponse> completeOAuth(
+            @Valid @RequestBody OAuthCompleteRequest request,
+            HttpServletRequest servletRequest,
+            HttpServletResponse response
+    ) {
+        com.asms.identity.dto.SessionDtos.ClientContext context = new com.asms.identity.dto.SessionDtos.ClientContext(
+                servletRequest.getHeader("User-Agent"),
+                servletRequest.getRemoteAddr()
+        );
+        AuthSession authSession = oauthOnboardingService.completeOnboarding(request, context);
+        refreshTokenCookieService.addRefreshTokenCookie(
+                response,
+                authSession.refreshToken(),
+                authSession.refreshTokenCookieMaxAgeSeconds()
+        );
+        return ApiResponse.success("Onboarding successful", new OAuthCompleteResponse(
+                authSession.response().accessToken(),
+                authSession.response().tokenType(),
+                authSession.response().expiresIn(),
+                authSession.response().user()
+        ));
     }
 }

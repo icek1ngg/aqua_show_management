@@ -233,22 +233,26 @@ export function AuthProvider({ children }) {
     }
   }, []);
 
-  const completeOAuthLogin = useCallback(async (accessToken, expiresIn) => {
+  const completeOAuthConsent = useCallback(async (code, acceptedTerms, legalDocumentVersion) => {
     try {
-      const expiresAt = getTokenExpiresAt(accessToken, null, expiresIn);
-      const tokenUser = getUserFromToken(accessToken);
+      const response = await authService.completeOAuth({ code, acceptedTerms, legalDocumentVersion });
+      const nextToken = getTokenFromLoginResponse(response);
       
-      setAccessToken(accessToken, expiresAt);
+      if (!nextToken) {
+        throw new Error('OAuth completion succeeded but no access token was returned.');
+      }
+
+      const responseData = getResponseData(response);
+      const expiresAt = getTokenExpiresAt(nextToken, responseData?.expiresAt, responseData?.expiresIn);
+      const tokenUser = getUserFromResponse(response) || getUserFromToken(nextToken);
+      
+      setAccessToken(nextToken, expiresAt);
       scheduleRefresh();
       
-      setToken(accessToken);
+      setToken(nextToken);
       setUser(tokenUser);
-
-      const currentUser = await authService.getCurrentUser();
-      const nextUser = getUserFromResponse(currentUser) || getResponseData(currentUser) || getUserFromToken(accessToken);
-      setUser(nextUser);
       
-      return nextUser;
+      return tokenUser;
     } catch (error) {
       broadcastLogout();
       setToken(null);
@@ -267,9 +271,9 @@ export function AuthProvider({ children }) {
       register,
       logout,
       refreshCurrentUser,
-      completeOAuthLogin,
+      completeOAuthConsent,
     }),
-    [loading, login, logout, refreshCurrentUser, register, token, user, completeOAuthLogin],
+    [loading, login, logout, refreshCurrentUser, register, token, user, completeOAuthConsent],
   );
 
   return <AuthContext.Provider value={value}>{children}</AuthContext.Provider>;

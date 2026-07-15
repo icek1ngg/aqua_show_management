@@ -155,4 +155,25 @@ public final class AuthDtos {
             String confirmPassword
     ) {
     }
+
+    public record OAuthCompleteRequest(
+            @NotBlank(message = "Code is required")
+            String code,
+
+            @jakarta.validation.constraints.AssertTrue(message = "Terms and privacy policy must be accepted")
+            boolean acceptedTerms,
+
+            @NotBlank(message = "Legal document version is required")
+            @Pattern(regexp = "2026-07-15", message = "Unsupported legal document version")
+            String legalDocumentVersion
+    ) {
+    }
+
+    public record OAuthCompleteResponse(
+            String accessToken,
+            String tokenType,
+            long expiresIn,
+            UserProfileResponse user
+    ) {
+    }
 }

@@ -161,6 +161,7 @@ class PasswordResetTest {
                 mock(com.asms.identity.service.EmailVerificationService.class),
                 passwordResetService,
                 mock(RefreshTokenCookieService.class),
+                mock(com.asms.identity.service.OAuthOnboardingService.class),
                 "http://localhost:5173"
         );
 

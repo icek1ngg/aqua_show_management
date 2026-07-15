@@ -5,6 +5,7 @@ import App from './App.jsx';
 import ForgotPasswordPage from '../features/auth/ForgotPasswordPage.jsx';
 import LoginPage from '../features/auth/LoginPage.jsx';
 import OAuthSuccessPage from '../features/auth/OAuthSuccessPage.jsx';
+import OAuthConsentPage from '../features/auth/OAuthConsentPage.jsx';
 import ProtectedRoute from '../features/auth/ProtectedRoute.jsx';
 import RegisterPage from '../features/auth/RegisterPage.jsx';
 import ResetPasswordPage from '../features/auth/ResetPasswordPage.jsx';
@@ -57,6 +58,10 @@ export const router = createBrowserRouter([
       {
         path: 'oauth2/success',
         element: <OAuthSuccessPage />,
+      },
+      {
+        path: 'oauth2/consent',
+        element: <OAuthConsentPage />,
       },
       {
         path: 'public/shows',
