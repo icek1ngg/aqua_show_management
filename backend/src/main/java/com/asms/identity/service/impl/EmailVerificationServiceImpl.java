@@ -63,6 +63,30 @@ public class EmailVerificationServiceImpl implements EmailVerificationService {
             public void checkResend(String normalizedEmail) {
                 throw rateLimitUnavailable();
             }
+
+            @Override
+            public void checkLoginFailure(String normalizedEmail, String remoteIp) {
+                throw rateLimitUnavailable();
+            }
+
+            @Override
+            public void clearLoginFailure(String normalizedEmail, String remoteIp) {
+            }
+
+            @Override
+            public boolean checkForgot(String normalizedEmail, String remoteIp) {
+                return false;
+            }
+
+            @Override
+            public void checkReset(String remoteIp) {
+                throw rateLimitUnavailable();
+            }
+
+            @Override
+            public void checkRefresh(String remoteIp) {
+                throw rateLimitUnavailable();
+            }
         }, Runnable::run);
     }
 

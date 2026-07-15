@@ -33,17 +33,20 @@ import org.springframework.web.cors.UrlBasedCorsConfigurationSource;
 public class SecurityConfig {
 
     private final ObjectMapper objectMapper;
+    private final CsrfAndOriginValidationFilter csrfAndOriginValidationFilter;
     private final JwtAuthenticationFilter jwtAuthenticationFilter;
     private final OAuth2AuthenticationSuccessHandler oAuth2AuthenticationSuccessHandler;
     private final String frontendBaseUrl;
 
     public SecurityConfig(
             ObjectMapper objectMapper,
+            CsrfAndOriginValidationFilter csrfAndOriginValidationFilter,
             JwtAuthenticationFilter jwtAuthenticationFilter,
             OAuth2AuthenticationSuccessHandler oAuth2AuthenticationSuccessHandler,
             @Value("${asms.frontend.base-url}") String frontendBaseUrl
     ) {
         this.objectMapper = objectMapper;
+        this.csrfAndOriginValidationFilter = csrfAndOriginValidationFilter;
         this.jwtAuthenticationFilter = jwtAuthenticationFilter;
         this.oAuth2AuthenticationSuccessHandler = oAuth2AuthenticationSuccessHandler;
         this.frontendBaseUrl = frontendBaseUrl;
@@ -80,6 +83,7 @@ public class SecurityConfig {
                         .successHandler(oAuth2AuthenticationSuccessHandler)
                         .failureHandler(new SimpleUrlAuthenticationFailureHandler(oAuth2FailureUrl()))
                 )
+                .addFilterBefore(csrfAndOriginValidationFilter, UsernamePasswordAuthenticationFilter.class)
                 .addFilterBefore(jwtAuthenticationFilter, UsernamePasswordAuthenticationFilter.class)
                 .build();
     }

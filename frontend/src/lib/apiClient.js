@@ -28,6 +28,20 @@ apiClient.interceptors.request.use((config) => {
     }
   }
 
+  // Extract XSRF-TOKEN from cookies
+  const match = document.cookie.match(/(?:^|;\s*)XSRF-TOKEN=([^;]*)/);
+  if (match && match[1]) {
+    const xsrfToken = match[1];
+    if (typeof config.headers?.set === 'function') {
+      config.headers.set('X-XSRF-TOKEN', xsrfToken);
+    } else {
+      config.headers = {
+        ...config.headers,
+        'X-XSRF-TOKEN': xsrfToken,
+      };
+    }
+  }
+
   return config;
 });
 

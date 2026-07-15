@@ -28,7 +28,7 @@ class RedisAuthRateLimitServiceTest {
     @BeforeEach
     void setUp() {
         redisTemplate = mock(StringRedisTemplate.class);
-        service = new RedisAuthRateLimitService(redisTemplate, 10, 3, 60, 5);
+        service = new RedisAuthRateLimitService(redisTemplate, 10, 3, 60, 5, 50, 5, 10, 3, 10, 60);
     }
 
     @Test

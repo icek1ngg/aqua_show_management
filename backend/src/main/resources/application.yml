@@ -85,6 +85,12 @@ asms:
       registration-email-per-hour: "${AUTH_REGISTER_EMAIL_PER_HOUR:3}"
       resend-cooldown-seconds: "${AUTH_RESEND_COOLDOWN_SECONDS:60}"
       resend-email-per-hour: "${AUTH_RESEND_EMAIL_PER_HOUR:5}"
+      login-ip-per-15min: "${AUTH_LOGIN_IP_PER_15MIN:50}"
+      login-email-ip-per-15min: "${AUTH_LOGIN_EMAIL_IP_PER_15MIN:5}"
+      forgot-ip-per-hour: "${AUTH_FORGOT_IP_PER_HOUR:10}"
+      forgot-email-per-hour: "${AUTH_FORGOT_EMAIL_PER_HOUR:3}"
+      reset-ip-per-15min: "${AUTH_RESET_IP_PER_15MIN:10}"
+      refresh-ip-per-min: "${AUTH_REFRESH_IP_PER_MIN:60}"
   frontend:
     base-url: "${FRONTEND_BASE_URL:http://localhost:5173}"
   backend:

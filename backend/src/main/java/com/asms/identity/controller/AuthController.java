@@ -36,6 +36,7 @@ import org.springframework.web.bind.annotation.RequestParam;
 import org.springframework.web.bind.annotation.RestController;
 
 import java.io.IOException;
+import java.util.UUID;
 
 @RestController
 @RequestMapping("/api/auth")
@@ -48,6 +49,7 @@ public class AuthController {
     private final PasswordResetService passwordResetService;
     private final RefreshTokenCookieService refreshTokenCookieService;
     private final OAuthOnboardingService oauthOnboardingService;
+    private final com.asms.identity.service.AuthRateLimitService authRateLimitService;
     private final String frontendBaseUrl;
 
     public AuthController(
@@ -56,6 +58,7 @@ public class AuthController {
             PasswordResetService passwordResetService,
             RefreshTokenCookieService refreshTokenCookieService,
             OAuthOnboardingService oauthOnboardingService,
+            com.asms.identity.service.AuthRateLimitService authRateLimitService,
             @Value("${asms.frontend.base-url}") String frontendBaseUrl
     ) {
         this.authService = authService;
@@ -63,7 +66,19 @@ public class AuthController {
         this.passwordResetService = passwordResetService;
         this.refreshTokenCookieService = refreshTokenCookieService;
         this.oauthOnboardingService = oauthOnboardingService;
+        this.authRateLimitService = authRateLimitService;
         this.frontendBaseUrl = frontendBaseUrl;
+    }
+
+    @GetMapping("/csrf")
+    public ApiResponse<Void> getCsrfToken(HttpServletResponse response) {
+        String token = UUID.randomUUID().toString();
+        jakarta.servlet.http.Cookie cookie = new jakarta.servlet.http.Cookie("XSRF-TOKEN", token);
+        cookie.setPath("/");
+        cookie.setHttpOnly(false); // Must be readable by frontend JS
+        cookie.setAttribute("SameSite", "Lax");
+        response.addCookie(cookie);
+        return ApiResponse.success("CSRF token generated");
     }
 
     @PostMapping("/register")
@@ -152,13 +167,17 @@ public class AuthController {
     }
 
     @PostMapping("/forgot-password")
-    public ApiResponse<Void> forgotPassword(@Valid @RequestBody ForgotPasswordRequest request) {
-        passwordResetService.requestPasswordReset(request.email());
+    public ApiResponse<Void> forgotPassword(@Valid @RequestBody ForgotPasswordRequest request, HttpServletRequest servletRequest) {
+        boolean allow = authRateLimitService.checkForgot(request.email(), servletRequest.getRemoteAddr());
+        if (allow) {
+            passwordResetService.requestPasswordReset(request.email());
+        }
         return ApiResponse.success("If the email exists, a password reset link has been sent.");
     }
 
     @PostMapping("/reset-password")
-    public ApiResponse<Void> resetPassword(@Valid @RequestBody ResetPasswordRequest request) {
+    public ApiResponse<Void> resetPassword(@Valid @RequestBody ResetPasswordRequest request, HttpServletRequest servletRequest) {
+        authRateLimitService.checkReset(servletRequest.getRemoteAddr());
         if (!request.newPassword().equals(request.confirmPassword())) {
             throw new BadRequestException("Password confirmation does not match");
         }

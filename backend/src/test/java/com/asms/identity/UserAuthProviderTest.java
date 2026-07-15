@@ -57,7 +57,8 @@ class UserAuthProviderTest {
                         classForName("com.asms.identity.security.JwtService"),
                         classForName("com.asms.identity.service.AuthSessionService"),
                         classForName("com.asms.identity.service.RegistrationPersistenceService"),
-                        classForName("com.asms.identity.service.VerificationEmailSender")
+                        classForName("com.asms.identity.service.VerificationEmailSender"),
+                        classForName("com.asms.identity.service.AuthRateLimitService")
                 )
                 .newInstance(
                         userRepository,
@@ -65,7 +66,8 @@ class UserAuthProviderTest {
                         Mockito.mock(classForName("com.asms.identity.security.JwtService")),
                         Mockito.mock(classForName("com.asms.identity.service.AuthSessionService")),
                         Mockito.mock(classForName("com.asms.identity.service.RegistrationPersistenceService")),
-                        Mockito.mock(classForName("com.asms.identity.service.VerificationEmailSender"))
+                        Mockito.mock(classForName("com.asms.identity.service.VerificationEmailSender")),
+                        Mockito.mock(classForName("com.asms.identity.service.AuthRateLimitService"))
                 );
 
         Object loginRequest = classForName("com.asms.identity.dto.AuthDtos$LoginRequest")

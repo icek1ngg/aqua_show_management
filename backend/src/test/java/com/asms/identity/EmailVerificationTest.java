@@ -137,8 +137,9 @@ class EmailVerificationTest {
         when(passwordEncoder.matches("password", "password")).thenReturn(true);
 
         LoginRequest request = new LoginRequest("user@example.com", "password");
+        com.asms.identity.dto.SessionDtos.ClientContext context = new com.asms.identity.dto.SessionDtos.ClientContext("ua", "127.0.0.1");
 
-        assertThatThrownBy(() -> authService.login(request, null))
+        assertThatThrownBy(() -> authService.login(request, context))
                 .isInstanceOf(UnauthorizedException.class)
                 .hasMessageContaining("Please verify your email before signing in.");
     }

@@ -89,6 +89,30 @@ public class AuthServiceImpl implements AuthService {
                     public void checkResend(String normalizedEmail) {
                         throw rateLimitUnavailable();
                     }
+
+                    @Override
+                    public void checkLoginFailure(String normalizedEmail, String remoteIp) {
+                        throw rateLimitUnavailable();
+                    }
+
+                    @Override
+                    public void clearLoginFailure(String normalizedEmail, String remoteIp) {
+                    }
+
+                    @Override
+                    public boolean checkForgot(String normalizedEmail, String remoteIp) {
+                        return false;
+                    }
+
+                    @Override
+                    public void checkReset(String remoteIp) {
+                        throw rateLimitUnavailable();
+                    }
+
+                    @Override
+                    public void checkRefresh(String remoteIp) {
+                        throw rateLimitUnavailable();
+                    }
                 }
         );
     }
@@ -113,7 +137,12 @@ public class AuthServiceImpl implements AuthService {
     @Override
     @Transactional
     public AuthSession login(LoginRequest request, ClientContext clientContext) {
-        User user = userRepository.findByEmailIgnoreCase(normalizeEmail(request.email())).orElse(null);
+        String normalizedEmail = normalizeEmail(request.email());
+        String remoteIp = clientContext.ipAddress();
+        
+        authRateLimitService.checkLoginFailure(normalizedEmail, remoteIp);
+        
+        User user = userRepository.findByEmailIgnoreCase(normalizedEmail).orElse(null);
         boolean localUserWithPassword = user != null
                 && user.getAuthProvider() == AuthProvider.LOCAL
                 && user.getPasswordHash() != null;
@@ -123,6 +152,8 @@ public class AuthServiceImpl implements AuthService {
         if (!localUserWithPassword || !passwordMatches) {
             throw invalidCredentials();
         }
+
+        authRateLimitService.clearLoginFailure(normalizedEmail, remoteIp);
 
         if (user.getStatus() == UserStatus.PENDING_VERIFICATION) {
             throw new UnauthorizedException(
@@ -150,6 +181,8 @@ public class AuthServiceImpl implements AuthService {
     @Override
     @Transactional(readOnly = true)
     public AuthSession refresh(String refreshToken, ClientContext clientContext) {
+        authRateLimitService.checkRefresh(clientContext.ipAddress());
+        
         SessionRotation rotatedSession = authSessionService.rotate(refreshToken, clientContext);
         User user = rotatedSession.user();
         String accessToken = jwtService.generateToken(user, rotatedSession.sid());

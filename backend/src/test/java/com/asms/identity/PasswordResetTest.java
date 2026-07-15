@@ -158,12 +158,13 @@ class PasswordResetTest {
                 passwordResetService,
                 mock(RefreshTokenCookieService.class),
                 mock(com.asms.identity.service.OAuthOnboardingService.class),
+                mock(com.asms.identity.service.AuthRateLimitService.class),
                 "http://localhost:5173"
         );
 
         ResetPasswordRequest request = new ResetPasswordRequest("token", "newPassword", "differentPassword");
 
-        assertThatThrownBy(() -> authController.resetPassword(request))
+        assertThatThrownBy(() -> authController.resetPassword(request, mock(jakarta.servlet.http.HttpServletRequest.class)))
                 .isInstanceOf(BadRequestException.class)
                 .hasMessageContaining("Password confirmation does not match");
     }

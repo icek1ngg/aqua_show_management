@@ -25,12 +25,22 @@ public class RedisAuthRateLimitService implements AuthRateLimitService {
 
     private static final Logger log = LoggerFactory.getLogger(RedisAuthRateLimitService.class);
     private static final long ONE_HOUR_MILLIS = 3_600_000L;
+    private static final long FIFTEEN_MINUTES_MILLIS = 900_000L;
+    private static final long ONE_MINUTE_MILLIS = 60_000L;
+
     // Both registration dimensions deliberately share one Redis Cluster slot so the
     // combined IP + email decision remains atomic. This trades one hot slot for correctness.
     private static final String REGISTRATION_IP_PREFIX = "auth:rate-limit:{registration}:ip:";
     private static final String REGISTRATION_EMAIL_PREFIX = "auth:rate-limit:{registration}:email:";
     private static final String RESEND_COOLDOWN_PREFIX = "auth:rate-limit:resend:cooldown:{resend:";
     private static final String RESEND_HOUR_PREFIX = "auth:rate-limit:resend:hour:{resend:";
+
+    private static final String LOGIN_IP_PREFIX = "auth:rate-limit:{login}:ip:";
+    private static final String LOGIN_EMAIL_IP_PREFIX = "auth:rate-limit:{login}:email-ip:";
+    private static final String FORGOT_IP_PREFIX = "auth:rate-limit:{forgot}:ip:";
+    private static final String FORGOT_EMAIL_PREFIX = "auth:rate-limit:{forgot}:email:";
+    private static final String RESET_IP_PREFIX = "auth:rate-limit:{reset}:ip:";
+    private static final String REFRESH_IP_PREFIX = "auth:rate-limit:{refresh}:ip:";
 
     private static final RedisScript<Long> REGISTRATION_SCRIPT = new DefaultRedisScript<>(
             """
@@ -77,24 +87,61 @@ public class RedisAuthRateLimitService implements AuthRateLimitService {
             Long.class
     );
 
+    private static final RedisScript<Long> SINGLE_LIMIT_SCRIPT = new DefaultRedisScript<>(
+            """
+            local redisTime = redis.call('TIME')
+            local now = (tonumber(redisTime[1]) * 1000) + math.floor(tonumber(redisTime[2]) / 1000)
+            local window = tonumber(ARGV[2])
+            local cutoff = now - window
+            redis.call('ZREMRANGEBYSCORE', KEYS[1], '-inf', cutoff)
+            local count = redis.call('ZCARD', KEYS[1])
+            if count >= tonumber(ARGV[1]) then
+              return 0
+            end
+            local member = tostring(now) .. ':' .. ARGV[3]
+            redis.call('ZADD', KEYS[1], now, member)
+            redis.call('PEXPIRE', KEYS[1], window)
+            return 1
+            """,
+            Long.class
+    );
+
     private final StringRedisTemplate redisTemplate;
     private final int registrationIpPerHour;
     private final int registrationEmailPerHour;
     private final int resendCooldownSeconds;
     private final int resendEmailPerHour;
+    private final int loginIpPer15Min;
+    private final int loginEmailIpPer15Min;
+    private final int forgotIpPerHour;
+    private final int forgotEmailPerHour;
+    private final int resetIpPer15Min;
+    private final int refreshIpPerMin;
 
     public RedisAuthRateLimitService(
             StringRedisTemplate redisTemplate,
             @Value("${asms.auth.rate-limit.registration-ip-per-hour}") int registrationIpPerHour,
             @Value("${asms.auth.rate-limit.registration-email-per-hour}") int registrationEmailPerHour,
             @Value("${asms.auth.rate-limit.resend-cooldown-seconds}") int resendCooldownSeconds,
-            @Value("${asms.auth.rate-limit.resend-email-per-hour}") int resendEmailPerHour
+            @Value("${asms.auth.rate-limit.resend-email-per-hour}") int resendEmailPerHour,
+            @Value("${asms.auth.rate-limit.login-ip-per-15min}") int loginIpPer15Min,
+            @Value("${asms.auth.rate-limit.login-email-ip-per-15min}") int loginEmailIpPer15Min,
+            @Value("${asms.auth.rate-limit.forgot-ip-per-hour}") int forgotIpPerHour,
+            @Value("${asms.auth.rate-limit.forgot-email-per-hour}") int forgotEmailPerHour,
+            @Value("${asms.auth.rate-limit.reset-ip-per-15min}") int resetIpPer15Min,
+            @Value("${asms.auth.rate-limit.refresh-ip-per-min}") int refreshIpPerMin
     ) {
         this.redisTemplate = redisTemplate;
         this.registrationIpPerHour = registrationIpPerHour;
         this.registrationEmailPerHour = registrationEmailPerHour;
         this.resendCooldownSeconds = resendCooldownSeconds;
         this.resendEmailPerHour = resendEmailPerHour;
+        this.loginIpPer15Min = loginIpPer15Min;
+        this.loginEmailIpPer15Min = loginEmailIpPer15Min;
+        this.forgotIpPerHour = forgotIpPerHour;
+        this.forgotEmailPerHour = forgotEmailPerHour;
+        this.resetIpPer15Min = resetIpPer15Min;
+        this.refreshIpPerMin = refreshIpPerMin;
     }
 
     @Override
@@ -137,6 +184,85 @@ public class RedisAuthRateLimitService implements AuthRateLimitService {
                     "Redis auth rate limit failed: operation=resend, keyTypes=resend-cooldown,resend-email-hour",
                     exception
             );
+            throw unavailable();
+        }
+    }
+
+    @Override
+    public void checkLoginFailure(String normalizedEmail, String remoteIp) {
+        try {
+            Long result = redisTemplate.execute(
+                    REGISTRATION_SCRIPT,
+                    List.of(LOGIN_IP_PREFIX + digest(remoteIp), LOGIN_EMAIL_IP_PREFIX + digest(normalizedEmail + ":" + remoteIp)),
+                    String.valueOf(loginIpPer15Min),
+                    String.valueOf(loginEmailIpPer15Min),
+                    String.valueOf(FIFTEEN_MINUTES_MILLIS),
+                    UUID.randomUUID().toString()
+            );
+            requireAccepted(result);
+        } catch (DataAccessException exception) {
+            log.error("Redis auth rate limit failed: operation=login", exception);
+            throw unavailable();
+        }
+    }
+
+    @Override
+    public void clearLoginFailure(String normalizedEmail, String remoteIp) {
+        try {
+            redisTemplate.delete(LOGIN_EMAIL_IP_PREFIX + digest(normalizedEmail + ":" + remoteIp));
+        } catch (DataAccessException exception) {
+            log.error("Redis auth rate limit failed: operation=clearLogin", exception);
+        }
+    }
+
+    @Override
+    public boolean checkForgot(String normalizedEmail, String remoteIp) {
+        try {
+            Long result = redisTemplate.execute(
+                    REGISTRATION_SCRIPT,
+                    List.of(FORGOT_IP_PREFIX + digest(remoteIp), FORGOT_EMAIL_PREFIX + digest(normalizedEmail)),
+                    String.valueOf(forgotIpPerHour),
+                    String.valueOf(forgotEmailPerHour),
+                    String.valueOf(ONE_HOUR_MILLIS),
+                    UUID.randomUUID().toString()
+            );
+            return result != null && result == 1L;
+        } catch (DataAccessException exception) {
+            log.error("Redis auth rate limit failed: operation=forgot", exception);
+            return false;
+        }
+    }
+
+    @Override
+    public void checkReset(String remoteIp) {
+        try {
+            Long result = redisTemplate.execute(
+                    SINGLE_LIMIT_SCRIPT,
+                    List.of(RESET_IP_PREFIX + digest(remoteIp)),
+                    String.valueOf(resetIpPer15Min),
+                    String.valueOf(FIFTEEN_MINUTES_MILLIS),
+                    UUID.randomUUID().toString()
+            );
+            requireAccepted(result);
+        } catch (DataAccessException exception) {
+            log.error("Redis auth rate limit failed: operation=reset", exception);
+            throw unavailable();
+        }
+    }
+
+    @Override
+    public void checkRefresh(String remoteIp) {
+        try {
+            Long result = redisTemplate.execute(
+                    SINGLE_LIMIT_SCRIPT,
+                    List.of(REFRESH_IP_PREFIX + digest(remoteIp)),
+                    String.valueOf(refreshIpPerMin),
+                    String.valueOf(ONE_MINUTE_MILLIS),
+                    UUID.randomUUID().toString()
+            );
+            requireAccepted(result);
+        } catch (DataAccessException exception) {
+            log.error("Redis auth rate limit failed: operation=refresh", exception);
             throw unavailable();
         }
     }
