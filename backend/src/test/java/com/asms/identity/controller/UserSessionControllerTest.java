@@ -55,8 +55,8 @@ class UserSessionControllerTest {
     void getUserSessions_Success() throws Exception {
         UUID sessionId2 = UUID.randomUUID();
         List<SessionView> mockSessions = List.of(
-                new SessionView(currentSessionId, Instant.now().minusSeconds(3600), Instant.now(), "Chrome Windows", "192.168.1.1", true),
-                new SessionView(sessionId2, Instant.now().minusSeconds(7200), Instant.now().minusSeconds(100), "Safari Mac", "10.0.0.1", false)
+                new SessionView(currentSessionId, Instant.now().minusSeconds(3600), Instant.now(), "Chrome Windows", "192.168.1.0/24", true, true),
+                new SessionView(sessionId2, Instant.now().minusSeconds(7200), Instant.now().minusSeconds(100), "Safari Mac", "10.0.0.0/24", false, false)
         );
 
         when(userSessionService.list(any(User.class), eq(currentSessionId))).thenReturn(mockSessions);
@@ -67,6 +67,7 @@ class UserSessionControllerTest {
                 .andExpect(jsonPath("$.success").value(true))
                 .andExpect(jsonPath("$.data[0].id").value(currentSessionId.toString()))
                 .andExpect(jsonPath("$.data[0].isCurrent").value(true))
+                .andExpect(jsonPath("$.data[0].rememberMe").value(true))
                 .andExpect(jsonPath("$.data[1].id").value(sessionId2.toString()))
                 .andExpect(jsonPath("$.data[1].isCurrent").value(false));
 

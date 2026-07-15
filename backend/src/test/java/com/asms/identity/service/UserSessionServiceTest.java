@@ -38,7 +38,7 @@ class UserSessionServiceTest {
     @Test
     void list_CallsAuthSessionService() {
         List<SessionView> mockSessions = List.of(
-                new SessionView(currentSessionId, Instant.now(), Instant.now(), "Dev", "127.0.0.1", true)
+                new SessionView(currentSessionId, Instant.now(), Instant.now(), "Dev", "127.0.0.0/24", false, true)
         );
         when(authSessionService.list(testUser, currentSessionId)).thenReturn(mockSessions);
 

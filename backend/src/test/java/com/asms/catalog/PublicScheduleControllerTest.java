@@ -10,6 +10,7 @@ import com.asms.core.security.JwtAuthenticationFilter;
 import com.asms.core.security.SecurityConfig;
 import com.asms.core.security.FrontendOriginPolicy;
 import com.asms.identity.repository.UserRepository;
+import com.asms.identity.repository.AuthSessionRepository;
 import com.asms.identity.security.JwtService;
 import com.asms.identity.security.OAuth2AuthenticationSuccessHandler;
 import org.junit.jupiter.api.Test;
@@ -43,6 +44,9 @@ class PublicScheduleControllerTest {
 
     @MockBean
     private UserRepository userRepository;
+
+    @MockBean
+    private AuthSessionRepository authSessionRepository;
 
     @MockBean
     private OAuth2AuthenticationSuccessHandler oAuth2AuthenticationSuccessHandler;

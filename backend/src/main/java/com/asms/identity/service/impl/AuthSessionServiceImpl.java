@@ -9,9 +9,11 @@ import com.asms.identity.dto.SessionDtos.SessionView;
 import com.asms.identity.entity.AuthSession;
 import com.asms.identity.entity.User;
 import com.asms.identity.repository.AuthSessionRepository;
+import com.asms.identity.security.IpAddressAnonymizer;
 import com.asms.identity.security.RefreshTokenCodec;
 import com.asms.identity.service.AuthSessionService;
 import org.springframework.beans.factory.annotation.Value;
+import org.springframework.scheduling.annotation.Scheduled;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
@@ -54,7 +56,8 @@ public class AuthSessionServiceImpl implements AuthSessionService {
                 UUID.randomUUID().toString(), 
                 expiresAt,
                 context.userAgent() != null ? truncate(context.userAgent(), 255) : null,
-                context.ipAddress() != null ? truncate(context.ipAddress(), 45) : null
+                IpAddressAnonymizer.anonymize(context.ipAddress()),
+                rememberMe
         );
         session = authSessionRepository.saveAndFlush(session);
         
@@ -113,7 +116,7 @@ public class AuthSessionServiceImpl implements AuthSessionService {
             session.setDevice(truncate(context.userAgent(), 255));
         }
         if (context.ipAddress() != null) {
-            session.setIpPrefix(truncate(context.ipAddress(), 45));
+            session.setIpPrefix(IpAddressAnonymizer.anonymize(context.ipAddress()));
         }
 
         String nextRawToken = refreshTokenCodec.generateToken(session.getId(), session.getGeneration());
@@ -165,16 +168,24 @@ public class AuthSessionServiceImpl implements AuthSessionService {
     @Override
     @Transactional(readOnly = true)
     public List<SessionView> list(User user, UUID currentSessionId) {
-        return authSessionRepository.findByUserOrderByLastSeenAtDesc(user).stream()
+        return authSessionRepository.findByUserAndExpiresAtAfterOrderByLastSeenAtDesc(user, Instant.now()).stream()
                 .map(session -> new SessionView(
                         session.getId(),
                         session.getCreatedAt(),
                         session.getLastSeenAt(),
                         session.getDevice(),
                         session.getIpPrefix(),
+                        session.isRememberMe(),
                         session.getId().equals(currentSessionId)
                 ))
                 .collect(Collectors.toList());
+    }
+
+    @Override
+    @Scheduled(cron = "${asms.auth.session-cleanup-cron:0 0 * * * *}")
+    @Transactional
+    public long purgeExpiredSessions() {
+        return authSessionRepository.deleteByExpiresAtLessThanEqual(Instant.now());
     }
 
     private String truncate(String value, int length) {

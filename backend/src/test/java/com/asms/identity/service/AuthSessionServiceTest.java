@@ -19,6 +19,7 @@ import org.mockito.junit.jupiter.MockitoExtension;
 
 import java.time.Instant;
 import java.util.Optional;
+import java.util.List;
 import java.util.UUID;
 
 import static org.junit.jupiter.api.Assertions.*;
@@ -70,7 +71,8 @@ class AuthSessionServiceTest {
         assertEquals(testUser, savedSession.getUser());
         assertEquals(1, savedSession.getGeneration());
         assertEquals("TestAgent", savedSession.getDevice());
-        assertEquals("127.0.0.1", savedSession.getIpPrefix());
+        assertEquals("127.0.0.0/24", savedSession.getIpPrefix());
+        assertFalse(savedSession.isRememberMe());
 
         String expectedHash = refreshTokenCodec.hash(issue.token());
         assertEquals(expectedHash, savedSession.getCurrentTokenHash());
@@ -80,6 +82,10 @@ class AuthSessionServiceTest {
     void create_rememberMe_shouldHaveLongLifetime() {
         SessionIssue issue = authSessionService.create(testUser, true, clientContext);
         assertEquals(2592000, issue.cookieMaxAgeSeconds());
+
+        ArgumentCaptor<AuthSession> sessionCaptor = ArgumentCaptor.forClass(AuthSession.class);
+        verify(authSessionRepository).save(sessionCaptor.capture());
+        assertTrue(sessionCaptor.getValue().isRememberMe());
     }
 
     @Test
@@ -165,5 +171,26 @@ class AuthSessionServiceTest {
         );
 
         assertEquals(ErrorCode.valueOf("AUTH_SESSION_REVOKED"), exception.getCode());
+    }
+
+    @Test
+    void list_shouldQueryOnlyUnexpiredSessions() {
+        UUID currentSessionId = UUID.randomUUID();
+        when(authSessionRepository.findByUserAndExpiresAtAfterOrderByLastSeenAtDesc(eq(testUser), any(Instant.class)))
+                .thenReturn(List.of());
+
+        assertTrue(authSessionService.list(testUser, currentSessionId).isEmpty());
+
+        verify(authSessionRepository)
+                .findByUserAndExpiresAtAfterOrderByLastSeenAtDesc(eq(testUser), any(Instant.class));
+    }
+
+    @Test
+    void purgeExpiredSessions_shouldDeleteOnlyExpiredRows() {
+        when(authSessionRepository.deleteByExpiresAtLessThanEqual(any(Instant.class))).thenReturn(3L);
+
+        assertEquals(3L, authSessionService.purgeExpiredSessions());
+
+        verify(authSessionRepository).deleteByExpiresAtLessThanEqual(any(Instant.class));
     }
 }

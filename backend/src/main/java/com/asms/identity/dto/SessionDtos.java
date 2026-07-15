@@ -37,6 +37,7 @@ public final class SessionDtos {
             Instant lastSeenAt,
             String device,
             String ipPrefix,
+            boolean rememberMe,
             boolean isCurrent
     ) {
     }

@@ -1,6 +1,7 @@
 package com.asms.core.security;
 
 import com.asms.identity.entity.User;
+import com.asms.identity.repository.AuthSessionRepository;
 import com.asms.identity.repository.UserRepository;
 import com.asms.identity.security.JwtService;
 import jakarta.servlet.FilterChain;
@@ -14,16 +15,24 @@ import org.springframework.stereotype.Component;
 import org.springframework.web.filter.OncePerRequestFilter;
 
 import java.io.IOException;
+import java.time.Instant;
+import java.util.UUID;
 
 @Component
 public class JwtAuthenticationFilter extends OncePerRequestFilter {
 
     private final JwtService jwtService;
     private final UserRepository userRepository;
+    private final AuthSessionRepository authSessionRepository;
 
-    public JwtAuthenticationFilter(JwtService jwtService, UserRepository userRepository) {
+    public JwtAuthenticationFilter(
+            JwtService jwtService,
+            UserRepository userRepository,
+            AuthSessionRepository authSessionRepository
+    ) {
         this.jwtService = jwtService;
         this.userRepository = userRepository;
+        this.authSessionRepository = authSessionRepository;
     }
 
     @Override
@@ -40,6 +49,7 @@ public class JwtAuthenticationFilter extends OncePerRequestFilter {
         }
 
         String token = authorizationHeader.substring(7);
+        SecurityContextHolder.clearContext();
         // An explicit Bearer token must take precedence over an OAuth/session
         // authentication that may still be present in the browser. Otherwise a
         // stale JSESSIONID can cause a valid MANAGER token to be evaluated with
@@ -53,9 +63,12 @@ public class JwtAuthenticationFilter extends OncePerRequestFilter {
                     .filter(User::isEnabled)
                     .filter(user -> user.getAuthVersion() == tokenAuthVersion)
                     .ifPresent(user -> {
-                        String sidString = claims.get("sid") != null ? claims.get("sid").toString() : null;
-                        java.util.UUID sessionId = sidString != null ? java.util.UUID.fromString(sidString) : null;
-                        
+                        UUID sessionId = parseSessionId(claims.get("sid"));
+                        if (sessionId == null || !authSessionRepository.existsByIdAndUserAndExpiresAtAfter(
+                                sessionId, user, Instant.now())) {
+                            return;
+                        }
+
                         com.asms.identity.security.JwtAuthenticationToken authentication = new com.asms.identity.security.JwtAuthenticationToken(
                                 user,
                                 null,
@@ -68,6 +81,17 @@ public class JwtAuthenticationFilter extends OncePerRequestFilter {
         }
 
         filterChain.doFilter(request, response);
+    }
+
+    private UUID parseSessionId(Object sidClaim) {
+        if (sidClaim == null) {
+            return null;
+        }
+        try {
+            return UUID.fromString(sidClaim.toString());
+        } catch (IllegalArgumentException ignored) {
+            return null;
+        }
     }
 
 }

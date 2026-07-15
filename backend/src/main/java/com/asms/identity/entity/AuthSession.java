@@ -44,10 +44,17 @@ public class AuthSession {
     @Column(length = 45)
     private String ipPrefix;
 
+    @Column(nullable = false)
+    private boolean rememberMe;
+
     protected AuthSession() {
     }
 
     public AuthSession(User user, String currentTokenHash, Instant expiresAt, String device, String ipPrefix) {
+        this(user, currentTokenHash, expiresAt, device, ipPrefix, false);
+    }
+
+    public AuthSession(User user, String currentTokenHash, Instant expiresAt, String device, String ipPrefix, boolean rememberMe) {
         this.id = UUID.randomUUID();
         this.user = user;
         this.currentTokenHash = currentTokenHash;
@@ -55,6 +62,7 @@ public class AuthSession {
         this.generation = 1;
         this.device = device;
         this.ipPrefix = ipPrefix;
+        this.rememberMe = rememberMe;
     }
 
     @PrePersist
@@ -128,5 +136,9 @@ public class AuthSession {
 
     public void setIpPrefix(String ipPrefix) {
         this.ipPrefix = ipPrefix;
+    }
+
+    public boolean isRememberMe() {
+        return rememberMe;
     }
 }

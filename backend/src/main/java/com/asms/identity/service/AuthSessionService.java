@@ -24,4 +24,6 @@ public interface AuthSessionService {
     void revokeAllExceptCurrent(User user, UUID currentSessionId);
 
     List<SessionView> list(User user, UUID currentSessionId);
+
+    long purgeExpiredSessions();
 }

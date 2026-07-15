@@ -8,6 +8,7 @@ import org.springframework.data.jpa.repository.Lock;
 import org.springframework.data.jpa.repository.Query;
 import org.springframework.data.repository.query.Param;
 
+import java.time.Instant;
 import java.util.List;
 import java.util.Optional;
 import java.util.UUID;
@@ -18,7 +19,11 @@ public interface AuthSessionRepository extends JpaRepository<AuthSession, UUID> 
     @Query("SELECT s FROM AuthSession s WHERE s.id = :id")
     Optional<AuthSession> findByIdForUpdate(@Param("id") UUID id);
 
-    List<AuthSession> findByUserOrderByLastSeenAtDesc(User user);
+    boolean existsByIdAndUserAndExpiresAtAfter(UUID id, User user, Instant now);
+
+    List<AuthSession> findByUserAndExpiresAtAfterOrderByLastSeenAtDesc(User user, Instant now);
+
+    long deleteByExpiresAtLessThanEqual(Instant now);
     
     void deleteByUserAndId(User user, UUID id);
     
