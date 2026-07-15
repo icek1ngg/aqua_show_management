@@ -8,10 +8,10 @@ import jakarta.servlet.ServletException;
 import jakarta.servlet.http.Cookie;
 import jakarta.servlet.http.HttpServletRequest;
 import jakarta.servlet.http.HttpServletResponse;
-import org.springframework.beans.factory.annotation.Value;
 import org.springframework.http.HttpMethod;
 import org.springframework.http.HttpStatus;
 import org.springframework.http.MediaType;
+import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.stereotype.Component;
 import org.springframework.web.filter.OncePerRequestFilter;
 
@@ -24,7 +24,7 @@ import java.util.List;
 public class CsrfAndOriginValidationFilter extends OncePerRequestFilter {
 
     private final ObjectMapper objectMapper;
-    private final String frontendBaseUrl;
+    private final FrontendOriginPolicy frontendOriginPolicy;
 
     // Endpoints that require CSRF token validation
     private static final List<String> CSRF_PROTECTED_PATHS = List.of(
@@ -38,12 +38,13 @@ public class CsrfAndOriginValidationFilter extends OncePerRequestFilter {
             "/api/payments/callback"
     );
 
+    @Autowired
     public CsrfAndOriginValidationFilter(
             ObjectMapper objectMapper,
-            @Value("${asms.frontend.base-url}") String frontendBaseUrl
+            FrontendOriginPolicy frontendOriginPolicy
     ) {
         this.objectMapper = objectMapper;
-        this.frontendBaseUrl = frontendBaseUrl;
+        this.frontendOriginPolicy = frontendOriginPolicy;
     }
 
     @Override
@@ -90,16 +91,7 @@ public class CsrfAndOriginValidationFilter extends OncePerRequestFilter {
     }
 
     private boolean isValidOrigin(String sourceOrigin) {
-        if (sourceOrigin == null) {
-            return false;
-        }
-        // In local development, we allow specific patterns or just match frontendBaseUrl exactly.
-        if (sourceOrigin.equals(frontendBaseUrl) || 
-            sourceOrigin.equals("http://localhost:5173") || 
-            sourceOrigin.equals("http://localhost:5174")) {
-            return true;
-        }
-        return sourceOrigin.endsWith(".ngrok-free.app") || sourceOrigin.endsWith(".ngrok-free.dev");
+        return frontendOriginPolicy.allows(sourceOrigin);
     }
 
     private String getOriginFromReferer(String referer) {

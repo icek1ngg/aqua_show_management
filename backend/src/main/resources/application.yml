@@ -93,6 +93,7 @@ asms:
       refresh-ip-per-min: "${AUTH_REFRESH_IP_PER_MIN:60}"
   frontend:
     base-url: "${FRONTEND_BASE_URL:http://localhost:5173}"
+    allowed-origins: "${FRONTEND_ALLOWED_ORIGINS:${FRONTEND_BASE_URL:http://localhost:5173}}"
   backend:
     base-url: "${BACKEND_BASE_URL:http://localhost:8080}"
   jwt:

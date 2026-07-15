@@ -2,6 +2,11 @@ import axios from 'axios';
 
 import { getAccessToken, clearAccessToken } from '../features/auth/authTokenStore.js';
 import { performRefresh, broadcastLogout } from '../features/auth/authRefreshCoordinator.js';
+import {
+  getCsrfToken,
+  isCsrfProtectedRequest,
+  setCsrfToken,
+} from '../features/auth/csrfTokenStore.js';
 
 const apiBaseUrl = import.meta.env?.VITE_API_BASE_URL || 'http://localhost:8080/api';
 
@@ -14,7 +19,42 @@ const apiClient = axios.create({
   },
 });
 
-apiClient.interceptors.request.use((config) => {
+const csrfBootstrapClient = axios.create({
+  baseURL: apiBaseUrl,
+  withCredentials: true,
+  headers: {
+    'Content-Type': 'application/json',
+    'ngrok-skip-browser-warning': 'true',
+  },
+});
+
+let activeCsrfBootstrap = null;
+
+async function ensureCsrfToken() {
+  const existingToken = getCsrfToken();
+  if (existingToken) {
+    return existingToken;
+  }
+
+  if (!activeCsrfBootstrap) {
+    activeCsrfBootstrap = csrfBootstrapClient.get('/auth/csrf')
+      .then((response) => {
+        const token = response?.data?.data?.token;
+        if (!token) {
+          throw new Error('CSRF bootstrap succeeded without a token.');
+        }
+        setCsrfToken(token);
+        return token;
+      })
+      .finally(() => {
+        activeCsrfBootstrap = null;
+      });
+  }
+
+  return activeCsrfBootstrap;
+}
+
+apiClient.interceptors.request.use(async (config) => {
   const token = getAccessToken();
 
   if (token) {
@@ -28,10 +68,8 @@ apiClient.interceptors.request.use((config) => {
     }
   }
 
-  // Extract XSRF-TOKEN from cookies
-  const match = document.cookie.match(/(?:^|;\s*)XSRF-TOKEN=([^;]*)/);
-  if (match && match[1]) {
-    const xsrfToken = match[1];
+  if (isCsrfProtectedRequest(config.url, config.method)) {
+    const xsrfToken = await ensureCsrfToken();
     if (typeof config.headers?.set === 'function') {
       config.headers.set('X-XSRF-TOKEN', xsrfToken);
     } else {

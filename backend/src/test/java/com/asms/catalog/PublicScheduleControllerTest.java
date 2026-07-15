@@ -8,6 +8,7 @@ import com.asms.core.exception.GlobalExceptionHandler;
 import com.asms.core.exception.NotFoundException;
 import com.asms.core.security.JwtAuthenticationFilter;
 import com.asms.core.security.SecurityConfig;
+import com.asms.core.security.FrontendOriginPolicy;
 import com.asms.identity.repository.UserRepository;
 import com.asms.identity.security.JwtService;
 import com.asms.identity.security.OAuth2AuthenticationSuccessHandler;
@@ -28,7 +29,7 @@ import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.status;
 
 @WebMvcTest(PublicScheduleController.class)
-@Import({SecurityConfig.class, JwtAuthenticationFilter.class, GlobalExceptionHandler.class})
+@Import({SecurityConfig.class, JwtAuthenticationFilter.class, FrontendOriginPolicy.class, GlobalExceptionHandler.class})
 class PublicScheduleControllerTest {
 
     @Autowired

@@ -8,6 +8,7 @@ import com.asms.identity.dto.AuthDtos.AuthSession;
 import com.asms.identity.dto.AuthDtos.ForgotPasswordRequest;
 import com.asms.identity.dto.AuthDtos.LoginRequest;
 import com.asms.identity.dto.AuthDtos.LoginResponse;
+import com.asms.identity.dto.AuthDtos.CsrfTokenResponse;
 import com.asms.identity.dto.AuthDtos.RegisterRequest;
 import com.asms.identity.dto.AuthDtos.RegisterResponse;
 import com.asms.identity.dto.AuthDtos.ResendVerificationRequest;
@@ -71,14 +72,14 @@ public class AuthController {
     }
 
     @GetMapping("/csrf")
-    public ApiResponse<Void> getCsrfToken(HttpServletResponse response) {
+    public ApiResponse<CsrfTokenResponse> getCsrfToken(HttpServletResponse response) {
         String token = UUID.randomUUID().toString();
         jakarta.servlet.http.Cookie cookie = new jakarta.servlet.http.Cookie("XSRF-TOKEN", token);
         cookie.setPath("/");
         cookie.setHttpOnly(false); // Must be readable by frontend JS
         cookie.setAttribute("SameSite", "Lax");
         response.addCookie(cookie);
-        return ApiResponse.success("CSRF token generated");
+        return ApiResponse.success("CSRF token generated", new CsrfTokenResponse(token));
     }
 
     @PostMapping("/register")

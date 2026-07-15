@@ -81,6 +81,9 @@ public final class AuthDtos {
     ) {
     }
 
+    public record CsrfTokenResponse(String token) {
+    }
+
     public record AuthSession(
             LoginResponse response,
             String refreshToken,

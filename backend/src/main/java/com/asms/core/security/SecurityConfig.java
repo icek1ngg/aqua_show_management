@@ -37,19 +37,22 @@ public class SecurityConfig {
     private final JwtAuthenticationFilter jwtAuthenticationFilter;
     private final OAuth2AuthenticationSuccessHandler oAuth2AuthenticationSuccessHandler;
     private final String frontendBaseUrl;
+    private final FrontendOriginPolicy frontendOriginPolicy;
 
     public SecurityConfig(
             ObjectMapper objectMapper,
             CsrfAndOriginValidationFilter csrfAndOriginValidationFilter,
             JwtAuthenticationFilter jwtAuthenticationFilter,
             OAuth2AuthenticationSuccessHandler oAuth2AuthenticationSuccessHandler,
-            @Value("${asms.frontend.base-url}") String frontendBaseUrl
+            @Value("${asms.frontend.base-url}") String frontendBaseUrl,
+            FrontendOriginPolicy frontendOriginPolicy
     ) {
         this.objectMapper = objectMapper;
         this.csrfAndOriginValidationFilter = csrfAndOriginValidationFilter;
         this.jwtAuthenticationFilter = jwtAuthenticationFilter;
         this.oAuth2AuthenticationSuccessHandler = oAuth2AuthenticationSuccessHandler;
         this.frontendBaseUrl = frontendBaseUrl;
+        this.frontendOriginPolicy = frontendOriginPolicy;
     }
 
     @Bean
@@ -71,7 +74,7 @@ public class SecurityConfig {
                 )
                 .authorizeHttpRequests(authorize -> authorize
                         .requestMatchers(HttpMethod.POST, "/api/auth/register", "/api/auth/login", "/api/auth/refresh", "/api/auth/logout", "/api/auth/resend-verification", "/api/auth/forgot-password", "/api/auth/reset-password", "/api/auth/oauth2/complete").permitAll()
-                        .requestMatchers(HttpMethod.GET, "/api/auth/verify-email").permitAll()
+                        .requestMatchers(HttpMethod.GET, "/api/auth/verify-email", "/api/auth/csrf").permitAll()
                         .requestMatchers(HttpMethod.GET, "/api/shows", "/api/shows/**", "/api/schedules/**").permitAll()
                         .requestMatchers(HttpMethod.POST, "/api/payments/callback").permitAll()
                         .requestMatchers(HttpMethod.POST, "/api/bookings/dev-samples", "/api/bookings/dev-samples/batch").hasAnyRole("USER", "STAFF", "MANAGER", "ADMIN")
@@ -101,14 +104,9 @@ public class SecurityConfig {
     @Bean
     public CorsConfigurationSource corsConfigurationSource() {
         CorsConfiguration configuration = new CorsConfiguration();
-        configuration.setAllowedOriginPatterns(List.of(
-                "http://localhost:5173",
-                "http://localhost:5174",
-                "https://*.ngrok-free.app",
-                "https://*.ngrok-free.dev"
-        ));
+        configuration.setAllowedOrigins(frontendOriginPolicy.allowedOrigins());
         configuration.setAllowedMethods(List.of("GET", "POST", "PUT", "PATCH", "DELETE", "OPTIONS"));
-        configuration.setAllowedHeaders(List.of("Authorization", "Content-Type", "ngrok-skip-browser-warning"));
+        configuration.setAllowedHeaders(List.of("Authorization", "Content-Type", "X-XSRF-TOKEN", "ngrok-skip-browser-warning"));
         configuration.setAllowCredentials(true);
 
         UrlBasedCorsConfigurationSource source = new UrlBasedCorsConfigurationSource();
