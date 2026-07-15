@@ -15,7 +15,7 @@ public class IdentityAsyncConfig {
         executor.setMaxPoolSize(4);
         executor.setQueueCapacity(100);
         executor.setThreadNamePrefix("verification-email-");
-        executor.setWaitForTasksToCompleteOnShutdown(true);
+        executor.setWaitForTasksToCompleteOnShutdown(false);
         executor.setAwaitTerminationSeconds(10);
         return executor;
     }
