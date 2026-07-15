@@ -20,15 +20,18 @@ public class RegistrationPersistenceService {
     private final UserRepository userRepository;
     private final PasswordEncoder passwordEncoder;
     private final VerificationChallengeService challengeService;
+    private final RegistrationDuplicateEmailProbe duplicateEmailProbe;
 
     public RegistrationPersistenceService(
             UserRepository userRepository,
             PasswordEncoder passwordEncoder,
-            VerificationChallengeService challengeService
+            VerificationChallengeService challengeService,
+            RegistrationDuplicateEmailProbe duplicateEmailProbe
     ) {
         this.userRepository = userRepository;
         this.passwordEncoder = passwordEncoder;
         this.challengeService = challengeService;
+        this.duplicateEmailProbe = duplicateEmailProbe;
     }
 
     @Transactional
@@ -52,7 +55,13 @@ public class RegistrationPersistenceService {
         try {
             saved = userRepository.saveAndFlush(user);
         } catch (DataIntegrityViolationException exception) {
-            throw duplicateEmailConflict();
+            if (duplicateEmailProbe.existsInNewTransaction(email)) {
+                throw duplicateEmailConflict();
+            }
+            throw exception;
+        }
+        if (saved.getId() == null) {
+            throw new IllegalStateException("Persisted registration user has no ID");
         }
 
         VerificationTokenCodec.IssuedToken token = challengeService.rotate(saved);

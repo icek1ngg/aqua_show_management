@@ -1,4 +1,11 @@
 export const LEGAL_DOCUMENT_VERSION = '2026-07-15';
+export const REGISTRATION_LIMITS = Object.freeze({
+  lastName: 100,
+  firstMiddleName: 150,
+  email: 150,
+  phoneNumber: 11,
+  password: 100,
+});
 
 export function buildRegistrationPayload({
   lastName,

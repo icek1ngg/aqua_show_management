@@ -14,6 +14,9 @@ import com.asms.identity.service.VerificationTokenCodec;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import org.springframework.beans.factory.annotation.Autowired;
+import org.springframework.beans.factory.annotation.Qualifier;
+import org.springframework.core.task.TaskExecutor;
+import org.springframework.core.task.TaskRejectedException;
 import org.springframework.stereotype.Service;
 
 import java.util.Locale;
@@ -29,18 +32,21 @@ public class EmailVerificationServiceImpl implements EmailVerificationService {
     private final UserRepository userRepository;
     private final VerificationEmailSender verificationEmailSender;
     private final AuthRateLimitService authRateLimitService;
+    private final TaskExecutor verificationEmailExecutor;
 
     @Autowired
     public EmailVerificationServiceImpl(
             VerificationChallengeService challengeService,
             UserRepository userRepository,
             VerificationEmailSender verificationEmailSender,
-            AuthRateLimitService authRateLimitService
+            AuthRateLimitService authRateLimitService,
+            @Qualifier("verificationEmailExecutor") TaskExecutor verificationEmailExecutor
     ) {
         this.challengeService = challengeService;
         this.userRepository = userRepository;
         this.verificationEmailSender = verificationEmailSender;
         this.authRateLimitService = authRateLimitService;
+        this.verificationEmailExecutor = verificationEmailExecutor;
     }
 
     public EmailVerificationServiceImpl(
@@ -58,7 +64,7 @@ public class EmailVerificationServiceImpl implements EmailVerificationService {
             public void checkResend(String normalizedEmail) {
                 throw rateLimitUnavailable();
             }
-        });
+        }, Runnable::run);
     }
 
     @Override
@@ -76,9 +82,14 @@ public class EmailVerificationServiceImpl implements EmailVerificationService {
     public String resendVerificationEmail(String email) {
         String normalizedEmail = email.trim().toLowerCase(Locale.ROOT);
         authRateLimitService.checkResend(normalizedEmail);
-        userRepository.findByEmailIgnoreCase(normalizedEmail)
-                .filter(user -> user.getStatus() == UserStatus.PENDING_VERIFICATION)
-                .ifPresent(this::rotateAndDeliver);
+        var candidate = userRepository.findByEmailIgnoreCase(normalizedEmail);
+        try {
+            verificationEmailExecutor.execute(() -> candidate
+                    .filter(user -> user.getStatus() == UserStatus.PENDING_VERIFICATION)
+                    .ifPresent(this::rotateAndDeliver));
+        } catch (TaskRejectedException exception) {
+            log.warn("Verification resend task was rejected by the bounded executor");
+        }
         return RESEND_RESPONSE;
     }
 

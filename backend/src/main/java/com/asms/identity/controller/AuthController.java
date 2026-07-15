@@ -67,7 +67,7 @@ public class AuthController {
     ) {
         return ResponseEntity.status(HttpStatus.CREATED).body(
                 ApiResponse.success(
-                        "Register successfully",
+                        "Account created. Verify your email before signing in.",
                         authService.register(request, servletRequest.getRemoteAddr())
                 )
         );

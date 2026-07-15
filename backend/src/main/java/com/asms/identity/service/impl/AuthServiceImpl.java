@@ -33,6 +33,9 @@ import java.util.Locale;
 @Service
 public class AuthServiceImpl implements AuthService {
 
+    private static final String DUMMY_BCRYPT_HASH =
+            "$2a$10$N9qo8uLOickgx2ZMRZoMyeIjZAgcfl7p92ldGxad68LJZdL17lhWy";
+
     private final UserRepository userRepository;
     private final PasswordEncoder passwordEncoder;
     private final JwtService jwtService;
@@ -109,12 +112,14 @@ public class AuthServiceImpl implements AuthService {
     @Override
     @Transactional
     public AuthSession login(LoginRequest request) {
-        User user = userRepository.findByEmailIgnoreCase(normalizeEmail(request.email()))
-                .orElseThrow(this::invalidCredentials);
+        User user = userRepository.findByEmailIgnoreCase(normalizeEmail(request.email())).orElse(null);
+        boolean localUserWithPassword = user != null
+                && user.getAuthProvider() == AuthProvider.LOCAL
+                && user.getPasswordHash() != null;
+        String passwordHash = localUserWithPassword ? user.getPasswordHash() : DUMMY_BCRYPT_HASH;
+        boolean passwordMatches = passwordEncoder.matches(request.password(), passwordHash);
 
-        if (user.getAuthProvider() != AuthProvider.LOCAL
-                || user.getPasswordHash() == null
-                || !passwordEncoder.matches(request.password(), user.getPasswordHash())) {
+        if (!localUserWithPassword || !passwordMatches) {
             throw invalidCredentials();
         }
 

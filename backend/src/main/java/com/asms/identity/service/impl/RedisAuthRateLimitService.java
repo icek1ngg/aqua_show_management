@@ -18,32 +18,38 @@ import java.security.MessageDigest;
 import java.security.NoSuchAlgorithmException;
 import java.util.HexFormat;
 import java.util.List;
+import java.util.UUID;
 
 @Service
 public class RedisAuthRateLimitService implements AuthRateLimitService {
 
     private static final Logger log = LoggerFactory.getLogger(RedisAuthRateLimitService.class);
-    private static final int ONE_HOUR_SECONDS = 3600;
-    private static final String REGISTRATION_IP_PREFIX = "auth:rate-limit:registration:ip:";
-    private static final String REGISTRATION_EMAIL_PREFIX = "auth:rate-limit:registration:email:";
-    private static final String RESEND_COOLDOWN_PREFIX = "auth:rate-limit:resend:cooldown:";
-    private static final String RESEND_HOUR_PREFIX = "auth:rate-limit:resend:hour:";
+    private static final long ONE_HOUR_MILLIS = 3_600_000L;
+    // Both registration dimensions deliberately share one Redis Cluster slot so the
+    // combined IP + email decision remains atomic. This trades one hot slot for correctness.
+    private static final String REGISTRATION_IP_PREFIX = "auth:rate-limit:{registration}:ip:";
+    private static final String REGISTRATION_EMAIL_PREFIX = "auth:rate-limit:{registration}:email:";
+    private static final String RESEND_COOLDOWN_PREFIX = "auth:rate-limit:resend:cooldown:{resend:";
+    private static final String RESEND_HOUR_PREFIX = "auth:rate-limit:resend:hour:{resend:";
 
     private static final RedisScript<Long> REGISTRATION_SCRIPT = new DefaultRedisScript<>(
             """
-            local ipCount = tonumber(redis.call('GET', KEYS[1]) or '0')
-            local emailCount = tonumber(redis.call('GET', KEYS[2]) or '0')
+            local redisTime = redis.call('TIME')
+            local now = (tonumber(redisTime[1]) * 1000) + math.floor(tonumber(redisTime[2]) / 1000)
+            local window = tonumber(ARGV[3])
+            local cutoff = now - window
+            redis.call('ZREMRANGEBYSCORE', KEYS[1], '-inf', cutoff)
+            redis.call('ZREMRANGEBYSCORE', KEYS[2], '-inf', cutoff)
+            local ipCount = redis.call('ZCARD', KEYS[1])
+            local emailCount = redis.call('ZCARD', KEYS[2])
             if ipCount >= tonumber(ARGV[1]) or emailCount >= tonumber(ARGV[2]) then
               return 0
             end
-            local newIpCount = redis.call('INCR', KEYS[1])
-            if newIpCount == 1 then
-              redis.call('EXPIRE', KEYS[1], tonumber(ARGV[3]))
-            end
-            local newEmailCount = redis.call('INCR', KEYS[2])
-            if newEmailCount == 1 then
-              redis.call('EXPIRE', KEYS[2], tonumber(ARGV[3]))
-            end
+            local member = tostring(now) .. ':' .. ARGV[4]
+            redis.call('ZADD', KEYS[1], now, member)
+            redis.call('ZADD', KEYS[2], now, member)
+            redis.call('PEXPIRE', KEYS[1], window)
+            redis.call('PEXPIRE', KEYS[2], window)
             return 1
             """,
             Long.class
@@ -54,15 +60,18 @@ public class RedisAuthRateLimitService implements AuthRateLimitService {
             if redis.call('EXISTS', KEYS[1]) == 1 then
               return 0
             end
-            local hourCount = tonumber(redis.call('GET', KEYS[2]) or '0')
+            local redisTime = redis.call('TIME')
+            local now = (tonumber(redisTime[1]) * 1000) + math.floor(tonumber(redisTime[2]) / 1000)
+            local window = tonumber(ARGV[3])
+            redis.call('ZREMRANGEBYSCORE', KEYS[2], '-inf', now - window)
+            local hourCount = redis.call('ZCARD', KEYS[2])
             if hourCount >= tonumber(ARGV[1]) then
               return 0
             end
-            redis.call('SET', KEYS[1], '1', 'EX', tonumber(ARGV[2]))
-            local newHourCount = redis.call('INCR', KEYS[2])
-            if newHourCount == 1 then
-              redis.call('EXPIRE', KEYS[2], tonumber(ARGV[3]))
-            end
+            redis.call('SET', KEYS[1], '1', 'PX', tonumber(ARGV[2]))
+            local member = tostring(now) .. ':' .. ARGV[4]
+            redis.call('ZADD', KEYS[2], now, member)
+            redis.call('PEXPIRE', KEYS[2], window)
             return 1
             """,
             Long.class
@@ -96,7 +105,8 @@ public class RedisAuthRateLimitService implements AuthRateLimitService {
                     List.of(REGISTRATION_IP_PREFIX + digest(remoteIp), REGISTRATION_EMAIL_PREFIX + digest(normalizedEmail)),
                     String.valueOf(registrationIpPerHour),
                     String.valueOf(registrationEmailPerHour),
-                    String.valueOf(ONE_HOUR_SECONDS)
+                    String.valueOf(ONE_HOUR_MILLIS),
+                    UUID.randomUUID().toString()
             );
             requireAccepted(result);
         } catch (DataAccessException exception) {
@@ -111,13 +121,15 @@ public class RedisAuthRateLimitService implements AuthRateLimitService {
     @Override
     public void checkResend(String normalizedEmail) {
         String digest = digest(normalizedEmail);
+        String slotSuffix = digest + "}";
         try {
             Long result = redisTemplate.execute(
                     RESEND_SCRIPT,
-                    List.of(RESEND_COOLDOWN_PREFIX + digest, RESEND_HOUR_PREFIX + digest),
+                    List.of(RESEND_COOLDOWN_PREFIX + slotSuffix, RESEND_HOUR_PREFIX + slotSuffix),
                     String.valueOf(resendEmailPerHour),
-                    String.valueOf(resendCooldownSeconds),
-                    String.valueOf(ONE_HOUR_SECONDS)
+                    String.valueOf(resendCooldownSeconds * 1000L),
+                    String.valueOf(ONE_HOUR_MILLIS),
+                    UUID.randomUUID().toString()
             );
             requireAccepted(result);
         } catch (DataAccessException exception) {

@@ -11,7 +11,7 @@ import {
   validatePhone,
 } from '../../shared/utils/validation.js';
 import { useAuth } from './AuthContext.jsx';
-import { buildRegistrationPayload } from './registrationForm.js';
+import { buildRegistrationPayload, REGISTRATION_LIMITS } from './registrationForm.js';
 
 const registerBubbles = [
   {
@@ -337,6 +337,7 @@ export default function RegisterPage() {
                       className="w-full rounded-full border border-transparent bg-cyan-50/70 py-4 pl-12 pr-4 text-slate-900 outline-none transition focus:border-cyan-500 focus:bg-white focus:ring-2 focus:ring-cyan-200"
                       id="register-last-name"
                       name="lastName"
+                      maxLength={REGISTRATION_LIMITS.lastName}
                       placeholder="Nguyen"
                       required
                       type="text"
@@ -358,6 +359,7 @@ export default function RegisterPage() {
                       className="w-full rounded-full border border-transparent bg-cyan-50/70 py-4 pl-12 pr-4 text-slate-900 outline-none transition focus:border-cyan-500 focus:bg-white focus:ring-2 focus:ring-cyan-200"
                       id="register-first-middle-name"
                       name="firstMiddleName"
+                      maxLength={REGISTRATION_LIMITS.firstMiddleName}
                       placeholder="Van A"
                       required
                       type="text"
@@ -381,6 +383,7 @@ export default function RegisterPage() {
                       className="w-full rounded-full border border-transparent bg-cyan-50/70 py-4 pl-12 pr-4 text-slate-900 outline-none transition focus:border-cyan-500 focus:bg-white focus:ring-2 focus:ring-cyan-200"
                       id="register-email"
                       name="email"
+                      maxLength={REGISTRATION_LIMITS.email}
                       placeholder="john@example.com"
                       required
                       type="email"
@@ -403,6 +406,7 @@ export default function RegisterPage() {
                       id="register-phone"
                       inputMode="numeric"
                       name="phone"
+                      maxLength={REGISTRATION_LIMITS.phoneNumber}
                       pattern="[0-9]*"
                       placeholder="0123456789"
                       type="tel"
@@ -427,6 +431,7 @@ export default function RegisterPage() {
                       className="w-full rounded-full border border-transparent bg-cyan-50/70 py-4 pl-12 pr-12 text-slate-900 outline-none transition focus:border-cyan-500 focus:bg-white focus:ring-2 focus:ring-cyan-200"
                       id="register-password"
                       name="password"
+                      maxLength={REGISTRATION_LIMITS.password}
                       placeholder="••••••••"
                       required
                       type={showPassword ? 'text' : 'password'}
@@ -458,6 +463,7 @@ export default function RegisterPage() {
                       className="w-full rounded-full border border-transparent bg-cyan-50/70 py-4 pl-12 pr-12 text-slate-900 outline-none transition focus:border-cyan-500 focus:bg-white focus:ring-2 focus:ring-cyan-200"
                       id="register-confirm-password"
                       name="confirmPassword"
+                      maxLength={REGISTRATION_LIMITS.password}
                       placeholder="••••••••"
                       required
                       type={showConfirmPassword ? 'text' : 'password'}
