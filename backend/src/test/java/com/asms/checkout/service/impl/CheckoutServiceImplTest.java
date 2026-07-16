@@ -1,6 +1,7 @@
 package com.asms.checkout.service.impl;
 
 import com.asms.booking.entity.Booking;
+import com.asms.booking.entity.BookingItem;
 import com.asms.booking.repository.BookingRepository;
 import com.asms.booking.service.RedisTicketHoldService;
 import com.asms.booking.service.TicketPricingService;
@@ -10,8 +11,10 @@ import com.asms.catalog.enums.ScheduleStatus;
 import com.asms.catalog.repository.ShowScheduleRepository;
 import com.asms.checkout.dto.CheckoutDtos.*;
 import com.asms.checkout.exception.CheckoutReviewRequiredException;
+import com.asms.checkout.service.CheckoutIdempotencyLockService;
 import com.asms.core.exception.BadRequestException;
 import com.asms.core.exception.ConflictException;
+import com.asms.core.exception.ErrorCode;
 import com.asms.core.exception.UnauthorizedException;
 import com.asms.identity.entity.User;
 import com.asms.payment.entity.Payment;
@@ -56,6 +59,7 @@ class CheckoutServiceImplTest {
     @Mock private PayOsClient payOsClient;
     @Mock private PlatformTransactionManager transactionManager;
     @Mock private TransactionStatus transactionStatus;
+    @Mock private CheckoutIdempotencyLockService idempotencyLockService;
 
     private CheckoutServiceImpl checkoutService;
     private User testUser;
@@ -65,8 +69,11 @@ class CheckoutServiceImplTest {
     void setUp() {
         checkoutService = new CheckoutServiceImpl(
                 bookingRepository, scheduleRepository, redisTicketHoldService,
-                ticketPricingService, paymentRepository, payOsClient, transactionManager
+                ticketPricingService, paymentRepository, payOsClient, transactionManager,
+                idempotencyLockService
         );
+        lenient().when(idempotencyLockService.execute(any(), anyString(), any()))
+                .thenAnswer(invocation -> ((java.util.function.Supplier<?>) invocation.getArgument(2)).get());
 
         testUser = mock(User.class);
         lenient().when(testUser.getId()).thenReturn(UUID.randomUUID());
@@ -234,6 +241,59 @@ class CheckoutServiceImplTest {
         verifyNoInteractions(paymentRepository);
     }
 
+    @Test
+    void sameIdempotencyPayloadReturnsExistingPaymentWithoutSideEffects() {
+        Booking existing = mockExistingBooking(new BigDecimal("100.00"));
+        when(bookingRepository.findByUserAndIdempotencyKey(testUser, "same-key"))
+                .thenReturn(Optional.of(existing));
+
+        StartPaymentResponse response = checkoutService.startPayment(requestFor(testSchedule, "same-key"), testUser);
+
+        assertEquals(existing.getId().toString(), response.bookingId());
+        verifyNoInteractions(scheduleRepository, redisTicketHoldService, payOsClient);
+        verify(paymentRepository).findByBooking_Id(existing.getId());
+    }
+
+    @Test
+    void priceOnlyIdempotencyMismatchIsRejectedWithStableCode() {
+        Booking existing = mockExistingBooking(new BigDecimal("120.00"));
+        when(bookingRepository.findByUserAndIdempotencyKey(testUser, "price-mismatch"))
+                .thenReturn(Optional.of(existing));
+
+        ConflictException failure = assertThrows(ConflictException.class,
+                () -> checkoutService.startPayment(requestFor(testSchedule, "price-mismatch"), testUser));
+
+        assertEquals(ErrorCode.IDEMPOTENCY_KEY_REUSED, failure.getCode());
+        verifyNoInteractions(scheduleRepository, redisTicketHoldService, paymentRepository, payOsClient);
+    }
+
+    @Test
+    void serializedRetryRequeriesBookingAndDoesNotDuplicateCheckoutSideEffects() {
+        stubBookableSchedule(testSchedule);
+        AtomicReference<Booking> committedBooking = new AtomicReference<>();
+        when(bookingRepository.findByUserAndIdempotencyKey(testUser, "concurrent-key"))
+                .thenAnswer(invocation -> Optional.ofNullable(committedBooking.get()));
+        when(redisTicketHoldService.holdTickets(anyString(), any(), anyInt(), any()))
+                .thenReturn(successfulHold("hold-once"));
+        when(bookingRepository.save(any(Booking.class))).thenAnswer(invocation -> {
+            Booking booking = invocation.getArgument(0);
+            ReflectionTestUtils.setField(booking, "id", UUID.randomUUID());
+            committedBooking.set(booking);
+            return booking;
+        });
+        when(payOsClient.createPaymentLink(any(), anyString())).thenReturn(paymentLink());
+        when(paymentRepository.findByBooking_Id(any())).thenReturn(Optional.empty());
+
+        StartPaymentRequest request = requestFor(testSchedule, "concurrent-key");
+        StartPaymentResponse first = checkoutService.startPayment(request, testUser);
+        StartPaymentResponse second = checkoutService.startPayment(request, testUser);
+
+        assertEquals(first.bookingId(), second.bookingId());
+        verify(redisTicketHoldService, times(1)).holdTickets(anyString(), any(), anyInt(), any());
+        verify(payOsClient, times(1)).createPaymentLink(any(), anyString());
+        verify(idempotencyLockService, times(2)).execute(eq(testUser.getId()), eq("concurrent-key"), any());
+    }
+
     private void stubBookableSchedule(ShowSchedule schedule) {
         when(bookingRepository.findByUserAndIdempotencyKey(any(), anyString())).thenReturn(Optional.empty());
         when(scheduleRepository.findById(schedule.getId())).thenReturn(Optional.of(schedule));
@@ -281,6 +341,24 @@ class CheckoutServiceImplTest {
         when(schedule.getStartTime()).thenReturn(LocalDateTime.now().plusDays(1));
         when(schedule.availableFor(any())).thenReturn(10);
         return schedule;
+    }
+
+    private Booking mockExistingBooking(BigDecimal unitPrice) {
+        Booking booking = mock(Booking.class);
+        BookingItem item = mock(BookingItem.class);
+        UUID bookingId = UUID.randomUUID();
+        String scheduleId = testSchedule.getId().toString();
+        lenient().when(booking.getId()).thenReturn(bookingId);
+        lenient().when(booking.getStatus()).thenReturn(com.asms.booking.enums.BookingStatus.PENDING_PAYMENT);
+        lenient().when(booking.getExpiresAt()).thenReturn(Instant.now().plusSeconds(600));
+        lenient().when(booking.getTotalQuantity()).thenReturn(2);
+        lenient().when(booking.getTotalAmount()).thenReturn(unitPrice.multiply(BigDecimal.valueOf(2)));
+        when(booking.getItems()).thenReturn(List.of(item));
+        when(item.getScheduleId()).thenReturn(scheduleId);
+        when(item.getTicketType()).thenReturn(com.asms.booking.enums.TicketType.STANDARD);
+        when(item.getQuantity()).thenReturn(2);
+        when(item.getUnitPrice()).thenReturn(unitPrice);
+        return booking;
     }
 
     private static final class TestTransactionException extends TransactionException {

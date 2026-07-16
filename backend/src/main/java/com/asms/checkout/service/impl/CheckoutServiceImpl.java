@@ -23,6 +23,8 @@ import com.asms.payment.repository.PaymentRepository;
 import com.asms.payment.integration.PayOsClient;
 import com.asms.payment.integration.PayOsPaymentLink;
 import com.asms.checkout.service.CheckoutService;
+import com.asms.checkout.service.CheckoutIdempotencyLockService;
+import com.asms.core.exception.ErrorCode;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import org.springframework.stereotype.Service;
@@ -53,6 +55,7 @@ public class CheckoutServiceImpl implements CheckoutService {
     private final PaymentRepository paymentRepository;
     private final PayOsClient payOsClient;
     private final TransactionTemplate transactionTemplate;
+    private final CheckoutIdempotencyLockService idempotencyLockService;
 
     public CheckoutServiceImpl(
             BookingRepository bookingRepository,
@@ -61,7 +64,8 @@ public class CheckoutServiceImpl implements CheckoutService {
             TicketPricingService ticketPricingService,
             PaymentRepository paymentRepository,
             PayOsClient payOsClient,
-            PlatformTransactionManager transactionManager
+            PlatformTransactionManager transactionManager,
+            CheckoutIdempotencyLockService idempotencyLockService
     ) {
         this.bookingRepository = bookingRepository;
         this.scheduleRepository = scheduleRepository;
@@ -70,6 +74,7 @@ public class CheckoutServiceImpl implements CheckoutService {
         this.paymentRepository = paymentRepository;
         this.payOsClient = payOsClient;
         this.transactionTemplate = new TransactionTemplate(transactionManager);
+        this.idempotencyLockService = idempotencyLockService;
     }
 
     @Override
@@ -79,12 +84,23 @@ public class CheckoutServiceImpl implements CheckoutService {
         }
 
         String idempotencyKey = request.idempotencyKey().trim();
+        return idempotencyLockService.execute(
+                user.getId(),
+                idempotencyKey,
+                () -> startPaymentLocked(request, user, idempotencyKey)
+        );
+    }
+
+    private StartPaymentResponse startPaymentLocked(StartPaymentRequest request, User user, String idempotencyKey) {
         Optional<Booking> existingBookingOpt = bookingRepository.findByUserAndIdempotencyKey(user, idempotencyKey);
 
         if (existingBookingOpt.isPresent()) {
             Booking existing = existingBookingOpt.get();
             if (!isSamePayload(existing, request.items())) {
-                throw new ConflictException("IDEMPOTENCY_KEY_REUSED");
+                throw new ConflictException(
+                        ErrorCode.IDEMPOTENCY_KEY_REUSED,
+                        "Idempotency key was already used with a different checkout payload"
+                );
             }
             return buildResponse(existing);
         }
@@ -222,15 +238,25 @@ public class CheckoutServiceImpl implements CheckoutService {
         List<NormalizedLine> reqNormalized = normalizeItems(items);
         if (existing.getItems().size() != reqNormalized.size()) return false;
 
-        Map<String, Integer> existingMap = new HashMap<>();
+        Map<LineKey, ExistingLineData> existingMap = new HashMap<>();
         for (BookingItem item : existing.getItems()) {
-            String key = item.getScheduleId() + "-" + item.getTicketType().name();
-            existingMap.put(key, existingMap.getOrDefault(key, 0) + item.getQuantity());
+            LineKey key = new LineKey(UUID.fromString(item.getScheduleId()), item.getTicketType());
+            ExistingLineData current = existingMap.get(key);
+            if (current == null) {
+                existingMap.put(key, new ExistingLineData(item.getQuantity(), item.getUnitPrice()));
+            } else {
+                current.quantity += item.getQuantity();
+                if (current.unitPrice.compareTo(item.getUnitPrice()) != 0) {
+                    return false;
+                }
+            }
         }
 
         for (NormalizedLine line : reqNormalized) {
-            String key = line.scheduleId.toString() + "-" + line.ticketType.name();
-            if (!existingMap.containsKey(key) || !existingMap.get(key).equals(line.quantity)) {
+            ExistingLineData existingLine = existingMap.get(new LineKey(line.scheduleId, line.ticketType));
+            if (existingLine == null
+                    || existingLine.quantity != line.quantity
+                    || existingLine.unitPrice.compareTo(line.expectedUnitPrice) != 0) {
                 return false;
             }
         }
@@ -369,6 +395,14 @@ public class CheckoutServiceImpl implements CheckoutService {
         NormalizedLineData(int quantity, BigDecimal expectedUnitPrice) {
             this.quantity = quantity;
             this.expectedUnitPrice = expectedUnitPrice;
+        }
+    }
+    private static class ExistingLineData {
+        int quantity;
+        BigDecimal unitPrice;
+        ExistingLineData(int quantity, BigDecimal unitPrice) {
+            this.quantity = quantity;
+            this.unitPrice = unitPrice;
         }
     }
     private record NormalizedLine(UUID scheduleId, TicketType ticketType, int quantity, BigDecimal expectedUnitPrice) {}
