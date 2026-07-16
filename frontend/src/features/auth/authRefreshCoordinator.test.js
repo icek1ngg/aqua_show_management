@@ -479,6 +479,28 @@ describe('authRefreshCoordinator', () => {
     assert.deepEqual(await Promise.all([first, second]), ['web-lock-token-1', 'web-lock-token-1']);
   });
 
+  it('does not combine signal with ifAvailable in a Web Locks request', async (t) => {
+    const locks = {
+      request(name, options, callback) {
+        if (options?.signal && options?.ifAvailable) {
+          throw new TypeError("The 'signal' and 'ifAvailable' options cannot be used together.");
+        }
+        return Promise.resolve(callback({ name }));
+      }
+    };
+    const coordinator = refreshCoordinator.createAuthRefreshCoordinator({
+      channel: createBroadcastBus().open(),
+      locks,
+      refreshAccessToken: async () => ({
+        data: { accessToken: 'browser-compatible-token', expiresIn: 3600 }
+      }),
+      tokenStore: createMemoryTokenStore()
+    });
+    t.after(() => coordinator.dispose());
+
+    assert.equal(await coordinator.performRefresh(), 'browser-compatible-token');
+  });
+
   it('uses a Web Locks result broadcast before the loser callback is installed', async (t) => {
     const bus = createBroadcastBus();
     const locks = createWebLockManager({ unavailableDelayMs: 15 });
@@ -501,6 +523,30 @@ describe('authRefreshCoordinator', () => {
     const results = await Promise.all([firstTab.performRefresh(), secondTab.performRefresh()]);
 
     assert.deepEqual(results, ['early-token-1', 'early-token-1']);
+    assert.equal(refreshCalls, 1);
+  });
+
+  it('lets a late-joining tab reuse a peer token without rotating again', async (t) => {
+    const bus = createBroadcastBus();
+    const locks = createWebLockManager();
+    let refreshCalls = 0;
+    const refreshAccessToken = async () => {
+      refreshCalls += 1;
+      return { data: { accessToken: `late-peer-token-${refreshCalls}`, expiresIn: 3600 } };
+    };
+    const firstTab = refreshCoordinator.createAuthRefreshCoordinator({
+      channel: bus.open(), locks, refreshAccessToken, tokenStore: createMemoryTokenStore()
+    });
+    t.after(() => firstTab.dispose());
+
+    assert.equal(await firstTab.performRefresh(), 'late-peer-token-1');
+
+    const secondTab = refreshCoordinator.createAuthRefreshCoordinator({
+      channel: bus.open(), locks, refreshAccessToken, tokenStore: createMemoryTokenStore()
+    });
+    t.after(() => secondTab.dispose());
+
+    assert.equal(await secondTab.performRefresh(), 'late-peer-token-1');
     assert.equal(refreshCalls, 1);
   });
 });

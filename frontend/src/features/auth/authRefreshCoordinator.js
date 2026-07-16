@@ -1,4 +1,4 @@
-import { getExpiresAt, setAccessToken, clearAccessToken } from './authTokenStore.js';
+import { getAccessToken, getExpiresAt, setAccessToken, clearAccessToken } from './authTokenStore.js';
 import * as authService from '../../services/authService.js';
 import { getTokenExpiresAt } from './jwtPayload.js';
 
@@ -41,7 +41,7 @@ export function createAuthRefreshCoordinator({
   setTimeoutFn = setTimeout,
   storage = null,
   tabId = randomTabId(),
-  tokenStore = { clearAccessToken, getExpiresAt, setAccessToken },
+  tokenStore = { clearAccessToken, getAccessToken, getExpiresAt, setAccessToken },
   waitTimeoutMs = DEFAULT_WAIT_TIMEOUT_MS
 } = {}) {
   let activeRefreshPromise = null;
@@ -97,7 +97,13 @@ export function createAuthRefreshCoordinator({
   }
 
   function onChannelMessage(event) {
-    if (event.data?.type === 'REFRESH_SUCCESS') {
+    if (event.data?.type === 'TOKEN_REQUEST') {
+      const accessToken = tokenStore.getAccessToken?.();
+      const expiresAt = tokenStore.getExpiresAt();
+      if (accessToken && expiresAt > now()) {
+        postMessage({ type: 'REFRESH_SUCCESS', accessToken, expiresAt });
+      }
+    } else if (event.data?.type === 'REFRESH_SUCCESS') {
       lastPeerOutcome = {
         accessToken: event.data.accessToken,
         sequence: ++peerOutcomeSequence,
@@ -343,7 +349,7 @@ export function createAuthRefreshCoordinator({
     if (!channel) {
       return locks.request(REFRESH_LOCK_NAME, signalOptions, () => performRefreshInternal());
     }
-    return locks.request(REFRESH_LOCK_NAME, { ...signalOptions, ifAvailable: true }, async (lock) => {
+    return locks.request(REFRESH_LOCK_NAME, { ifAvailable: true }, async (lock) => {
       ensureActive();
       if (lock) return performRefreshInternal();
       const outcome = await waitForWebLockPeer(deadline, observedSequence);
@@ -352,13 +358,25 @@ export function createAuthRefreshCoordinator({
     });
   }
 
+  async function performWithPeerDiscovery(deadline, observedSequence) {
+    postMessage({ type: 'TOKEN_REQUEST' });
+    await delay(leaseArbitrationMs);
+    ensureActive();
+    const peerOutcome = peerOutcomeAfter(observedSequence);
+    if (peerOutcome?.type === 'success') return peerOutcome.accessToken;
+    if (peerOutcome?.type === 'failure') throw new Error('Refresh failed in another tab');
+    return performWithWebLock(deadline, observedSequence);
+  }
+
   function performRefresh() {
     if (disposed) return Promise.reject(disposedError());
     if (activeRefreshPromise) return activeRefreshPromise;
     const deadline = now() + waitTimeoutMs;
     const observedSequence = peerOutcomeSequence;
     const operation = locks?.request
-      ? performWithWebLock(deadline, observedSequence)
+      ? (channel
+          ? performWithPeerDiscovery(deadline, observedSequence)
+          : performWithWebLock(deadline, observedSequence))
       : performWithLease(deadline, observedSequence);
     activeRefreshPromise = Promise.resolve(operation).finally(() => {
       activeRefreshPromise = null;
