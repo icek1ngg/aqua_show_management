@@ -136,6 +136,26 @@ public class PayOsClient {
         );
     }
 
+    public void cancelPaymentLink(String orderCode, String cancellationReason) {
+        if (clientId == null || clientId.isBlank() || apiKey == null || apiKey.isBlank()) {
+            return;
+        }
+
+        try {
+            Map<String, Object> request = Map.of("cancellationReason", cancellationReason == null ? "CANCELLED" : cancellationReason);
+            restClient.post()
+                    .uri("/v2/payment-requests/{id}/cancel", orderCode)
+                    .contentType(MediaType.APPLICATION_JSON)
+                    .header("x-client-id", clientId)
+                    .header("x-api-key", apiKey)
+                    .body(request)
+                    .retrieve()
+                    .toBodilessEntity();
+        } catch (Exception e) {
+            log.warn("Failed to cancel PayOS payment link for order {}: {}", orderCode, e.getMessage());
+        }
+    }
+
     public PayOsPaymentStatus getPaymentStatus(String orderCodeOrPaymentLinkId) {
         if (orderCodeOrPaymentLinkId == null || orderCodeOrPaymentLinkId.isBlank()) {
             throw new BadRequestException("PayOS order code is required");
