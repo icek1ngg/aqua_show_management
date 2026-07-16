@@ -7,11 +7,13 @@ import com.asms.identity.enums.AuthChallengeType;
 import com.asms.identity.enums.UserStatus;
 import com.asms.identity.repository.UserRepository;
 import com.asms.identity.service.AuthChallengeService;
-import com.asms.identity.service.PasswordResetEmailSender;
+import com.asms.identity.service.PasswordResetMailEvents.PasswordChanged;
+import com.asms.identity.service.PasswordResetMailEvents.ResetRequested;
 import com.asms.identity.service.PasswordResetService;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import org.springframework.security.crypto.password.PasswordEncoder;
+import org.springframework.context.ApplicationEventPublisher;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
@@ -24,20 +26,20 @@ public class PasswordResetServiceImpl implements PasswordResetService {
 
     private final AuthChallengeService challengeService;
     private final UserRepository userRepository;
-    private final PasswordResetEmailSender emailSender;
+    private final ApplicationEventPublisher eventPublisher;
     private final PasswordEncoder passwordEncoder;
     private final com.asms.identity.service.AuthSessionService authSessionService;
 
     public PasswordResetServiceImpl(
             AuthChallengeService challengeService,
             UserRepository userRepository,
-            PasswordResetEmailSender emailSender,
+            ApplicationEventPublisher eventPublisher,
             PasswordEncoder passwordEncoder,
             com.asms.identity.service.AuthSessionService authSessionService
     ) {
         this.challengeService = challengeService;
         this.userRepository = userRepository;
-        this.emailSender = emailSender;
+        this.eventPublisher = eventPublisher;
         this.passwordEncoder = passwordEncoder;
         this.authSessionService = authSessionService;
     }
@@ -47,7 +49,6 @@ public class PasswordResetServiceImpl implements PasswordResetService {
     public void requestPasswordReset(String email) {
         Optional<User> userOpt = userRepository.findByEmailIgnoreCase(email.trim());
         if (userOpt.isEmpty()) {
-            log.info("Password reset requested for nonexistent email: {}", email);
             return;
         }
 
@@ -55,13 +56,11 @@ public class PasswordResetServiceImpl implements PasswordResetService {
 
         // Check if user is Google-only
         if (user.getAuthProvider() == AuthProvider.GOOGLE && user.getPasswordHash() == null) {
-            log.info("Password reset requested for Google-only account: {}", email);
             return;
         }
 
         // Check if user is disabled or inactive
         if (user.getStatus() == UserStatus.DISABLED || user.getStatus() == UserStatus.INACTIVE) {
-            log.info("Password reset requested for inactive or disabled user: {}", email);
             return;
         }
 
@@ -73,9 +72,9 @@ public class PasswordResetServiceImpl implements PasswordResetService {
             );
             String tokenString = issued.rawToken();
 
-            emailSender.sendPasswordResetEmail(user, tokenString);
+            eventPublisher.publishEvent(new ResetRequested(user, tokenString));
         } catch (Exception e) {
-            log.error("Failed to process password reset request for {}", user.getEmail(), e);
+            log.error("Failed to process password reset request for user {}", user.getId(), e);
         }
     }
 
@@ -100,9 +99,6 @@ public class PasswordResetServiceImpl implements PasswordResetService {
         authSessionService.revokeAll(user);
         userRepository.save(user);
         
-        // Disable other challenges
-        challengeService.invalidate(user, AuthChallengeType.PASSWORD_RESET);
-
-        emailSender.sendPasswordChangedEmail(user);
+        eventPublisher.publishEvent(new PasswordChanged(user));
     }
 }

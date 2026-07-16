@@ -1,6 +1,7 @@
 package com.asms.identity.service;
 
 import com.asms.core.exception.BadRequestException;
+import com.asms.core.exception.ErrorCode;
 import com.asms.identity.entity.AuthChallenge;
 import com.asms.identity.entity.User;
 import com.asms.identity.enums.AuthChallengeType;
@@ -75,32 +76,35 @@ class AuthChallengeServiceTest {
 
         assertThatThrownBy(() -> service.consume(rawToken, AuthChallengeType.PASSWORD_RESET))
                 .isInstanceOf(BadRequestException.class)
-                .hasMessageContaining("type");
+                .extracting("code")
+                .isEqualTo(ErrorCode.RESET_TOKEN_TYPE_MISMATCH);
     }
 
     @Test
     void consumeRejectsExpiredToken() {
         String rawToken = "expired-token";
-        AuthChallenge challenge = new AuthChallenge(user, AuthChallengeType.EMAIL_VERIFICATION, codec.hash(rawToken), LocalDateTime.now().minusMinutes(5));
+        AuthChallenge challenge = new AuthChallenge(user, AuthChallengeType.PASSWORD_RESET, codec.hash(rawToken), LocalDateTime.now().minusMinutes(5));
         
         when(repository.findByTokenHashForUpdate(codec.hash(rawToken))).thenReturn(Optional.of(challenge));
 
-        assertThatThrownBy(() -> service.consume(rawToken, AuthChallengeType.EMAIL_VERIFICATION))
+        assertThatThrownBy(() -> service.consume(rawToken, AuthChallengeType.PASSWORD_RESET))
                 .isInstanceOf(BadRequestException.class)
-                .hasMessageContaining("expired");
+                .extracting("code")
+                .isEqualTo(ErrorCode.RESET_TOKEN_EXPIRED);
     }
 
     @Test
     void consumeRejectsUsedToken() {
         String rawToken = "used-token";
-        AuthChallenge challenge = new AuthChallenge(user, AuthChallengeType.EMAIL_VERIFICATION, codec.hash(rawToken), LocalDateTime.now().plusMinutes(15));
+        AuthChallenge challenge = new AuthChallenge(user, AuthChallengeType.PASSWORD_RESET, codec.hash(rawToken), LocalDateTime.now().plusMinutes(15));
         challenge.setUsedAt(LocalDateTime.now());
         
         when(repository.findByTokenHashForUpdate(codec.hash(rawToken))).thenReturn(Optional.of(challenge));
 
-        assertThatThrownBy(() -> service.consume(rawToken, AuthChallengeType.EMAIL_VERIFICATION))
+        assertThatThrownBy(() -> service.consume(rawToken, AuthChallengeType.PASSWORD_RESET))
                 .isInstanceOf(BadRequestException.class)
-                .hasMessageContaining("already been used");
+                .extracting("code")
+                .isEqualTo(ErrorCode.RESET_TOKEN_USED);
     }
 
     @Test
@@ -108,9 +112,10 @@ class AuthChallengeServiceTest {
         String rawToken = "invalid-token";
         when(repository.findByTokenHashForUpdate(codec.hash(rawToken))).thenReturn(Optional.empty());
 
-        assertThatThrownBy(() -> service.consume(rawToken, AuthChallengeType.EMAIL_VERIFICATION))
+        assertThatThrownBy(() -> service.consume(rawToken, AuthChallengeType.PASSWORD_RESET))
                 .isInstanceOf(BadRequestException.class)
-                .hasMessageContaining("Invalid challenge token");
+                .extracting("code")
+                .isEqualTo(ErrorCode.RESET_TOKEN_INVALID);
     }
 
     @Test

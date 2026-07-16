@@ -1,6 +1,7 @@
 package com.asms.identity.service.impl;
 
 import com.asms.core.exception.BadRequestException;
+import com.asms.core.exception.ErrorCode;
 import com.asms.identity.entity.AuthChallenge;
 import com.asms.identity.entity.User;
 import com.asms.identity.enums.AuthChallengeType;
@@ -45,18 +46,30 @@ public class AuthChallengeServiceImpl implements AuthChallengeService {
         String tokenHash = tokenCodec.hash(rawToken);
 
         AuthChallenge challenge = challengeRepository.findByTokenHashForUpdate(tokenHash)
-                .orElseThrow(() -> new BadRequestException("Invalid challenge token"));
+                .orElseThrow(() -> new BadRequestException(
+                        invalidCode(expectedType),
+                        "Invalid challenge token"
+                ));
 
         if (challenge.getType() != expectedType) {
-            throw new BadRequestException("Invalid challenge token type");
+            throw new BadRequestException(
+                    mismatchCode(expectedType),
+                    "Invalid challenge token type"
+            );
         }
 
         if (challenge.isUsed()) {
-            throw new BadRequestException("Challenge token has already been used");
+            throw new BadRequestException(
+                    usedCode(expectedType),
+                    "Challenge token has already been used"
+            );
         }
 
         if (challenge.isExpired()) {
-            throw new BadRequestException("Challenge token has expired");
+            throw new BadRequestException(
+                    expiredCode(expectedType),
+                    "Challenge token has expired"
+            );
         }
 
         challenge.setUsedAt(LocalDateTime.now());
@@ -67,5 +80,29 @@ public class AuthChallengeServiceImpl implements AuthChallengeService {
     @Transactional
     public void invalidate(User user, AuthChallengeType type) {
         challengeRepository.deleteByUserAndType(user, type);
+    }
+
+    private ErrorCode invalidCode(AuthChallengeType type) {
+        return type == AuthChallengeType.PASSWORD_RESET
+                ? ErrorCode.RESET_TOKEN_INVALID
+                : ErrorCode.VERIFICATION_TOKEN_INVALID;
+    }
+
+    private ErrorCode expiredCode(AuthChallengeType type) {
+        return type == AuthChallengeType.PASSWORD_RESET
+                ? ErrorCode.RESET_TOKEN_EXPIRED
+                : ErrorCode.VERIFICATION_TOKEN_EXPIRED;
+    }
+
+    private ErrorCode usedCode(AuthChallengeType type) {
+        return type == AuthChallengeType.PASSWORD_RESET
+                ? ErrorCode.RESET_TOKEN_USED
+                : ErrorCode.VERIFICATION_TOKEN_USED;
+    }
+
+    private ErrorCode mismatchCode(AuthChallengeType type) {
+        return type == AuthChallengeType.PASSWORD_RESET
+                ? ErrorCode.RESET_TOKEN_TYPE_MISMATCH
+                : ErrorCode.VERIFICATION_TOKEN_INVALID;
     }
 }

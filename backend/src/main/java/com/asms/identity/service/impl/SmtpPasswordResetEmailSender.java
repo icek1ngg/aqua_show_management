@@ -115,7 +115,7 @@ public class SmtpPasswordResetEmailSender implements PasswordResetEmailSender {
                 helper.setText(htmlContent, true);
                 mailSender.send(message);
             } catch (Exception e) {
-                log.error("Failed to send password reset email to {}", user.getEmail(), e);
+                log.error("Failed to send password reset email for user {}", user.getId(), e);
             }
         });
     }
@@ -152,7 +152,7 @@ public class SmtpPasswordResetEmailSender implements PasswordResetEmailSender {
                 helper.setText(htmlContent, true);
                 mailSender.send(message);
             } catch (Exception e) {
-                log.error("Failed to send password changed email to {}", user.getEmail(), e);
+                log.error("Failed to send password changed email for user {}", user.getId(), e);
             }
         });
     }

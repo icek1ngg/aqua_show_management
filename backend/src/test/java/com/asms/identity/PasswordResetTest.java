@@ -10,6 +10,7 @@ import com.asms.identity.enums.AuthChallengeType;
 import com.asms.identity.enums.AuthProvider;
 import com.asms.identity.enums.UserStatus;
 import com.asms.identity.service.AuthChallengeService;
+import com.asms.identity.service.PasswordResetMailEvents.ResetRequested;
 import com.asms.identity.repository.UserRepository;
 import com.asms.identity.security.RefreshTokenCookieService;
 import com.asms.identity.service.impl.PasswordResetServiceImpl;
@@ -19,6 +20,7 @@ import org.junit.jupiter.api.Test;
 import org.mockito.Mockito;
 import org.springframework.mail.javamail.JavaMailSender;
 import org.springframework.security.crypto.password.PasswordEncoder;
+import org.springframework.context.ApplicationEventPublisher;
 import org.springframework.test.util.ReflectionTestUtils;
 
 import java.time.LocalDateTime;
@@ -34,7 +36,7 @@ class PasswordResetTest {
 
     private UserRepository userRepository;
     private AuthChallengeService challengeService;
-    private com.asms.identity.service.PasswordResetEmailSender emailSender;
+    private ApplicationEventPublisher eventPublisher;
     private PasswordEncoder passwordEncoder;
     private PasswordResetServiceImpl passwordResetService;
 
@@ -42,7 +44,7 @@ class PasswordResetTest {
     void setUp() {
         userRepository = mock(UserRepository.class);
         challengeService = mock(AuthChallengeService.class);
-        emailSender = mock(com.asms.identity.service.PasswordResetEmailSender.class);
+        eventPublisher = mock(ApplicationEventPublisher.class);
         passwordEncoder = mock(PasswordEncoder.class);
 
         com.asms.identity.service.AuthSessionService authSessionService = mock(com.asms.identity.service.AuthSessionService.class);
@@ -50,7 +52,7 @@ class PasswordResetTest {
         passwordResetService = new PasswordResetServiceImpl(
                 challengeService,
                 userRepository,
-                emailSender,
+                eventPublisher,
                 passwordEncoder,
                 authSessionService
         );
@@ -68,7 +70,7 @@ class PasswordResetTest {
 
         passwordResetService.requestPasswordReset("local@example.com");
 
-        verify(emailSender).sendPasswordResetEmail(user, "mocked-token");
+        verify(eventPublisher).publishEvent(new ResetRequested(user, "mocked-token"));
     }
 
     @Test
@@ -77,7 +79,7 @@ class PasswordResetTest {
 
         passwordResetService.requestPasswordReset("nonexistent@example.com");
 
-        verifyNoInteractions(challengeService, emailSender);
+        verifyNoInteractions(challengeService, eventPublisher);
     }
 
     @Test
@@ -90,7 +92,7 @@ class PasswordResetTest {
 
         passwordResetService.requestPasswordReset("google@example.com");
 
-        verifyNoInteractions(challengeService, emailSender);
+        verifyNoInteractions(challengeService, eventPublisher);
     }
 
     @Test
@@ -102,7 +104,7 @@ class PasswordResetTest {
 
         passwordResetService.requestPasswordReset("disabled@example.com");
 
-        verifyNoInteractions(challengeService, emailSender);
+        verifyNoInteractions(challengeService, eventPublisher);
     }
 
     @Test
@@ -118,7 +120,7 @@ class PasswordResetTest {
 
         assertThat(user.getPasswordHash()).isEqualTo("newHashedPassword");
         verify(userRepository).save(user);
-        verify(challengeService).invalidate(user, AuthChallengeType.PASSWORD_RESET);
+        verify(challengeService, never()).invalidate(user, AuthChallengeType.PASSWORD_RESET);
     }
 
     @Test

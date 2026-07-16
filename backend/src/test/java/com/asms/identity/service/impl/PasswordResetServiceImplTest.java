@@ -9,7 +9,8 @@ import com.asms.identity.enums.UserStatus;
 import com.asms.identity.repository.UserRepository;
 import com.asms.identity.service.AuthChallengeService;
 import com.asms.identity.service.AuthSessionService;
-import com.asms.identity.service.PasswordResetEmailSender;
+import com.asms.identity.service.PasswordResetMailEvents.PasswordChanged;
+import com.asms.identity.service.PasswordResetMailEvents.ResetRequested;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.extension.ExtendWith;
@@ -17,6 +18,9 @@ import org.mockito.InjectMocks;
 import org.mockito.Mock;
 import org.mockito.junit.jupiter.MockitoExtension;
 import org.springframework.security.crypto.password.PasswordEncoder;
+import org.springframework.context.ApplicationEventPublisher;
+import org.springframework.boot.test.system.CapturedOutput;
+import org.springframework.boot.test.system.OutputCaptureExtension;
 import org.springframework.test.util.ReflectionTestUtils;
 
 import java.time.Duration;
@@ -27,7 +31,7 @@ import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.ArgumentMatchers.eq;
 import static org.mockito.Mockito.*;
 
-@ExtendWith(MockitoExtension.class)
+@ExtendWith({MockitoExtension.class, OutputCaptureExtension.class})
 class PasswordResetServiceImplTest {
 
     @Mock
@@ -35,7 +39,7 @@ class PasswordResetServiceImplTest {
     @Mock
     private UserRepository userRepository;
     @Mock
-    private PasswordResetEmailSender emailSender;
+    private ApplicationEventPublisher eventPublisher;
     @Mock
     private PasswordEncoder passwordEncoder;
     @Mock
@@ -64,7 +68,7 @@ class PasswordResetServiceImplTest {
         passwordResetService.requestPasswordReset("user@example.com");
 
         verify(challengeService).issue(eq(user), eq(AuthChallengeType.PASSWORD_RESET), any(Duration.class));
-        verify(emailSender).sendPasswordResetEmail(user, "test-token");
+        verify(eventPublisher).publishEvent(new ResetRequested(user, "test-token"));
     }
 
     @Test
@@ -74,7 +78,16 @@ class PasswordResetServiceImplTest {
         passwordResetService.requestPasswordReset("notfound@example.com");
 
         verify(challengeService, never()).issue(any(), any(), any());
-        verify(emailSender, never()).sendPasswordResetEmail(any(), any());
+        verifyNoInteractions(eventPublisher);
+    }
+
+    @Test
+    void requestPasswordReset_shouldNotLogSubmittedEmail(CapturedOutput output) {
+        when(userRepository.findByEmailIgnoreCase("private@example.com")).thenReturn(Optional.empty());
+
+        passwordResetService.requestPasswordReset("private@example.com");
+
+        assertFalse(output.getOut().contains("private@example.com"));
     }
 
     @Test
@@ -86,7 +99,7 @@ class PasswordResetServiceImplTest {
         passwordResetService.requestPasswordReset("user@example.com");
 
         verify(challengeService, never()).issue(any(), any(), any());
-        verify(emailSender, never()).sendPasswordResetEmail(any(), any());
+        verifyNoInteractions(eventPublisher);
     }
 
     @Test
@@ -102,8 +115,8 @@ class PasswordResetServiceImplTest {
         assertEquals(2, user.getAuthVersion());
         verify(authSessionService).revokeAll(user);
         verify(userRepository).save(user);
-        verify(challengeService).invalidate(user, AuthChallengeType.PASSWORD_RESET);
-        verify(emailSender).sendPasswordChangedEmail(user);
+        verify(challengeService, never()).invalidate(user, AuthChallengeType.PASSWORD_RESET);
+        verify(eventPublisher).publishEvent(new PasswordChanged(user));
     }
 
     @Test
@@ -118,6 +131,6 @@ class PasswordResetServiceImplTest {
 
         verify(authSessionService, never()).revokeAll(any());
         verify(userRepository, never()).save(any());
-        verify(emailSender, never()).sendPasswordChangedEmail(any());
+        verifyNoInteractions(eventPublisher);
     }
 }

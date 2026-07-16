@@ -9,13 +9,15 @@ import org.mockito.InjectMocks;
 import org.mockito.Mock;
 import org.mockito.junit.jupiter.MockitoExtension;
 import org.springframework.core.task.SyncTaskExecutor;
+import org.springframework.boot.test.system.CapturedOutput;
+import org.springframework.boot.test.system.OutputCaptureExtension;
 import org.springframework.mail.javamail.JavaMailSender;
 import org.springframework.test.util.ReflectionTestUtils;
 
 import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.Mockito.*;
 
-@ExtendWith(MockitoExtension.class)
+@ExtendWith({MockitoExtension.class, OutputCaptureExtension.class})
 class SmtpPasswordResetEmailSenderTest {
 
     @Mock
@@ -55,7 +57,7 @@ class SmtpPasswordResetEmailSenderTest {
     }
     
     @Test
-    void sendPasswordResetEmail_shouldNotThrowException_whenMailSenderFails() {
+    void sendPasswordResetEmail_shouldNotThrowException_whenMailSenderFails(CapturedOutput output) {
         User user = new User("Last", "First", "user@example.com", "123456789", "hash");
 
         MimeMessage mimeMessage = mock(MimeMessage.class);
@@ -65,5 +67,6 @@ class SmtpPasswordResetEmailSenderTest {
         emailSender.sendPasswordResetEmail(user, "test-token");
 
         verify(mailSender).send(mimeMessage);
+        org.junit.jupiter.api.Assertions.assertFalse(output.getOut().contains("user@example.com"));
     }
 }

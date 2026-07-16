@@ -66,15 +66,14 @@ public class VerificationChallengeService {
         try {
             challenge = challengeService.consume(rawToken, AuthChallengeType.EMAIL_VERIFICATION);
         } catch (com.asms.core.exception.BadRequestException e) {
-            String msg = e.getMessage();
-            if (msg.contains("used")) {
+            if (e.getCode() == ErrorCode.VERIFICATION_TOKEN_USED) {
                 throw new VerificationTokenException(
                         ErrorCode.VERIFICATION_TOKEN_USED,
                         VerificationTokenException.Result.USED,
                         "Verification token has already been used"
                 );
             }
-            if (msg.contains("expired")) {
+            if (e.getCode() == ErrorCode.VERIFICATION_TOKEN_EXPIRED) {
                 throw new VerificationTokenException(
                         ErrorCode.VERIFICATION_TOKEN_EXPIRED,
                         VerificationTokenException.Result.EXPIRED,
