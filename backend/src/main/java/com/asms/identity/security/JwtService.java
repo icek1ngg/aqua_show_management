@@ -65,7 +65,7 @@ public class JwtService {
     public String extractSubject(String token) {
         return getClaims(token).get("sub").toString();
     }
-    
+
     public Map<String, Object> extractClaims(String token) {
         return getClaims(token);
     }
@@ -76,7 +76,7 @@ public class JwtService {
             if (parts.length != 3) {
                 return false;
             }
-            
+
             // Check alg header
             byte[] decodedHeader = Base64.getUrlDecoder().decode(parts[0]);
             Map<String, Object> header = objectMapper.readValue(decodedHeader, MAP_TYPE);
@@ -90,11 +90,11 @@ public class JwtService {
             }
 
             Map<String, Object> claims = getClaims(token);
-            
+
             if (!"asms".equals(claims.get("iss")) || !"asms-client".equals(claims.get("aud"))) {
                 return false;
             }
-            
+
             if (!claims.containsKey("sid") || !claims.containsKey("authVersion")) {
                 return false;
             }

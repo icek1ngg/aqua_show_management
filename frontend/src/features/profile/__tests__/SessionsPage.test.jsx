@@ -56,7 +56,7 @@ describe('SessionsPage', () => {
   it('calls revokeSession when Sign out button is clicked', async () => {
     getSessions.mockResolvedValue({ data: mockSessions });
     revokeSession.mockResolvedValue({});
-    
+
     render(<SessionsPage />);
 
     await waitFor(() => {
@@ -64,7 +64,7 @@ describe('SessionsPage', () => {
     });
 
     fireEvent.click(screen.getByText('Sign out'));
-    
+
     await waitFor(() => {
       expect(revokeSession).toHaveBeenCalledWith('2');
     });

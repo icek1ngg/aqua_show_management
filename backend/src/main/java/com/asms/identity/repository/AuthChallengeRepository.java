@@ -23,7 +23,7 @@ public interface AuthChallengeRepository extends JpaRepository<AuthChallenge, UU
     @Modifying
     @Query("DELETE FROM AuthChallenge c WHERE c.user = :user AND c.type = :type")
     void deleteByUserAndType(User user, AuthChallengeType type);
-    
+
     @Query("SELECT c.user.id FROM AuthChallenge c WHERE c.tokenHash = :tokenHash")
     Optional<UUID> findUserIdByTokenHash(String tokenHash);
 }

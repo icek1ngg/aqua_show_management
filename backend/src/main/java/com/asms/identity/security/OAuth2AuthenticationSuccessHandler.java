@@ -79,7 +79,7 @@ public class OAuth2AuthenticationSuccessHandler implements AuthenticationSuccess
             Authentication authentication
     ) throws IOException, ServletException {
         OAuth2User principal = (OAuth2User) authentication.getPrincipal();
-        
+
         String emailVerifiedStr = stringAttribute(principal, "email_verified");
         if (!"true".equalsIgnoreCase(emailVerifiedStr)) {
             throw new OAuth2AuthenticationException(new OAuth2Error("unverified_email"), "Google email must be verified");
@@ -129,8 +129,8 @@ public class OAuth2AuthenticationSuccessHandler implements AuthenticationSuccess
 
         if (authSessionService != null && refreshTokenCookieService != null) {
             SessionIssue refreshToken = authSessionService.create(
-                user, 
-                true, 
+                user,
+                true,
                 new com.asms.identity.dto.SessionDtos.ClientContext(
                     request.getHeader("User-Agent"),
                     request.getRemoteAddr()
@@ -138,7 +138,7 @@ public class OAuth2AuthenticationSuccessHandler implements AuthenticationSuccess
             );
             refreshTokenCookieService.addRefreshTokenCookie(response, refreshToken.token(), refreshToken.cookieMaxAgeSeconds());
         }
-        
+
         String redirectUrl = frontendBaseUrl + "/oauth2/success";
         response.sendRedirect(redirectUrl);
     }

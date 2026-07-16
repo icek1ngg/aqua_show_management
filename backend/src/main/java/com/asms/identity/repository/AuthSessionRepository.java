@@ -24,12 +24,12 @@ public interface AuthSessionRepository extends JpaRepository<AuthSession, UUID> 
     List<AuthSession> findByUserAndExpiresAtAfterOrderByLastSeenAtDesc(User user, Instant now);
 
     long deleteByExpiresAtLessThanEqual(Instant now);
-    
+
     void deleteByUserAndId(User user, UUID id);
-    
+
     @org.springframework.data.jpa.repository.Modifying
     @Query("DELETE FROM AuthSession s WHERE s.user = :user AND s.id <> :currentSessionId")
     void deleteByUserAndIdNot(@Param("user") User user, @Param("currentSessionId") UUID currentSessionId);
-    
+
     void deleteByUser(User user);
 }

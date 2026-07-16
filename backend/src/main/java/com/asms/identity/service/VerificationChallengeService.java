@@ -82,7 +82,7 @@ public class VerificationChallengeService {
             }
             throw invalidToken();
         }
-        
+
         User lockedUser = challenge.getUser();
         lockedUser.setStatus(UserStatus.ACTIVE);
     }

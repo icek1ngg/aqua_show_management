@@ -180,8 +180,8 @@ export function AuthProvider({ children }) {
     const handleTokenUpdated = () => {
       const currentToken = getAccessToken();
       setToken(currentToken);
-      
-      // If we got a token update from another tab, we might want to fetch user, 
+
+      // If we got a token update from another tab, we might want to fetch user,
       // but decoding the token is usually enough until next reload.
       if (currentToken) {
         setUser((prevUser) => prevUser || getUserFromToken(currentToken));
@@ -211,7 +211,7 @@ export function AuthProvider({ children }) {
 
       setAccessToken(nextToken, expiresAt);
       scheduleRefresh();
-      
+
       setToken(nextToken);
       setUser(nextUser);
 
@@ -237,7 +237,7 @@ export function AuthProvider({ children }) {
     try {
       const response = await authService.completeOAuth({ code, acceptedTerms, legalDocumentVersion });
       const nextToken = getTokenFromLoginResponse(response);
-      
+
       if (!nextToken) {
         throw new Error('OAuth completion succeeded but no access token was returned.');
       }
@@ -245,13 +245,13 @@ export function AuthProvider({ children }) {
       const responseData = getResponseData(response);
       const expiresAt = getTokenExpiresAt(nextToken, responseData?.expiresAt, responseData?.expiresIn);
       const tokenUser = getUserFromResponse(response) || getUserFromToken(nextToken);
-      
+
       setAccessToken(nextToken, expiresAt);
       scheduleRefresh();
-      
+
       setToken(nextToken);
       setUser(tokenUser);
-      
+
       return tokenUser;
     } catch (error) {
       broadcastLogout();

@@ -11,7 +11,7 @@ export default function OAuthSuccessPage() {
   useEffect(() => {
     if (loading) return;
     if (handledRef.current) return;
-    
+
     handledRef.current = true;
 
     if (isAuthenticated) {

@@ -139,9 +139,9 @@ public class AuthServiceImpl implements AuthService {
     public AuthSession login(LoginRequest request, ClientContext clientContext) {
         String normalizedEmail = normalizeEmail(request.email());
         String remoteIp = clientContext.ipAddress();
-        
+
         authRateLimitService.checkLoginFailure(normalizedEmail, remoteIp);
-        
+
         User user = userRepository.findByEmailIgnoreCase(normalizedEmail).orElse(null);
         boolean localUserWithPassword = user != null
                 && user.getAuthProvider() == AuthProvider.LOCAL
@@ -182,7 +182,7 @@ public class AuthServiceImpl implements AuthService {
     @Transactional
     public AuthSession refresh(String refreshToken, ClientContext clientContext) {
         authRateLimitService.checkRefresh(clientContext.ipAddress());
-        
+
         SessionRotation rotatedSession = authSessionService.rotate(refreshToken, clientContext);
         User user = rotatedSession.user();
         String accessToken = jwtService.generateToken(user, rotatedSession.sid());

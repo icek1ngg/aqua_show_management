@@ -95,7 +95,7 @@ class AuthSessionServiceTest {
         String tokenHash = refreshTokenCodec.hash(rawToken);
 
         AuthSession session = new AuthSession(testUser, tokenHash, Instant.now().plusSeconds(3600), "Agent", "IP");
-        
+
         when(authSessionRepository.findByIdForUpdate(sessionId)).thenReturn(Optional.of(session));
 
         SessionRotation rotation = authSessionService.rotate(rawToken, clientContext);
@@ -114,11 +114,11 @@ class AuthSessionServiceTest {
         UUID sessionId = UUID.randomUUID();
         // Generate token with generation 1
         String rawToken = refreshTokenCodec.generateToken(sessionId, 1);
-        
+
         // But session in DB is already at generation 2
         AuthSession session = new AuthSession(testUser, "differentHash", Instant.now().plusSeconds(3600), "Agent", "IP");
         session.setGeneration(2);
-        
+
         when(authSessionRepository.findByIdForUpdate(sessionId)).thenReturn(Optional.of(session));
 
         UnauthorizedException exception = assertThrows(
@@ -129,7 +129,7 @@ class AuthSessionServiceTest {
         assertEquals(ErrorCode.REFRESH_TOKEN_REUSED, exception.getCode());
         verify(authSessionRepository).delete(session);
     }
-    
+
     @Test
     void rotate_withInvalidSignature_shouldRejectAndNotRevoke() {
         String invalidToken = "invalid.token.format.sig";
@@ -145,9 +145,9 @@ class AuthSessionServiceTest {
     void rotate_expiredSession_shouldDeleteSession() {
         UUID sessionId = UUID.randomUUID();
         String rawToken = refreshTokenCodec.generateToken(sessionId, 1);
-        
+
         AuthSession session = new AuthSession(testUser, refreshTokenCodec.hash(rawToken), Instant.now().minusSeconds(10), "Agent", "IP");
-        
+
         when(authSessionRepository.findByIdForUpdate(sessionId)).thenReturn(Optional.of(session));
 
         UnauthorizedException exception = assertThrows(

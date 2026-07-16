@@ -50,17 +50,17 @@ public class AuthSessionServiceImpl implements AuthSessionService {
     public SessionIssue create(User user, boolean rememberMe, ClientContext context) {
         long lifetimeSeconds = rememberMe ? rememberMeSeconds : shortLivedSeconds;
         Instant expiresAt = Instant.now().plusSeconds(lifetimeSeconds);
-        
+
         AuthSession session = new AuthSession(
                 user,
-                UUID.randomUUID().toString(), 
+                UUID.randomUUID().toString(),
                 expiresAt,
                 context.userAgent() != null ? truncate(context.userAgent(), 255) : null,
                 IpAddressAnonymizer.anonymize(context.ipAddress()),
                 rememberMe
         );
         session = authSessionRepository.saveAndFlush(session);
-        
+
         String rawToken = refreshTokenCodec.generateToken(session.getId(), session.getGeneration());
         session.setCurrentTokenHash(refreshTokenCodec.hash(rawToken));
         authSessionRepository.save(session);
@@ -111,7 +111,7 @@ public class AuthSessionServiceImpl implements AuthSessionService {
 
         session.setGeneration(session.getGeneration() + 1);
         session.setLastSeenAt(Instant.now());
-        
+
         if (context.userAgent() != null) {
             session.setDevice(truncate(context.userAgent(), 255));
         }
@@ -124,7 +124,7 @@ public class AuthSessionServiceImpl implements AuthSessionService {
         authSessionRepository.save(session);
 
         long remainingSeconds = Math.max(0, Duration.between(Instant.now(), session.getExpiresAt()).toSeconds());
-        
+
         return new SessionRotation(nextRawToken, remainingSeconds, user, session.getId().toString());
     }
 

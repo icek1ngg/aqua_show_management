@@ -55,7 +55,7 @@ class RefreshTokenCodecTest {
         UUID sessionId = UUID.randomUUID();
         String rawToken = codec.generateToken(sessionId, 1);
         String[] parts = rawToken.split("\\.");
-        
+
         // Tamper with generation
         String tamperedPayload = parts[0] + ".2." + parts[2];
         String tamperedToken = tamperedPayload + "." + parts[3];

@@ -71,7 +71,7 @@ public class CsrfAndOriginValidationFilter extends OncePerRequestFilter {
         // 2. Validate Origin / Referer (All mutating requests)
         String origin = request.getHeader("Origin");
         String referer = request.getHeader("Referer");
-        
+
         if (!isValidOrigin(origin) && !isValidOrigin(getOriginFromReferer(referer))) {
              reject(response, "Invalid Origin or Referer");
              return;
@@ -120,7 +120,7 @@ public class CsrfAndOriginValidationFilter extends OncePerRequestFilter {
     private void reject(HttpServletResponse response, String message) throws IOException {
         response.setStatus(HttpStatus.FORBIDDEN.value());
         response.setContentType(MediaType.APPLICATION_JSON_VALUE);
-        objectMapper.writeValue(response.getWriter(), 
+        objectMapper.writeValue(response.getWriter(),
             ApiResponse.failure(ErrorCode.CSRF_VALIDATION_FAILED.name(), message));
     }
 }

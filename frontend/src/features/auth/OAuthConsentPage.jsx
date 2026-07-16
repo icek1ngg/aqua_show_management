@@ -9,7 +9,7 @@ export default function OAuthConsentPage() {
   const [searchParams] = useSearchParams();
   const navigate = useNavigate();
   const { completeOAuthConsent } = useAuth();
-  
+
   const [acceptedTerms, setAcceptedTerms] = useState(false);
   const [error, setError] = useState(null);
   const [isSubmitting, setIsSubmitting] = useState(false);
@@ -99,7 +99,7 @@ export default function OAuthConsentPage() {
               {isSubmitting ? 'Creating account...' : 'Complete Sign Up'}
             </Button>
           </form>
-          
+
           <div className="mt-6 text-center text-sm text-slate-500">
             Changed your mind?{' '}
             <Link to="/login" className="font-semibold text-cyan-600 hover:text-cyan-500">

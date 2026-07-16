@@ -120,7 +120,7 @@ export default function SessionsPage() {
                   </div>
                 </div>
               </div>
-              
+
               {!session.isCurrent && (
                 <button
                   onClick={() => handleRevoke(session.id)}

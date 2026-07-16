@@ -46,7 +46,7 @@ class AuthChallengeServiceTest {
         ArgumentCaptor<AuthChallenge> challengeCaptor = ArgumentCaptor.forClass(AuthChallenge.class);
         verify(repository).deleteByUserAndType(user, AuthChallengeType.EMAIL_VERIFICATION);
         verify(repository).save(challengeCaptor.capture());
-        
+
         AuthChallenge saved = challengeCaptor.getValue();
         assertThat(saved.getTokenHash()).isEqualTo(issued.challenge().getTokenHash());
         assertThat(saved.getTokenHash()).isEqualTo(codec.hash(issued.rawToken()));
@@ -58,7 +58,7 @@ class AuthChallengeServiceTest {
     void consumeReturnsChallengeForValidToken() {
         String rawToken = "valid-token";
         AuthChallenge challenge = new AuthChallenge(user, AuthChallengeType.PASSWORD_RESET, codec.hash(rawToken), LocalDateTime.now().plusMinutes(15));
-        
+
         when(repository.findByTokenHashForUpdate(codec.hash(rawToken))).thenReturn(Optional.of(challenge));
 
         AuthChallenge consumed = service.consume(rawToken, AuthChallengeType.PASSWORD_RESET);
@@ -71,7 +71,7 @@ class AuthChallengeServiceTest {
     void consumeRejectsMismatchedType() {
         String rawToken = "valid-token";
         AuthChallenge challenge = new AuthChallenge(user, AuthChallengeType.EMAIL_VERIFICATION, codec.hash(rawToken), LocalDateTime.now().plusMinutes(15));
-        
+
         when(repository.findByTokenHashForUpdate(codec.hash(rawToken))).thenReturn(Optional.of(challenge));
 
         assertThatThrownBy(() -> service.consume(rawToken, AuthChallengeType.PASSWORD_RESET))
@@ -84,7 +84,7 @@ class AuthChallengeServiceTest {
     void consumeRejectsExpiredToken() {
         String rawToken = "expired-token";
         AuthChallenge challenge = new AuthChallenge(user, AuthChallengeType.PASSWORD_RESET, codec.hash(rawToken), LocalDateTime.now().minusMinutes(5));
-        
+
         when(repository.findByTokenHashForUpdate(codec.hash(rawToken))).thenReturn(Optional.of(challenge));
 
         assertThatThrownBy(() -> service.consume(rawToken, AuthChallengeType.PASSWORD_RESET))
@@ -98,7 +98,7 @@ class AuthChallengeServiceTest {
         String rawToken = "used-token";
         AuthChallenge challenge = new AuthChallenge(user, AuthChallengeType.PASSWORD_RESET, codec.hash(rawToken), LocalDateTime.now().plusMinutes(15));
         challenge.setUsedAt(LocalDateTime.now());
-        
+
         when(repository.findByTokenHashForUpdate(codec.hash(rawToken))).thenReturn(Optional.of(challenge));
 
         assertThatThrownBy(() -> service.consume(rawToken, AuthChallengeType.PASSWORD_RESET))

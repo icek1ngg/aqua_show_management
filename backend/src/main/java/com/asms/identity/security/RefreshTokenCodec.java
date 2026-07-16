@@ -37,15 +37,15 @@ public class RefreshTokenCodec {
         if (parts.length != 4) {
             throw new IllegalArgumentException("Invalid token format");
         }
-        
+
         String payload = parts[0] + "." + parts[1] + "." + parts[2];
         String signature = parts[3];
-        
+
         String expectedSignature = sign(payload);
         if (!MessageDigest.isEqual(signature.getBytes(StandardCharsets.UTF_8), expectedSignature.getBytes(StandardCharsets.UTF_8))) {
             throw new IllegalArgumentException("Invalid token signature");
         }
-        
+
         try {
             return new DecodedToken(
                     UUID.fromString(parts[0]),
@@ -56,7 +56,7 @@ public class RefreshTokenCodec {
             throw new IllegalArgumentException("Invalid token payload format", e);
         }
     }
-    
+
     public String hash(String rawToken) {
         try {
             MessageDigest digest = MessageDigest.getInstance("SHA-256");

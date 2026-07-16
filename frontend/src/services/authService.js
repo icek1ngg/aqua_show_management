@@ -49,4 +49,3 @@ export async function completeOAuth({ code, acceptedTerms, legalDocumentVersion 
   const response = await apiClient.post('/auth/oauth2/complete', { code, acceptedTerms, legalDocumentVersion });
   return response.data;
 }
-

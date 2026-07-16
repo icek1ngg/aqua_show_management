@@ -55,7 +55,7 @@ class SmtpPasswordResetEmailSenderTest {
 
         verify(mailSender).send(mimeMessage);
     }
-    
+
     @Test
     void sendPasswordResetEmail_shouldNotThrowException_whenMailSenderFails(CapturedOutput output) {
         User user = new User("Last", "First", "user@example.com", "123456789", "hash");

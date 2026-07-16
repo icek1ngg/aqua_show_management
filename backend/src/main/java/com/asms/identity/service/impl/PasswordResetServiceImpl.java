@@ -98,7 +98,7 @@ public class PasswordResetServiceImpl implements PasswordResetService {
         user.invalidateAuthentication();
         authSessionService.revokeAll(user);
         userRepository.save(user);
-        
+
         eventPublisher.publishEvent(new PasswordChanged(user));
     }
 }
