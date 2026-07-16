@@ -2,8 +2,6 @@ import { useState } from 'react';
 import { useNavigate, useSearchParams, Link } from 'react-router-dom';
 import { useAuth } from './AuthContext.jsx';
 import { getRedirectPathAfterLogin } from './authRedirect.js';
-import { Button } from '../../components/ui/Button.jsx';
-import { Input } from '../../components/ui/Input.jsx';
 
 export default function OAuthConsentPage() {
   const [searchParams] = useSearchParams();
@@ -22,7 +20,7 @@ export default function OAuthConsentPage() {
         <div className="w-full max-w-md rounded-2xl bg-white p-8 text-center shadow-xl">
           <h2 className="text-xl font-bold text-red-600">Invalid Request</h2>
           <p className="mt-2 text-slate-600">Missing onboarding code.</p>
-          <Button onClick={() => navigate('/login')} className="mt-6 w-full">Back to Login</Button>
+          <button onClick={() => navigate('/login')} className="mt-6 w-full rounded-full bg-gradient-to-r from-[#ff6900] to-[#c2410c] py-4 font-bold text-white shadow-lg shadow-orange-700/20 transition duration-300 hover:-translate-y-0.5 hover:shadow-orange-700/30 active:translate-y-0 disabled:cursor-not-allowed disabled:opacity-70">Back to Login</button>
         </div>
       </div>
     );
@@ -91,13 +89,13 @@ export default function OAuthConsentPage() {
               </label>
             </div>
 
-            <Button
+            <button
               type="submit"
               disabled={isSubmitting}
-              className="w-full bg-cyan-600 hover:bg-cyan-500"
+              className="w-full rounded-full bg-gradient-to-r from-[#ff6900] to-[#c2410c] py-4 font-bold text-white shadow-lg shadow-orange-700/20 transition duration-300 hover:-translate-y-0.5 hover:shadow-orange-700/30 active:translate-y-0 disabled:cursor-not-allowed disabled:opacity-70"
             >
               {isSubmitting ? 'Creating account...' : 'Complete Sign Up'}
-            </Button>
+            </button>
           </form>
 
           <div className="mt-6 text-center text-sm text-slate-500">
