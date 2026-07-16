@@ -111,3 +111,8 @@ temp/
 # Local parallel-agent worktrees
 .worktrees/
 .superpowers/
+
+# Local planning and document artifacts
+/docs/superpowers/plans/
+/docs/superpowers/specs/
+*.docx
