@@ -14,6 +14,7 @@ import { cartItemKey } from '../cart/cartStorage.js';
 import { createBooking } from '../../services/bookingService.js';
 import { getSchedule } from '../../services/showService.js';
 import MainLayout from '../../shared/layouts/MainLayout.jsx';
+import { saveCheckoutDraft } from '../checkout/checkoutDraft.js';
 
 function bookingErrorMessage(error) {
   if (error?.response?.status === 409) return 'Ticket availability changed. We refreshed the cart with the latest information.';
@@ -119,25 +120,28 @@ export default function CreateBookingPage() {
       return;
     }
 
-    const checkedOutKeys = new Set(selectedLines.map((line) => line.key || cartItemKey(line)));
-    const payload = buildCheckoutPayload(lines, checkedOutKeys, requestId());
-    try {
-      setIsSubmitting(true);
-      setError('');
-      const response = await createBooking(payload);
-      if (!response?.bookingId) throw new Error('Booking ID was not returned.');
-      removeItems(checkedOutKeys);
-      navigate(`/bookings/${response.bookingId}/payment`);
-    } catch (submitError) {
-      if (submitError?.response?.status === 401) {
-        navigate('/login', { state: { from: location } });
-        return;
-      }
-      setError(bookingErrorMessage(submitError));
-      if (submitError?.response?.status === 409) setRefreshKey((value) => value + 1);
-    } finally {
-      setIsSubmitting(false);
-    }
+    const checkedOutKeys = Array.from(new Set(selectedLines.map((line) => line.key || cartItemKey(line))));
+    
+    const draft = {
+      idempotencyKey: requestId(),
+      cartKeys: checkedOutKeys,
+      items: selectedLines.map(line => ({
+        scheduleId: String(line.scheduleId),
+        ticketType: line.ticketType,
+        quantity: Math.trunc(Number(line.quantity)),
+        expectedUnitPrice: Number(line.unitPrice),
+        displaySnapshot: {
+          showTitle: line.showTitle,
+          imageUrl: line.imageUrl,
+          venueName: line.venueName,
+          startTime: line.startTime,
+          endTime: line.endTime
+        }
+      }))
+    };
+    
+    saveCheckoutDraft(draft);
+    navigate('/checkout/payment');
   };
 
   return (

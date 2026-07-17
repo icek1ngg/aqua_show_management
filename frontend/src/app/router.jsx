@@ -12,6 +12,7 @@ import ResetPasswordPage from '../features/auth/ResetPasswordPage.jsx';
 import BookingDetailPage from '../features/booking/BookingDetailPage.jsx';
 import BookingHistoryPage from '../features/booking/BookingHistoryPage.jsx';
 import CreateBookingPage from '../features/booking/CreateBookingPage.jsx';
+import CheckoutPaymentPage from '../features/checkout/CheckoutPaymentPage.jsx';
 import MockPayosCheckoutPage from '../features/payment/MockPayosCheckoutPage.jsx';
 import PaymentPage from '../features/payment/PaymentPage.jsx';
 import PaymentResultPage from '../features/payment/PaymentResultPage.jsx';
@@ -102,6 +103,14 @@ export const router = createBrowserRouter([
       {
         path: 'bookings/create',
         element: <CreateBookingPage />,
+      },
+      {
+        path: 'checkout/payment',
+        element: (
+          <ProtectedRoute>
+            <CheckoutPaymentPage />
+          </ProtectedRoute>
+        ),
       },
       {
         path: 'bookings/:bookingId/payment',
