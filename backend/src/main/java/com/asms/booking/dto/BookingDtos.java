@@ -2,6 +2,7 @@ package com.asms.booking.dto;
 
 import com.asms.booking.enums.BookingStatus;
 import com.asms.booking.enums.TicketType;
+import com.asms.booking.enums.PassengerType;
 import com.asms.notification.enums.EmailNotificationStatus;
 import com.asms.notification.enums.EmailNotificationType;
 import com.asms.payment.enums.PaymentStatus;
@@ -34,11 +35,16 @@ public final class BookingDtos {
             @NotBlank(message = "Ticket type is required")
             String ticketType,
 
+            String passengerType,
+
             @NotNull(message = "Quantity is required")
             @Min(value = 1, message = "Quantity must be at least 1")
             @Max(value = 10, message = "Quantity must not exceed 10")
             Integer quantity
     ) {
+        public CreateBookingItemRequest(String scheduleId, String ticketType, Integer quantity) {
+            this(scheduleId, ticketType, PassengerType.ADULT.name(), quantity);
+        }
     }
 
     public record CreateBookingRequest(
@@ -162,6 +168,7 @@ public final class BookingDtos {
             LocalDateTime endTime,
             String venueName,
             TicketType ticketType,
+            PassengerType passengerType,
             Integer quantity,
             BigDecimal unitPrice,
             BigDecimal lineTotal
@@ -214,7 +221,28 @@ public final class BookingDtos {
             long totalItems,
             int totalPages,
             boolean hasNext,
-            boolean hasPrevious
+            boolean hasPrevious,
+            BookingHistorySummary summary
+    ) {
+        public PageBookingResponse(
+                List<BookingResponse> items,
+                int page,
+                int size,
+                long totalItems,
+                int totalPages,
+                boolean hasNext,
+                boolean hasPrevious
+        ) {
+            this(items, page, size, totalItems, totalPages, hasNext, hasPrevious,
+                    new BookingHistorySummary(totalItems, 0, 0, 0));
+        }
+    }
+
+    public record BookingHistorySummary(
+            long total,
+            long pending,
+            long paid,
+            long closed
     ) {
     }
 

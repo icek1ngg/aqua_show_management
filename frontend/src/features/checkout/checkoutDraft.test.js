@@ -51,6 +51,7 @@ describe('checkoutDraft', () => {
     assert.deepEqual(retrieved.items, [{
       scheduleId,
       ticketType: 'STANDARD',
+      passengerType: 'ADULT',
       quantity: 2,
       expectedUnitPrice: 100_000,
       displaySnapshot: { showTitle: 'Dolphins' },
@@ -66,6 +67,7 @@ describe('checkoutDraft', () => {
       { ...validDraft(), items: [{ ...validDraft().items[0], scheduleId: 'not-a-uuid' }] },
       { ...validDraft(), items: [{ ...validDraft().items[0], ticketType: '?' }] },
       { ...validDraft(), items: [{ ...validDraft().items[0], ticketType: 'ADULT' }] },
+      { ...validDraft(), items: [{ ...validDraft().items[0], passengerType: 'INFANT' }] },
       { ...validDraft(), items: [{ ...validDraft().items[0], quantity: 0 }] },
       { ...validDraft(), items: [{ ...validDraft().items[0], quantity: 1.5 }] },
       { ...validDraft(), items: [{ ...validDraft().items[0], expectedUnitPrice: -1 }] },

@@ -4,6 +4,7 @@ import com.asms.booking.entity.Booking;
 import com.asms.booking.entity.BookingItem;
 import com.asms.booking.enums.BookingStatus;
 import com.asms.booking.enums.TicketType;
+import com.asms.booking.enums.PassengerType;
 import com.asms.booking.repository.BookingRepository;
 import com.asms.booking.service.RedisTicketHoldService;
 import com.asms.booking.service.TicketPricingService;
@@ -105,14 +106,19 @@ public class CheckoutServiceImpl implements CheckoutService {
 
         List<CheckoutReviewItem> reviewItems = new ArrayList<>();
         boolean reviewRequired = false;
+        Map<InventoryKey, Integer> remainingByInventory = new HashMap<>();
 
         for (ResolvedLine line : resolvedLines) {
             boolean mismatch = false;
             if (line.expectedUnitPrice.compareTo(line.actualUnitPrice) != 0) {
                 mismatch = true;
             }
-            int persistentAvailable = line.schedule.availableFor(line.ticketType);
-            if (persistentAvailable < line.quantity) {
+            InventoryKey inventoryKey = new InventoryKey(line.schedule.getId(), line.ticketType);
+            int remaining = remainingByInventory.computeIfAbsent(
+                    inventoryKey, ignored -> line.schedule.availableFor(line.ticketType));
+            int availableForLine = Math.min(line.quantity, Math.max(0, remaining));
+            remainingByInventory.put(inventoryKey, Math.max(0, remaining - availableForLine));
+            if (availableForLine < line.quantity) {
                 mismatch = true;
             }
 
@@ -121,8 +127,9 @@ public class CheckoutServiceImpl implements CheckoutService {
                 reviewItems.add(new CheckoutReviewItem(
                         line.schedule.getId().toString(),
                         line.ticketType.name(),
+                        line.passengerType.name(),
                         line.quantity,
-                        persistentAvailable,
+                        availableForLine,
                         line.expectedUnitPrice,
                         line.actualUnitPrice
                 ));
@@ -179,6 +186,7 @@ public class CheckoutServiceImpl implements CheckoutService {
                             booking,
                             line.schedule,
                             line.ticketType,
+                            line.passengerType,
                             line.quantity,
                             line.actualUnitPrice,
                             heldLine.hold.holdId()
@@ -214,7 +222,9 @@ public class CheckoutServiceImpl implements CheckoutService {
 
         Map<LineKey, ExistingLineData> existingMap = new HashMap<>();
         for (BookingItem item : existing.getItems()) {
-            LineKey key = new LineKey(UUID.fromString(item.getScheduleId()), item.getTicketType());
+            LineKey key = new LineKey(
+                    UUID.fromString(item.getScheduleId()), item.getTicketType(),
+                    item.getPassengerType() == null ? PassengerType.ADULT : item.getPassengerType());
             ExistingLineData current = existingMap.get(key);
             if (current == null) {
                 existingMap.put(key, new ExistingLineData(item.getQuantity(), item.getUnitPrice()));
@@ -227,7 +237,8 @@ public class CheckoutServiceImpl implements CheckoutService {
         }
 
         for (NormalizedLine line : reqNormalized) {
-            ExistingLineData existingLine = existingMap.get(new LineKey(line.scheduleId, line.ticketType));
+            ExistingLineData existingLine = existingMap.get(
+                    new LineKey(line.scheduleId, line.ticketType, line.passengerType));
             if (existingLine == null
                     || existingLine.quantity != line.quantity
                     || existingLine.unitPrice.compareTo(line.expectedUnitPrice) != 0) {
@@ -257,13 +268,14 @@ public class CheckoutServiceImpl implements CheckoutService {
                 throw new BadRequestException("Schedule ID is invalid");
             }
             TicketType ticketType = TicketType.parse(item.ticketType());
+            PassengerType passengerType = PassengerType.parse(item.passengerType());
             int quantity = validateQuantity(item.quantity());
             BigDecimal expectedPrice = item.expectedUnitPrice();
             if (expectedPrice == null || expectedPrice.compareTo(BigDecimal.ZERO) < 0) {
                 throw new BadRequestException("Invalid expected unit price");
             }
 
-            LineKey key = new LineKey(scheduleId, ticketType);
+            LineKey key = new LineKey(scheduleId, ticketType, passengerType);
             if (map.containsKey(key)) {
                 NormalizedLineData data = map.get(key);
                 if (data.expectedUnitPrice.compareTo(expectedPrice) != 0) {
@@ -279,7 +291,9 @@ public class CheckoutServiceImpl implements CheckoutService {
         }
 
         return map.entrySet().stream()
-                .map(e -> new NormalizedLine(e.getKey().scheduleId, e.getKey().ticketType, e.getValue().quantity, e.getValue().expectedUnitPrice))
+                .map(e -> new NormalizedLine(
+                        e.getKey().scheduleId, e.getKey().ticketType, e.getKey().passengerType,
+                        e.getValue().quantity, e.getValue().expectedUnitPrice))
                 .collect(Collectors.toList());
     }
 
@@ -295,7 +309,9 @@ public class CheckoutServiceImpl implements CheckoutService {
                 throw new BadRequestException("Bookings must be created at least 30 minutes before show start");
             }
             BigDecimal actualUnitPrice = ticketPricingService.unitPrice(schedule.getStandardPrice(), line.ticketType);
-            return new ResolvedLine(schedule, line.ticketType, line.quantity, line.expectedUnitPrice, actualUnitPrice);
+            return new ResolvedLine(
+                    schedule, line.ticketType, line.passengerType,
+                    line.quantity, line.expectedUnitPrice, actualUnitPrice);
         }).collect(Collectors.toList());
     }
 
@@ -330,6 +346,7 @@ public class CheckoutServiceImpl implements CheckoutService {
         List<Object> items = booking.getItems().stream().map(item -> Map.of(
                 "scheduleId", item.getScheduleId(),
                 "ticketType", item.getTicketType().name(),
+                "passengerType", (item.getPassengerType() == null ? PassengerType.ADULT : item.getPassengerType()).name(),
                 "quantity", item.getQuantity(),
                 "unitPrice", item.getUnitPrice()
         )).collect(Collectors.toList());
@@ -357,7 +374,8 @@ public class CheckoutServiceImpl implements CheckoutService {
         return UUID.randomUUID().toString().replace("-", "").substring(0, 6).toUpperCase(Locale.ROOT);
     }
 
-    private record LineKey(UUID scheduleId, TicketType ticketType) {}
+    private record LineKey(UUID scheduleId, TicketType ticketType, PassengerType passengerType) {}
+    private record InventoryKey(UUID scheduleId, TicketType ticketType) {}
     private static class NormalizedLineData {
         int quantity;
         BigDecimal expectedUnitPrice;
@@ -374,7 +392,11 @@ public class CheckoutServiceImpl implements CheckoutService {
             this.unitPrice = unitPrice;
         }
     }
-    private record NormalizedLine(UUID scheduleId, TicketType ticketType, int quantity, BigDecimal expectedUnitPrice) {}
-    private record ResolvedLine(ShowSchedule schedule, TicketType ticketType, int quantity, BigDecimal expectedUnitPrice, BigDecimal actualUnitPrice) {}
+    private record NormalizedLine(
+            UUID scheduleId, TicketType ticketType, PassengerType passengerType,
+            int quantity, BigDecimal expectedUnitPrice) {}
+    private record ResolvedLine(
+            ShowSchedule schedule, TicketType ticketType, PassengerType passengerType,
+            int quantity, BigDecimal expectedUnitPrice, BigDecimal actualUnitPrice) {}
     private record HeldLine(ResolvedLine line, HoldResult hold) {}
 }

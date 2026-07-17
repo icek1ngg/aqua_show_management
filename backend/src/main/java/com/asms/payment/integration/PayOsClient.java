@@ -183,7 +183,8 @@ public class PayOsClient {
                 throw new BadRequestException("PayOS booking item total is too large");
             }
             payOsItems.add(Map.of(
-                    "name", item.getShowName().trim() + " - " + item.getTicketType().name(),
+                    "name", item.getShowName().trim() + " - " + item.getTicketType().name()
+                            + " - " + item.getPassengerType().name(),
                     "quantity", item.getQuantity(),
                     "price", unitPrice
             ));

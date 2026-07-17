@@ -289,6 +289,22 @@ class CheckoutServiceImplTest {
     }
 
     @Test
+    void passengerBreakdownIsPartOfTheIdempotencyPayload() {
+        Booking existing = mockExistingBooking(new BigDecimal("100.00"));
+        when(bookingRepository.findByUserAndIdempotencyKey(testUser, "passenger-mismatch"))
+                .thenReturn(Optional.of(existing));
+        StartPaymentRequest changedPassenger = new StartPaymentRequest("passenger-mismatch", List.of(
+                new CheckoutItemRequest(
+                        testSchedule.getId().toString(), "STANDARD", "CHILD", 2, new BigDecimal("100.00"))));
+
+        ConflictException failure = assertThrows(ConflictException.class,
+                () -> checkoutService.startPayment(changedPassenger, testUser));
+
+        assertEquals(ErrorCode.IDEMPOTENCY_KEY_REUSED, failure.getCode());
+        verifyNoInteractions(scheduleRepository, redisTicketHoldService, paymentService);
+    }
+
+    @Test
     void serializedRetryRequeriesBookingAndDoesNotDuplicateCheckoutSideEffects() {
         stubBookableSchedule(testSchedule);
         AtomicReference<Booking> committedBooking = new AtomicReference<>();

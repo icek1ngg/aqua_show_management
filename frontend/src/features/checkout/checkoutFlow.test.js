@@ -54,7 +54,7 @@ describe('checkout conflict decisions', () => {
     const next = confirmCheckoutReview(draft, lines, 'new-key');
 
     assert.equal(next.idempotencyKey, 'new-key');
-    assert.deepEqual(next.items, [{ scheduleId: scheduleOne, ticketType: 'STANDARD', quantity: 1, expectedUnitPrice: 125 }]);
+    assert.deepEqual(next.items, [{ scheduleId: scheduleOne, ticketType: 'STANDARD', passengerType: 'ADULT', quantity: 1, expectedUnitPrice: 125 }]);
     assert.deepEqual(next.cartKeys, [`${scheduleOne}:STANDARD`]);
   });
 

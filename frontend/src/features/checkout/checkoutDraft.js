@@ -4,6 +4,7 @@ export const CHECKOUT_DRAFT_TTL_MS = 30 * 60 * 1000;
 
 const snapshotFields = ['showTitle', 'imageUrl', 'venueName', 'startTime', 'endTime'];
 const validTicketTypes = new Set(['STANDARD', 'VIP', 'FAMILY']);
+const validPassengerTypes = new Set(['ADULT', 'CHILD', 'SENIOR']);
 const uuidPattern = /^[0-9a-f]{8}-[0-9a-f]{4}-[1-5][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i;
 
 function storage() {
@@ -34,6 +35,7 @@ function normalizeItem(value) {
   if (!value || typeof value !== 'object' || Array.isArray(value)) return null;
   const scheduleId = normalizeNonBlank(value.scheduleId);
   const ticketType = normalizeNonBlank(value.ticketType)?.toUpperCase();
+  const passengerType = normalizeNonBlank(value.passengerType)?.toUpperCase() || 'ADULT';
   const quantity = value.quantity;
   const expectedUnitPrice = value.expectedUnitPrice;
   if (
@@ -41,6 +43,7 @@ function normalizeItem(value) {
     || !uuidPattern.test(scheduleId)
     || !ticketType
     || !validTicketTypes.has(ticketType)
+    || !validPassengerTypes.has(passengerType)
     || !Number.isInteger(quantity)
     || quantity < 1
     || quantity > 10
@@ -49,7 +52,7 @@ function normalizeItem(value) {
     || expectedUnitPrice < 0
   ) return null;
 
-  const normalized = { scheduleId, ticketType, quantity, expectedUnitPrice };
+  const normalized = { scheduleId, ticketType, passengerType, quantity, expectedUnitPrice };
   const displaySnapshot = normalizeSnapshot(value.displaySnapshot);
   if (displaySnapshot) normalized.displaySnapshot = displaySnapshot;
   return normalized;
@@ -64,9 +67,10 @@ function normalizeContents(value) {
   const rawItems = Array.isArray(value.items) ? value.items : [];
   const items = rawItems.map(normalizeItem);
   if (!idempotencyKey || cartKeys.length === 0 || items.length === 0 || items.some(item => !item)) return null;
-  const itemKeys = items.map(item => `${item.scheduleId}:${item.ticketType}`);
+  const itemKeys = items.map(item => `${item.scheduleId}:${item.ticketType}:${item.passengerType}`);
   if (new Set(itemKeys).size !== itemKeys.length) return null;
-  if (cartKeys.length !== itemKeys.length || itemKeys.some(key => !cartKeys.includes(key))) return null;
+  const itemCartKeys = [...new Set(items.map(item => `${item.scheduleId}:${item.ticketType}`))];
+  if (cartKeys.length !== itemCartKeys.length || itemCartKeys.some(key => !cartKeys.includes(key))) return null;
   return { idempotencyKey, cartKeys, items };
 }
 

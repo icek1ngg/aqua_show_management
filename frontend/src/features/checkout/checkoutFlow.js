@@ -1,4 +1,8 @@
 function lineKey(value) {
+  return `${String(value?.scheduleId ?? '').trim()}:${String(value?.ticketType ?? '').trim().toUpperCase()}:${String(value?.passengerType || 'ADULT').trim().toUpperCase()}`;
+}
+
+function cartLineKey(value) {
   return `${String(value?.scheduleId ?? '').trim()}:${String(value?.ticketType ?? '').trim().toUpperCase()}`;
 }
 
@@ -63,6 +67,7 @@ function cleanReviewedItem(line) {
   const item = {
     scheduleId: String(line.scheduleId).trim(),
     ticketType: String(line.ticketType).trim().toUpperCase(),
+    passengerType: String(line.passengerType || 'ADULT').trim().toUpperCase(),
     quantity: Math.min(Number(line.quantity), Number(line.currentAvailable ?? line.quantity)),
     expectedUnitPrice: Number(line.currentUnitPrice ?? line.expectedUnitPrice),
   };
@@ -71,7 +76,7 @@ function cleanReviewedItem(line) {
 }
 
 export function purchasedCartKeys(items) {
-  return [...new Set((Array.isArray(items) ? items : []).map(lineKey).filter(key => !key.startsWith(':')))];
+  return [...new Set((Array.isArray(items) ? items : []).map(cartLineKey).filter(key => !key.startsWith(':')))];
 }
 
 export function confirmCheckoutReview(draft, lines, newIdempotencyKey) {

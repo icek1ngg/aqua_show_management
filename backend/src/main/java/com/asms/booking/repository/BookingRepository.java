@@ -15,6 +15,7 @@ import org.springframework.data.repository.query.Param;
 import java.time.Instant;
 import java.util.List;
 import java.util.Optional;
+import java.util.Collection;
 import java.util.UUID;
 
 public interface BookingRepository extends JpaRepository<Booking, UUID>, JpaSpecificationExecutor<Booking> {
@@ -30,6 +31,43 @@ public interface BookingRepository extends JpaRepository<Booking, UUID>, JpaSpec
     List<Booking> findByUserAndStatusOrderByCreatedAtDesc(User user, BookingStatus status);
 
     Page<Booking> findByUserOrderByCreatedAtDesc(User user, Pageable pageable);
+
+    @Query(
+            value = """
+                    select distinct b from Booking b left join b.items i
+                    where b.user = :user
+                      and ((:pendingGroup = true and b.status in (com.asms.booking.enums.BookingStatus.PROCESSING, com.asms.booking.enums.BookingStatus.PENDING_PAYMENT))
+                           or (:pendingGroup = false and (:status is null or b.status = :status)))
+                      and (:keyword is null
+                           or lower(b.bookingCode) like lower(concat('%', :keyword, '%'))
+                           or lower(i.showName) like lower(concat('%', :keyword, '%'))
+                           or lower(i.venueName) like lower(concat('%', :keyword, '%')))
+                    order by b.createdAt desc
+                    """,
+            countQuery = """
+                    select count(distinct b) from Booking b left join b.items i
+                    where b.user = :user
+                      and ((:pendingGroup = true and b.status in (com.asms.booking.enums.BookingStatus.PROCESSING, com.asms.booking.enums.BookingStatus.PENDING_PAYMENT))
+                           or (:pendingGroup = false and (:status is null or b.status = :status)))
+                      and (:keyword is null
+                           or lower(b.bookingCode) like lower(concat('%', :keyword, '%'))
+                           or lower(i.showName) like lower(concat('%', :keyword, '%'))
+                           or lower(i.venueName) like lower(concat('%', :keyword, '%')))
+                    """
+    )
+    Page<Booking> searchMyBookings(
+            @Param("user") User user,
+            @Param("keyword") String keyword,
+            @Param("status") BookingStatus status,
+            @Param("pendingGroup") boolean pendingGroup,
+            Pageable pageable
+    );
+
+    long countByUser(User user);
+
+    long countByUserAndStatus(User user, BookingStatus status);
+
+    long countByUserAndStatusIn(User user, Collection<BookingStatus> statuses);
 
     boolean existsByBookingCode(String bookingCode);
 

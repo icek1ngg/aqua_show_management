@@ -125,18 +125,6 @@ function normalizeBooking(booking) {
   };
 }
 
-function matchesStatusFilter(bookingStatus, filterValue) {
-  if (filterValue === 'ALL') {
-    return true;
-  }
-
-  if (filterValue === 'PENDING') {
-    return bookingStatus === 'PENDING_PAYMENT' || bookingStatus === 'PROCESSING';
-  }
-
-  return bookingStatus === filterValue;
-}
-
 function BookingStatus({ status, expiresAt }) {
   const meta = statusMeta[status] || statusMeta.PROCESSING;
 
@@ -182,7 +170,9 @@ export default function BookingHistoryPage() {
   const [isLoading, setIsLoading] = useState(true);
   const [loadError, setLoadError] = useState('');
   const [searchTerm, setSearchTerm] = useState('');
+  const [debouncedSearchTerm, setDebouncedSearchTerm] = useState('');
   const [statusFilter, setStatusFilter] = useState('ALL');
+  const [summary, setSummary] = useState({ total: 0, pending: 0, paid: 0, closed: 0 });
   const navigate = useNavigate();
   const location = useLocation();
 
@@ -193,7 +183,12 @@ export default function BookingHistoryPage() {
           setIsLoading(true);
         }
         setLoadError('');
-        const bookingPage = await getMyBookings({ page: currentPage, size: pageSize });
+        const bookingPage = await getMyBookings({
+          page: currentPage,
+          size: pageSize,
+          q: debouncedSearchTerm,
+          status: statusFilter,
+        });
         const items = Array.isArray(bookingPage?.items) ? bookingPage.items : [];
         setBookings(items.map(normalizeBooking));
         setPagination({
@@ -203,6 +198,12 @@ export default function BookingHistoryPage() {
           totalPages: Number.isInteger(bookingPage?.totalPages) ? bookingPage.totalPages : 0,
           hasNext: Boolean(bookingPage?.hasNext),
           hasPrevious: Boolean(bookingPage?.hasPrevious),
+        });
+        setSummary({
+          total: Number(bookingPage?.summary?.total) || 0,
+          pending: Number(bookingPage?.summary?.pending) || 0,
+          paid: Number(bookingPage?.summary?.paid) || 0,
+          closed: Number(bookingPage?.summary?.closed) || 0,
         });
       } catch (error) {
         if (error?.response?.status === 401) {
@@ -217,8 +218,16 @@ export default function BookingHistoryPage() {
         }
       }
     },
-    [currentPage, location, navigate],
+    [currentPage, debouncedSearchTerm, location, navigate, statusFilter],
   );
+
+  useEffect(() => {
+    const timer = window.setTimeout(() => {
+      setCurrentPage(0);
+      setDebouncedSearchTerm(searchTerm.trim());
+    }, 300);
+    return () => window.clearTimeout(timer);
+  }, [searchTerm]);
 
   useEffect(() => {
     let isMounted = true;
@@ -246,37 +255,25 @@ export default function BookingHistoryPage() {
     return () => window.removeEventListener('focus', refetchOnFocus);
   }, [loadBookings]);
 
-  const visibleBookings = useMemo(() => {
-    const normalizedSearchTerm = searchTerm.trim().toLowerCase();
-
-    return [...bookings]
-      .filter((booking) => {
-        const matchesSearch =
-          normalizedSearchTerm.length === 0 ||
-          booking.showName.toLowerCase().includes(normalizedSearchTerm) ||
-          booking.bookingCode.toLowerCase().includes(normalizedSearchTerm);
-        const matchesStatus = matchesStatusFilter(booking.status, statusFilter);
-
-        return matchesSearch && matchesStatus;
-      })
-      .sort((firstBooking, secondBooking) => {
+  const visibleBookings = useMemo(() => (
+    [...bookings].sort((firstBooking, secondBooking) => {
         const firstTime = new Date(firstBooking.createdAt || 0).getTime();
         const secondTime = new Date(secondBooking.createdAt || 0).getTime();
 
         return secondTime - firstTime;
-      });
-  }, [bookings, searchTerm, statusFilter]);
+      })
+  ), [bookings]);
 
   const stats = {
-    total: pagination.totalItems,
-    pending: bookings.filter((booking) => matchesStatusFilter(booking.status, 'PENDING')).length,
-    paid: bookings.filter((booking) => booking.status === 'PAID').length,
-    closed: bookings.filter((booking) => ['EXPIRED', 'FAILED'].includes(booking.status)).length,
+    total: summary.total,
+    pending: summary.pending,
+    paid: summary.paid,
+    closed: summary.closed,
   };
 
-  const hasNoBookings = !isLoading && !loadError && pagination.totalItems === 0;
+  const hasNoBookings = !isLoading && !loadError && summary.total === 0;
   const hasNoPageResults = !isLoading && !loadError && pagination.totalItems > 0 && bookings.length === 0;
-  const hasNoFilteredResults = !isLoading && !loadError && bookings.length > 0 && visibleBookings.length === 0;
+  const hasNoFilteredResults = !isLoading && !loadError && summary.total > 0 && pagination.totalItems === 0;
   const totalPages = Math.max(pagination.totalPages, pagination.totalItems > 0 ? 1 : 0);
 
   return (
@@ -333,14 +330,17 @@ export default function BookingHistoryPage() {
                       statusFilter === filter.value ? 'bg-cyan-700 text-white shadow-sm' : 'text-slate-500 hover:text-cyan-700',
                     ].join(' ')}
                     key={filter.value}
-                    onClick={() => setStatusFilter(filter.value)}
+                    onClick={() => {
+                      setCurrentPage(0);
+                      setStatusFilter(filter.value);
+                    }}
                     type="button"
                   >
                     {filter.label}
                   </button>
                 ))}
               </div>
-              <p className="mt-2 ml-1 text-xs font-semibold text-slate-400">Filters apply to the current page.</p>
+              <p className="mt-2 ml-1 text-xs font-semibold text-slate-400">Filters apply to your complete booking history.</p>
             </div>
           </div>
         </section>

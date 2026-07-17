@@ -49,12 +49,18 @@ public class BookingController {
     public ApiResponse<PageBookingResponse> getMyBookings(
             @AuthenticationPrincipal User user,
             @RequestParam(name = "page", defaultValue = "0") int page,
-            @RequestParam(name = "size", defaultValue = "5") int size
+            @RequestParam(name = "size", defaultValue = "5") int size,
+            @RequestParam(name = "q", required = false) String keyword,
+            @RequestParam(name = "status", required = false) String status
     ) {
         return ApiResponse.success(
                 "Bookings fetched successfully",
-                bookingService.getMyBookings(currentUserEmail(user), page, size)
+                bookingService.getMyBookings(currentUserEmail(user), page, size, keyword, status)
         );
+    }
+
+    public ApiResponse<PageBookingResponse> getMyBookings(User user, int page, int size) {
+        return getMyBookings(user, page, size, null, null);
     }
 
     @GetMapping("/{id}")

@@ -125,19 +125,22 @@ export default function CreateBookingPage() {
     const draft = {
       idempotencyKey: requestId(),
       cartKeys: checkedOutKeys,
-      items: selectedLines.map(line => ({
-        scheduleId: String(line.scheduleId),
-        ticketType: line.ticketType,
-        quantity: Math.trunc(Number(line.quantity)),
-        expectedUnitPrice: Number(line.unitPrice),
-        displaySnapshot: {
-          showTitle: line.showTitle,
-          imageUrl: line.imageUrl,
-          venueName: line.venueName,
-          startTime: line.startTime,
-          endTime: line.endTime
-        }
-      }))
+      items: selectedLines.flatMap(line => Object.entries(line.ages || { adult: line.quantity })
+        .filter(([, quantity]) => Number(quantity) > 0)
+        .map(([passengerType, quantity]) => ({
+          scheduleId: String(line.scheduleId),
+          ticketType: line.ticketType,
+          passengerType: passengerType.toUpperCase(),
+          quantity: Math.trunc(Number(quantity)),
+          expectedUnitPrice: Number(line.unitPrice),
+          displaySnapshot: {
+            showTitle: line.showTitle,
+            imageUrl: line.imageUrl,
+            venueName: line.venueName,
+            startTime: line.startTime,
+            endTime: line.endTime
+          }
+        })))
     };
     
     saveCheckoutDraft(draft);

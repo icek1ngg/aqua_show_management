@@ -139,6 +139,7 @@ export default function CheckoutPaymentPage() {
       items: activeDraft.items.map(item => ({
         scheduleId: item.scheduleId,
         ticketType: item.ticketType,
+        passengerType: item.passengerType,
         quantity: item.quantity,
         expectedUnitPrice: item.expectedUnitPrice
       }))

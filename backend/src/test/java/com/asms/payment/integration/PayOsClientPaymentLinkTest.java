@@ -3,6 +3,7 @@ package com.asms.payment.integration;
 import com.asms.booking.entity.Booking;
 import com.asms.booking.entity.BookingItem;
 import com.asms.booking.enums.TicketType;
+import com.asms.booking.enums.PassengerType;
 import com.asms.core.exception.BadRequestException;
 import com.asms.identity.entity.User;
 import com.fasterxml.jackson.databind.ObjectMapper;
@@ -45,8 +46,8 @@ class PayOsClientPaymentLinkTest {
                         {
                           "amount": 110000,
                           "items": [
-                            {"name": "Dolphin Dreams - VIP", "quantity": 2, "price": 30000},
-                            {"name": "Ocean Wonders - FAMILY", "quantity": 1, "price": 50000}
+                            {"name": "Dolphin Dreams - VIP - ADULT", "quantity": 2, "price": 30000},
+                            {"name": "Ocean Wonders - FAMILY - ADULT", "quantity": 1, "price": 50000}
                           ]
                         }
                         """, false))
@@ -118,6 +119,7 @@ class PayOsClientPaymentLinkTest {
         BookingItem item = mock(BookingItem.class);
         when(item.getShowName()).thenReturn(showName);
         when(item.getTicketType()).thenReturn(type);
+        when(item.getPassengerType()).thenReturn(PassengerType.ADULT);
         when(item.getQuantity()).thenReturn(quantity);
         when(item.getUnitPrice()).thenReturn(new BigDecimal(unitPrice));
         return item;

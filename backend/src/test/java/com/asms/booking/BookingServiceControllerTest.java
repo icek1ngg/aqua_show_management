@@ -455,6 +455,28 @@ class BookingServiceControllerTest {
     }
 
     @Test
+    void getMyBookingsAppliesServerFiltersAndReturnsWholeHistorySummary() {
+        User user = user("user@example.com");
+        Booking paid = booking(user, "hold-paid");
+        paid.setStatus(BookingStatus.PAID);
+        when(userRepository.findByEmailIgnoreCase(user.getEmail())).thenReturn(Optional.of(user));
+        when(bookingRepository.searchMyBookings(
+                eq(user), eq("ocean"), eq(BookingStatus.PAID), eq(false), any(Pageable.class)))
+                .thenReturn(new PageImpl<>(List.of(paid), org.springframework.data.domain.PageRequest.of(0, 5), 1));
+        when(bookingRepository.countByUser(user)).thenReturn(8L);
+        when(bookingRepository.countByUserAndStatusIn(eq(user), any())).thenReturn(2L, 1L);
+        when(bookingRepository.countByUserAndStatus(user, BookingStatus.PAID)).thenReturn(5L);
+
+        PageBookingResponse response = bookingService.getMyBookings(user.getEmail(), 0, 5, " ocean ", "paid");
+
+        assertThat(response.items()).hasSize(1);
+        assertThat(response.summary().total()).isEqualTo(8);
+        assertThat(response.summary().pending()).isEqualTo(2);
+        assertThat(response.summary().paid()).isEqualTo(5);
+        assertThat(response.summary().closed()).isEqualTo(1);
+    }
+
+    @Test
     void controllerReturnsPaginatedMyBookingsResponse() {
         User user = user("user@example.com");
         Booking booking = booking(user, "hold-123");

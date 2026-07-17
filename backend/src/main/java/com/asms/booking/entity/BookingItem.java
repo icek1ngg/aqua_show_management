@@ -1,6 +1,7 @@
 package com.asms.booking.entity;
 
 import com.asms.booking.enums.TicketType;
+import com.asms.booking.enums.PassengerType;
 import com.asms.catalog.entity.ShowSchedule;
 import jakarta.persistence.Column;
 import jakarta.persistence.Entity;
@@ -40,6 +41,10 @@ public class BookingItem {
     @Column(nullable = false, length = 30)
     private TicketType ticketType;
 
+    @Enumerated(EnumType.STRING)
+    @Column(nullable = false, length = 20)
+    private PassengerType passengerType;
+
     @Column(nullable = false)
     private Integer quantity;
 
@@ -74,11 +79,12 @@ public class BookingItem {
             Booking booking,
             ShowSchedule schedule,
             TicketType ticketType,
+            PassengerType passengerType,
             int quantity,
             BigDecimal unitPrice,
             String holdId
     ) {
-        if (schedule == null || ticketType == null || quantity <= 0 || unitPrice == null
+        if (schedule == null || ticketType == null || passengerType == null || quantity <= 0 || unitPrice == null
                 || unitPrice.signum() < 0 || holdId == null || holdId.isBlank()) {
             throw new IllegalArgumentException("Complete booking item details are required");
         }
@@ -88,6 +94,7 @@ public class BookingItem {
         item.showId = schedule.getShow().getId().toString();
         item.scheduleId = schedule.getId().toString();
         item.ticketType = ticketType;
+        item.passengerType = passengerType;
         item.quantity = quantity;
         item.unitPrice = money(unitPrice);
         item.lineTotal = money(unitPrice.multiply(BigDecimal.valueOf(quantity)));
@@ -100,6 +107,12 @@ public class BookingItem {
         return item;
     }
 
+    public static BookingItem create(
+            Booking booking, ShowSchedule schedule, TicketType ticketType, int quantity,
+            BigDecimal unitPrice, String holdId) {
+        return create(booking, schedule, ticketType, PassengerType.ADULT, quantity, unitPrice, holdId);
+    }
+
     static BookingItem legacyDraft(Booking booking) {
         BookingItem item = new BookingItem();
         item.id = UUID.randomUUID();
@@ -107,6 +120,7 @@ public class BookingItem {
         item.showId = "legacy";
         item.scheduleId = "legacy";
         item.ticketType = TicketType.STANDARD;
+        item.passengerType = PassengerType.ADULT;
         item.quantity = 1;
         item.unitPrice = BigDecimal.ZERO.setScale(2);
         item.lineTotal = BigDecimal.ZERO.setScale(2);
@@ -156,6 +170,10 @@ public class BookingItem {
 
     public TicketType getTicketType() {
         return ticketType;
+    }
+
+    public PassengerType getPassengerType() {
+        return passengerType;
     }
 
     void setTicketType(TicketType ticketType) {

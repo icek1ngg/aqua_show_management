@@ -1,36 +1,13 @@
-import { useEffect } from 'react';
+import { useEffect, useState } from 'react';
 import { Link } from 'react-router-dom';
 
 import { useAuth } from '../../features/auth/AuthContext.jsx';
+import { getMyBookings } from '../../services/bookingService.js';
 import MainLayout from '../../shared/layouts/MainLayout.jsx';
+import { formatCurrency } from '../../shared/utils/ticketPricing.js';
 import ActiveSessionsPanel from './SessionsPage.jsx';
 
-const recentBookings = [
-  {
-    title: 'Symphony of Lights',
-    date: 'Oct 24, 2024 · 8:00 PM',
-    tickets: '2 Tickets',
-    amount: '4.000 ₫',
-    status: 'Paid',
-    statusIcon: 'check_circle',
-    amountClassName: 'text-cyan-700',
-    statusClassName: 'bg-emerald-100 text-emerald-700',
-    imageUrl:
-      'https://lh3.googleusercontent.com/aida-public/AB6AXuCujaSo6RV1Zoca54QEd2IVZ0mAIhk-vMjIjrWZ7vuCp0P6wllTuqPk4C8vUmNCkvR3RIODJ1oFmeSH8MZ-G37u1qMR5SGvZxUPPJnMsqk3L4KrtxQarbpM4eTByeZzXqJBfd1vj5K372GpP8Ayu4fBjMoU297quKk5Ks1Zu3OJVF7JnLc7tv52VksRq713j_R4nTLp2eF5SXS-k8LDvGqMXUTAVexCDC4W2CRrf9wRyqfIIqm9G3VrZTqy0eU7D4yRB5CiNTWJug',
-  },
-  {
-    title: 'Dolphin Tales',
-    date: 'Oct 25, 2024 · 11:00 AM',
-    tickets: '1 Ticket',
-    amount: '2.000 ₫',
-    status: 'Pending Payment',
-    statusIcon: 'schedule',
-    amountClassName: 'text-orange-600',
-    statusClassName: 'bg-orange-100 text-orange-700',
-    imageUrl:
-      'https://lh3.googleusercontent.com/aida-public/AB6AXuCLkcsyUKlIImgmce-9G2dAo8GcDQHC4tMU_HtQpL0TEZHFnZMA593upxVQv7NP_8xUJLFZ9UhPc2TkLmRBIwG4nADjfrcPCCV1OcprAX9PJYRROaEPTJIr9XSSsURgaOernS9YgRdb06XKur09aBAzonxwlnjCul3WOZ_hy89pXKbtzNbQMxBkKc-JLsrTQN5WL9Qd5ekbJS4-Q_1eRRxp5L5pm-iG_pY2SQwZkYFcKXI6Ead_uy9WTRTwJK2BTK1zLuqph8bxCQ',
-  },
-];
+const fallbackBookingImage = 'https://images.unsplash.com/photo-1544551763-46a013bb70d5?auto=format&fit=crop&w=320&q=80';
 
 function ProfileAvatar({ user }) {
   if (user.avatarUrl) {
@@ -100,7 +77,22 @@ function ProfileSummaryCard({ user }) {
   );
 }
 
-function RecentBookings() {
+function bookingStatusMeta(status) {
+  if (status === 'PAID') return { label: 'Paid', icon: 'check_circle', className: 'bg-emerald-100 text-emerald-700' };
+  if (status === 'FAILED') return { label: 'Failed', icon: 'error', className: 'bg-red-100 text-red-700' };
+  if (status === 'EXPIRED') return { label: 'Expired', icon: 'timer_off', className: 'bg-slate-100 text-slate-600' };
+  return { label: 'Pending Payment', icon: 'schedule', className: 'bg-orange-100 text-orange-700' };
+}
+
+function formatBookingDate(value) {
+  if (!value) return 'Schedule unavailable';
+  const date = new Date(value);
+  return Number.isNaN(date.getTime())
+    ? String(value)
+    : date.toLocaleString('en-US', { dateStyle: 'medium', timeStyle: 'short' });
+}
+
+function RecentBookings({ bookings, isLoading, error }) {
   return (
     <section className="rounded-[2rem] border border-cyan-100 bg-white p-5 shadow-[0_12px_40px_rgba(8,145,178,0.08)] sm:p-8">
       <div className="mb-8 flex items-center justify-between gap-4">
@@ -114,38 +106,51 @@ function RecentBookings() {
       </div>
 
       <div className="space-y-4">
-        {recentBookings.map((booking) => (
+        {isLoading ? <p className="py-10 text-center font-semibold text-cyan-700">Loading recent bookings...</p> : null}
+        {!isLoading && error ? <p className="rounded-2xl bg-red-50 p-5 text-center font-semibold text-red-700">{error}</p> : null}
+        {!isLoading && !error && bookings.length === 0 ? (
+          <div className="rounded-2xl border border-dashed border-cyan-200 p-8 text-center">
+            <p className="font-bold text-slate-700">You have no bookings yet.</p>
+            <Link className="mt-3 inline-block font-bold text-cyan-700 hover:underline" to="/">Explore shows</Link>
+          </div>
+        ) : null}
+        {!isLoading && !error ? bookings.map((booking) => {
+          const firstItem = booking.items?.[0];
+          const meta = bookingStatusMeta(booking.status);
+          const title = firstItem?.showName || booking.showName || 'AquaPulse Show';
+          return (
           <article
             className="group flex flex-col justify-between gap-5 rounded-[1.5rem] border border-cyan-100 p-5 transition hover:border-cyan-300 hover:bg-cyan-50/50 md:flex-row md:items-center md:p-6"
-            key={booking.title}
+            key={booking.id}
           >
             <div className="flex min-w-0 items-center gap-4 sm:gap-5">
               <div className="h-16 w-16 shrink-0 overflow-hidden rounded-2xl bg-cyan-50">
-                <img alt={booking.title} className="h-full w-full object-cover" src={booking.imageUrl} />
+                <img alt={title} className="h-full w-full object-cover" src={firstItem?.imageUrl || fallbackBookingImage} />
               </div>
               <div className="min-w-0">
                 <h3 className="truncate text-lg font-black text-slate-900 transition group-hover:text-cyan-800">
-                  {booking.title}
+                  {title}
                 </h3>
                 <p className="mt-1 flex items-center gap-2 text-sm text-slate-500">
                   <span className="material-symbols-outlined text-base">calendar_month</span>
-                  {booking.date}
+                  {formatBookingDate(firstItem?.startTime || booking.showDate)}
                 </p>
               </div>
             </div>
 
             <div className="flex items-center justify-between gap-5 md:justify-end">
               <div className="text-right">
-                <p className="text-xs font-bold text-slate-500">{booking.tickets}</p>
-                <p className={`text-lg font-black ${booking.amountClassName}`}>{booking.amount}</p>
+                <p className="text-xs font-bold text-slate-500">{booking.totalQuantity ?? booking.quantity ?? 0} Tickets</p>
+                <p className="text-lg font-black text-cyan-700">{formatCurrency(booking.totalAmount)}</p>
               </div>
-              <span className={`flex items-center gap-1 rounded-full px-3 py-1.5 text-xs font-bold ${booking.statusClassName}`}>
-                <span className="material-symbols-outlined text-sm">{booking.statusIcon}</span>
-                {booking.status}
-              </span>
+              <Link className={`flex items-center gap-1 rounded-full px-3 py-1.5 text-xs font-bold ${meta.className}`} to={`/bookings/${booking.id}`}>
+                <span className="material-symbols-outlined text-sm">{meta.icon}</span>
+                {meta.label}
+              </Link>
             </div>
           </article>
-        ))}
+          );
+        }) : null}
       </div>
     </section>
   );
@@ -153,12 +158,33 @@ function RecentBookings() {
 
 export default function ProfilePage() {
   const { user, loading, refreshCurrentUser } = useAuth();
+  const [recentBookings, setRecentBookings] = useState([]);
+  const [recentLoading, setRecentLoading] = useState(true);
+  const [recentError, setRecentError] = useState('');
 
   useEffect(() => {
     if (!user && !loading) {
       refreshCurrentUser();
     }
   }, [user, loading, refreshCurrentUser]);
+
+  useEffect(() => {
+    if (!user) return undefined;
+    let active = true;
+    setRecentLoading(true);
+    setRecentError('');
+    getMyBookings({ page: 0, size: 2 })
+      .then((response) => {
+        if (active) setRecentBookings(Array.isArray(response?.items) ? response.items : []);
+      })
+      .catch(() => {
+        if (active) setRecentError('Could not load recent bookings.');
+      })
+      .finally(() => {
+        if (active) setRecentLoading(false);
+      });
+    return () => { active = false; };
+  }, [user]);
 
   if (loading || !user) {
     return (
@@ -180,7 +206,7 @@ export default function ProfilePage() {
         </aside>
 
         <section className="min-w-0" aria-label="Profile activity">
-          <RecentBookings />
+          <RecentBookings bookings={recentBookings} error={recentError} isLoading={recentLoading} />
         </section>
       </div>
     </MainLayout>
