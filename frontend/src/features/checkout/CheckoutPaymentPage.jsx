@@ -1,11 +1,19 @@
-import { useEffect, useMemo, useState } from 'react';
+import { useEffect, useMemo, useRef, useState } from 'react';
 import { Navigate, useNavigate, useLocation } from 'react-router-dom';
-import { getCheckoutDraft, clearCheckoutDraft, saveCheckoutDraft } from './checkoutDraft.js';
+import { getCheckoutDraft, clearCheckoutDraft, revalidateCheckoutDraft, saveCheckoutDraft } from './checkoutDraft.js';
 import { startCheckoutPayment } from '../../services/checkoutService.js';
 import { getSchedule } from '../../services/showService.js';
 import { useCart } from '../cart/CartContext.jsx';
 import MainLayout from '../../shared/layouts/MainLayout.jsx';
 import { normalizeTicketType } from '../../shared/utils/ticketPricing.js';
+import {
+  applyAuthoritativeReview,
+  beginCheckoutSubmission,
+  classifyCheckoutError,
+  confirmCheckoutReview,
+  finishCheckoutSubmission,
+  purchasedCartKeys,
+} from './checkoutFlow.js';
 
 function requestId() {
   return globalThis.crypto?.randomUUID?.() || `checkout-${Date.now()}-${Math.random().toString(16).slice(2)}`;
@@ -15,12 +23,14 @@ const priceFields = { STANDARD: 'standardPrice', VIP: 'vipPrice', FAMILY: 'famil
 const availabilityFields = { STANDARD: 'standardAvailableTickets', VIP: 'vipAvailableTickets', FAMILY: 'familyAvailableTickets' };
 
 export default function CheckoutPaymentPage() {
-  const [draft, setDraft] = useState(getCheckoutDraft());
+  const [draft, setDraft] = useState(() => getCheckoutDraft());
   const [loading, setLoading] = useState(true);
   const [submitting, setSubmitting] = useState(false);
   const [error, setError] = useState('');
   const [lines, setLines] = useState([]);
   const [requiresReview, setRequiresReview] = useState(false);
+  const [idempotencyReused, setIdempotencyReused] = useState(false);
+  const submissionLatch = useRef(false);
   const { removeItems } = useCart();
   const navigate = useNavigate();
   const location = useLocation();
@@ -92,39 +102,41 @@ export default function CheckoutPaymentPage() {
   }, [draft]);
 
   const handleConfirmChanges = () => {
-    // Filter out invalid items, adjust quantities, update prices
-    const validLines = lines.filter(l => !l.invalid && !l.noStock); // If no stock, remove. Wait, if partial stock, we should adjust.
-    // For simplicity, if noStock, we just remove it or adjust quantity. Let's adjust quantity if available > 0, else remove.
-    const updatedItems = lines.filter(l => !l.invalid && l.currentAvailable > 0).map(l => ({
-      ...l,
-      quantity: Math.min(l.quantity, l.currentAvailable),
-      expectedUnitPrice: l.currentUnitPrice
-    }));
-
-    if (updatedItems.length === 0) {
+    const activeDraft = revalidateCheckoutDraft(draft);
+    if (!activeDraft) {
       clearCheckoutDraft();
       navigate('/bookings/create');
       return;
     }
-
-    const newDraft = {
-      ...draft,
-      idempotencyKey: requestId(),
-      items: updatedItems.map(({ currentUnitPrice, currentAvailable, priceChanged, noStock, invalid, ...rest }) => rest)
-    };
-    saveCheckoutDraft(newDraft);
-    setDraft(newDraft);
+    const reviewedDraft = confirmCheckoutReview(activeDraft, lines, requestId());
+    if (reviewedDraft.items.length === 0) {
+      clearCheckoutDraft();
+      navigate('/bookings/create');
+      return;
+    }
+    const savedDraft = saveCheckoutDraft(reviewedDraft);
+    setDraft(savedDraft);
     setRequiresReview(false);
+    setIdempotencyReused(false);
+    setError('');
   };
 
   const handlePay = async () => {
-    if (submitting) return;
+    if (!beginCheckoutSubmission(submissionLatch)) return;
+    const activeDraft = revalidateCheckoutDraft(draft);
+    if (!activeDraft) {
+      finishCheckoutSubmission(submissionLatch);
+      clearCheckoutDraft();
+      navigate('/bookings/create');
+      return;
+    }
     setSubmitting(true);
     setError('');
+    setIdempotencyReused(false);
 
     const payload = {
-      idempotencyKey: draft.idempotencyKey,
-      items: draft.items.map(item => ({
+      idempotencyKey: activeDraft.idempotencyKey,
+      items: activeDraft.items.map(item => ({
         scheduleId: item.scheduleId,
         ticketType: item.ticketType,
         quantity: item.quantity,
@@ -135,7 +147,7 @@ export default function CheckoutPaymentPage() {
     try {
       const response = await startCheckoutPayment(payload);
       if (!response?.bookingId || !response?.payment) throw new Error('Payment session was not returned.');
-      removeItems(draft.cartKeys);
+      removeItems(purchasedCartKeys(activeDraft.items));
       clearCheckoutDraft();
       navigate(`/bookings/${response.bookingId}/payment`, { replace: true, state: { paymentSession: response.payment } });
     } catch (err) {
@@ -143,17 +155,26 @@ export default function CheckoutPaymentPage() {
         navigate('/login', { state: { from: location } });
         return;
       }
-      if (err?.response?.status === 409) {
-        setError('Ticket availability or prices have changed. Please review your cart.');
+      const conflict = classifyCheckoutError(err);
+      if (conflict.kind === 'review') {
+        const reviewedLines = applyAuthoritativeReview(activeDraft, conflict.data);
+        setLines(reviewedLines);
+        setError(conflict.message || 'Ticket availability or prices have changed. Review the server updates before continuing.');
         setRequiresReview(true);
-        // Force refresh by re-setting draft
-        setDraft({ ...draft });
+      } else if (conflict.kind === 'inProgress') {
+        setError(conflict.message || 'This checkout is already being processed. Wait a moment, then retry.');
+        setRequiresReview(false);
+      } else if (conflict.kind === 'idempotencyReused') {
+        setError(conflict.message || 'This checkout key was already used for different items. Return to your cart and start checkout again.');
+        setRequiresReview(false);
+        setIdempotencyReused(true);
       } else {
         const errors = err?.response?.data?.errors;
         const msg = errors ? Object.values(errors).filter(Boolean).join(' ') : (err?.response?.data?.message || 'Payment initiation failed.');
         setError(msg);
       }
     } finally {
+      finishCheckoutSubmission(submissionLatch);
       setSubmitting(false);
     }
   };
@@ -228,7 +249,14 @@ export default function CheckoutPaymentPage() {
                   <span className="text-2xl font-black text-cyan-700">{totals.amount.toLocaleString()} VND</span>
                 </div>
 
-                {requiresReview ? (
+                {idempotencyReused ? (
+                  <button
+                    onClick={() => navigate('/bookings/create')}
+                    className="w-full rounded-xl bg-slate-700 py-4 font-black text-white transition hover:bg-slate-800"
+                  >
+                    Return to Cart
+                  </button>
+                ) : requiresReview ? (
                   <button
                     onClick={handleConfirmChanges}
                     className="w-full rounded-xl bg-amber-500 py-4 font-black text-white transition hover:bg-amber-600"
