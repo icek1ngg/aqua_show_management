@@ -3,6 +3,7 @@ package com.asms.payment.integration;
 import com.asms.booking.entity.Booking;
 import com.asms.booking.entity.BookingItem;
 import com.asms.core.exception.BadRequestException;
+import com.asms.core.exception.ServiceUnavailableException;
 import com.asms.payment.dto.PayOsCallbackRequest;
 import com.fasterxml.jackson.core.JsonProcessingException;
 import com.fasterxml.jackson.databind.JsonNode;
@@ -94,15 +95,14 @@ public class PayOsClient {
     }
 
     public PayOsPaymentLink createPaymentLink(Booking booking, String payosOrderCode) {
+        if (clientId == null || clientId.isBlank() || apiKey == null || apiKey.isBlank() || checksumKey == null || checksumKey.isBlank()) {
+            throw new ServiceUnavailableException("PayOS payment service is not configured");
+        }
         if (booking == null || booking.getTotalAmount() == null) {
             throw new BadRequestException("A booking with a total amount is required to create a PayOS payment link");
         }
         long amount = toPayOsVndAmount(booking.getTotalAmount());
         List<Map<String, Object>> items = buildPayOsItems(booking, amount);
-
-        if (clientId == null || clientId.isBlank() || apiKey == null || apiKey.isBlank() || checksumKey == null || checksumKey.isBlank()) {
-            return new PayOsPaymentLink(createLocalPaymentLink(booking, payosOrderCode, "pending"), null, null, null, null, null, booking.getTotalAmount(), buildDescription(payosOrderCode));
-        }
 
         long orderCode = Long.parseLong(payosOrderCode);
         String returnUrl = createLocalPaymentLink(booking, payosOrderCode, "pending");

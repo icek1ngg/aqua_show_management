@@ -4,6 +4,7 @@ import com.asms.booking.entity.Booking;
 import com.asms.booking.entity.BookingItem;
 import com.asms.booking.dto.TicketHoldDtos.TicketHoldInfo;
 import com.asms.booking.enums.BookingStatus;
+import com.asms.booking.exception.TicketHoldServiceUnavailableException;
 import com.asms.booking.repository.BookingRepository;
 import com.asms.booking.service.RedisTicketHoldService;
 import com.asms.catalog.entity.ShowSchedule;
@@ -45,7 +46,6 @@ import java.util.List;
 import java.util.Locale;
 import java.util.Map;
 import java.util.UUID;
-import java.util.concurrent.ThreadLocalRandom;
 
 @Service
 public class PaymentServiceImpl implements PaymentService {
@@ -280,7 +280,7 @@ public class PaymentServiceImpl implements PaymentService {
             boolean firstSuccessfulTransition =
                     oldPaymentStatus != PaymentStatus.SUCCESS || oldBookingStatus != BookingStatus.PAID;
             if (firstSuccessfulTransition) {
-                commitHeldInventory(booking);
+                commitCapturedInventory(booking);
             }
             payment.setStatus(PaymentStatus.SUCCESS);
             if (payment.getPaidAt() == null) {
@@ -291,8 +291,8 @@ public class PaymentServiceImpl implements PaymentService {
             paymentRepository.save(payment);
             if (firstSuccessfulTransition) {
                 generatedTickets = ticketGenerationService.generateTicketsIfMissing(booking).size();
-                completePaymentAfterCommit(payment, booking);
             }
+            completePaymentAfterCommit(payment, booking);
         } else if (incomingStatus == PaymentStatus.EXPIRED && oldPaymentStatus == PaymentStatus.PENDING) {
             payment.setStatus(PaymentStatus.EXPIRED);
             booking.setStatus(BookingStatus.EXPIRED);
@@ -324,19 +324,37 @@ public class PaymentServiceImpl implements PaymentService {
         return new AppliedPaymentStatus(changed, generatedTickets);
     }
 
-    private void commitHeldInventory(Booking booking) {
+    private void commitCapturedInventory(Booking booking) {
         for (BookingItem item : booking.getItems()) {
-            TicketHoldInfo hold = redisTicketHoldService.getHold(item.getHoldId()).orElse(null);
-            if (hold == null || !hold.expiresAt().isAfter(Instant.now())) {
-                throw new BadRequestException("A ticket hold has expired. Please select the tickets again.");
+            TicketHoldInfo hold = null;
+            try {
+                hold = redisTicketHoldService.getHold(item.getHoldId()).orElse(null);
+            } catch (TicketHoldServiceUnavailableException exception) {
+                log.warn(
+                        "Ticket hold evidence unavailable while honoring captured payment: bookingId={}, holdId={}",
+                        booking.getId(),
+                        item.getHoldId(),
+                        exception
+                );
             }
-            boolean matchesItem = item.getHoldId().equals(hold.holdId())
-                    && item.getScheduleId().equals(hold.scheduleId())
-                    && item.getTicketType().name().equals(hold.ticketType())
-                    && item.getQuantity() == hold.quantity()
-                    && booking.getUser().getId().equals(hold.userId());
-            if (!matchesItem) {
-                throw new BadRequestException("A ticket hold does not match the booking item");
+            if (hold != null) {
+                boolean matchesItem = item.getHoldId().equals(hold.holdId())
+                        && item.getScheduleId().equals(hold.scheduleId())
+                        && item.getTicketType().name().equals(hold.ticketType())
+                        && item.getQuantity() == hold.quantity()
+                        && booking.getUser().getId().equals(hold.userId());
+                if (!matchesItem) {
+                    throw new BadRequestException("A ticket hold does not match the booking item");
+                }
+            } else {
+                log.warn(
+                        "Honoring captured payment after ticket hold expiry: bookingId={}, holdId={}, scheduleId={}, ticketType={}, quantity={}",
+                        booking.getId(),
+                        item.getHoldId(),
+                        item.getScheduleId(),
+                        item.getTicketType(),
+                        item.getQuantity()
+                );
             }
         }
 
@@ -358,7 +376,17 @@ public class PaymentServiceImpl implements PaymentService {
             if (schedule == null) {
                 throw new BadRequestException("One or more show schedules no longer exist");
             }
-            schedule.decrementAvailable(item.getTicketType(), item.getQuantity());
+            int shortfall = schedule.decrementAvailableForCapturedPayment(item.getTicketType(), item.getQuantity());
+            if (shortfall > 0) {
+                log.error(
+                        "Captured payment exceeds remaining inventory; honoring paid booking: bookingId={}, scheduleId={}, ticketType={}, requested={}, shortfall={}",
+                        booking.getId(),
+                        schedule.getId(),
+                        item.getTicketType(),
+                        item.getQuantity(),
+                        shortfall
+                );
+            }
         }
         showScheduleRepository.saveAll(schedules);
     }
@@ -380,7 +408,11 @@ public class PaymentServiceImpl implements PaymentService {
         );
 
         runAfterCommit(() -> {
-            releaseHolds(booking);
+            try {
+                releaseHolds(booking);
+            } catch (RuntimeException exception) {
+                log.warn("Failed to release paid booking holds: bookingId={}", booking.getId(), exception);
+            }
             paymentCompletedPublisher.publish(message);
         });
     }
@@ -494,9 +526,9 @@ public class PaymentServiceImpl implements PaymentService {
     }
 
     private String generateOrderCode(UUID bookingId) {
-        long base = Instant.now().toEpochMilli() % 900_000_000_000L;
-        long suffix = ThreadLocalRandom.current().nextLong(100, 999);
-        return String.valueOf((base * 1000) + suffix);
+        long mixed = bookingId.getMostSignificantBits() ^ Long.rotateLeft(bookingId.getLeastSignificantBits(), 29);
+        long value = 100_000_000_000_000L + Long.remainderUnsigned(mixed, 900_000_000_000_000L);
+        return Long.toString(value);
     }
 
     private CreatePaymentResponse toCreatePaymentResponse(Payment payment) {

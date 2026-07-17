@@ -114,6 +114,16 @@ class ScheduleCapacityServiceTest {
     }
 
     @Test
+    void capturedPaymentDecrementCapsAvailabilityAndReportsShortfall() {
+        ShowSchedule schedule = schedule(2, 0, 0);
+
+        int shortfall = schedule.decrementAvailableForCapturedPayment(TicketType.STANDARD, 3);
+
+        assertThat(shortfall).isEqualTo(1);
+        assertThat(schedule.availableFor(TicketType.STANDARD)).isZero();
+    }
+
+    @Test
     void rejectsNonPositiveDecrementQuantity() {
         ShowSchedule schedule = schedule(70, 20, 10);
 

@@ -14,8 +14,17 @@ import java.util.LinkedHashMap;
 import java.util.Map;
 
 import static org.assertj.core.api.Assertions.assertThat;
+import static org.assertj.core.api.Assertions.assertThatThrownBy;
 
 class PayOsClientTest {
+
+    @Test
+    void blankProviderCredentialsFailInsteadOfCreatingFakePaymentLink() {
+        PayOsClient client = client("", false, "");
+
+        assertThatThrownBy(() -> client.createPaymentLink(null, "123456789"))
+                .hasMessage("PayOS payment service is not configured");
+    }
 
     @Test
     void blankChecksumRejectsCallbackByDefault() {

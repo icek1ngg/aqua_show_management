@@ -5,6 +5,7 @@ import com.asms.booking.entity.BookingItem;
 import com.asms.booking.dto.TicketHoldDtos.TicketHoldInfo;
 import com.asms.booking.enums.BookingStatus;
 import com.asms.booking.enums.TicketType;
+import com.asms.booking.exception.TicketHoldServiceUnavailableException;
 import com.asms.booking.repository.BookingRepository;
 import com.asms.booking.service.RedisTicketHoldService;
 import com.asms.catalog.entity.Show;
@@ -98,7 +99,7 @@ class PaymentServiceImplTest {
     }
 
     @Test
-    void duplicateCallbackDoesNotPublishDuplicateCompletionTask() {
+    void duplicateCallbackRepublishesIdempotentCompletionTaskForRecovery() {
         Payment payment = pendingPayment();
         when(payOsClient.isValidCallback(any())).thenReturn(true);
         when(paymentRepository.findByPayosOrderCodeForUpdate(payment.getPayosOrderCode())).thenReturn(Optional.of(payment));
@@ -106,7 +107,7 @@ class PaymentServiceImplTest {
         paymentService.processCallback(successCallback(payment.getPayosOrderCode()));
         paymentService.processCallback(successCallback(payment.getPayosOrderCode()));
 
-        verify(paymentCompletedPublisher, times(1)).publish(any());
+        verify(paymentCompletedPublisher, times(2)).publish(any());
         verify(ticketGenerationService, times(1)).generateTicketsIfMissing(payment.getBooking());
     }
 
@@ -149,29 +150,53 @@ class PaymentServiceImplTest {
         assertThat(vipSchedule.availableFor(TicketType.VIP)).isEqualTo(4);
         verify(showScheduleRepository, times(1))
                 .findAllByIdForUpdate(lockedIds);
-        verify(redisTicketHoldService, times(1)).releaseHold("hold-standard");
-        verify(redisTicketHoldService, times(1)).releaseHold("hold-vip");
+        verify(redisTicketHoldService, times(2)).releaseHold("hold-standard");
+        verify(redisTicketHoldService, times(2)).releaseHold("hold-vip");
         verify(ticketGenerationService, times(1)).generateTicketsIfMissing(booking);
-        verify(paymentCompletedPublisher, times(1)).publish(any());
+        verify(paymentCompletedPublisher, times(2)).publish(any());
     }
 
     @Test
-    void expiredHoldRejectsPaymentBeforeAnyStateOrInventoryWrite() {
+    void expiredHoldStillHonorsCapturedPayment() {
         Payment payment = pendingPayment();
         when(payOsClient.isValidCallback(any())).thenReturn(true);
         when(paymentRepository.findByPayosOrderCodeForUpdate(payment.getPayosOrderCode())).thenReturn(Optional.of(payment));
         when(redisTicketHoldService.getHold("hold-test")).thenReturn(Optional.empty());
-        org.assertj.core.api.Assertions.assertThatThrownBy(
-                () -> paymentService.processCallback(successCallback(payment.getPayosOrderCode()))
-        ).hasMessageContaining("hold has expired");
+        paymentService.processCallback(successCallback(payment.getPayosOrderCode()));
 
-        assertThat(payment.getStatus()).isEqualTo(PaymentStatus.PENDING);
-        assertThat(payment.getBooking().getStatus()).isEqualTo(BookingStatus.PENDING_PAYMENT);
-        verify(showScheduleRepository, never()).saveAll(any());
-        verify(bookingRepository, never()).save(any());
-        verify(paymentRepository, never()).save(any());
-        verify(ticketGenerationService, never()).generateTicketsIfMissing(any());
-        verify(paymentCompletedPublisher, never()).publish(any());
+        assertThat(payment.getStatus()).isEqualTo(PaymentStatus.SUCCESS);
+        assertThat(payment.getBooking().getStatus()).isEqualTo(BookingStatus.PAID);
+        verify(showScheduleRepository).saveAll(any());
+        verify(ticketGenerationService).generateTicketsIfMissing(payment.getBooking());
+        verify(paymentCompletedPublisher).publish(any());
+    }
+
+    @Test
+    void redisReleaseFailureDoesNotSuppressCompletionPublication() {
+        Payment payment = pendingPayment();
+        when(payOsClient.isValidCallback(any())).thenReturn(true);
+        when(paymentRepository.findByPayosOrderCodeForUpdate(payment.getPayosOrderCode())).thenReturn(Optional.of(payment));
+        org.mockito.Mockito.doThrow(new IllegalStateException("redis unavailable"))
+                .when(redisTicketHoldService).releaseHold("hold-test");
+
+        paymentService.processCallback(successCallback(payment.getPayosOrderCode()));
+
+        verify(paymentCompletedPublisher).publish(any());
+    }
+
+    @Test
+    void redisLookupFailureDoesNotBlockCapturedPayment() {
+        Payment payment = pendingPayment();
+        when(payOsClient.isValidCallback(any())).thenReturn(true);
+        when(paymentRepository.findByPayosOrderCodeForUpdate(payment.getPayosOrderCode())).thenReturn(Optional.of(payment));
+        when(redisTicketHoldService.getHold("hold-test"))
+                .thenThrow(new TicketHoldServiceUnavailableException("redis unavailable"));
+
+        paymentService.processCallback(successCallback(payment.getPayosOrderCode()));
+
+        assertThat(payment.getStatus()).isEqualTo(PaymentStatus.SUCCESS);
+        assertThat(payment.getBooking().getStatus()).isEqualTo(BookingStatus.PAID);
+        verify(paymentCompletedPublisher).publish(any());
     }
 
     @Test
