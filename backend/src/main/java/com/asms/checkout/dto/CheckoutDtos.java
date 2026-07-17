@@ -3,6 +3,7 @@ package com.asms.checkout.dto;
 import com.asms.payment.dto.CreatePaymentResponse;
 import jakarta.validation.Valid;
 import jakarta.validation.constraints.NotEmpty;
+import jakarta.validation.constraints.NotBlank;
 import jakarta.validation.constraints.NotNull;
 import jakarta.validation.constraints.Size;
 
@@ -21,7 +22,7 @@ public final class CheckoutDtos {
     ) {}
 
     public record StartPaymentRequest(
-            @NotNull(message = "Idempotency key is required") String idempotencyKey,
+            @NotBlank(message = "Idempotency key is required") String idempotencyKey,
             @NotEmpty(message = "Items are required") @Size(max = 20) List<@Valid CheckoutItemRequest> items
     ) {}
 

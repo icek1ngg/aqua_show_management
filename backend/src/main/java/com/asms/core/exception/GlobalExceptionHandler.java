@@ -1,5 +1,7 @@
 package com.asms.core.exception;
 
+import com.asms.checkout.dto.CheckoutDtos.CheckoutReviewRequiredData;
+import com.asms.checkout.exception.CheckoutReviewRequiredException;
 import com.asms.core.response.ApiResponse;
 import jakarta.validation.ConstraintViolationException;
 import org.springframework.http.HttpStatus;
@@ -75,5 +77,19 @@ public class GlobalExceptionHandler {
         return ResponseEntity
                 .status(HttpStatus.INTERNAL_SERVER_ERROR)
                 .body(ApiResponse.failure("Internal server error"));
+    }
+
+    @ExceptionHandler(CheckoutReviewRequiredException.class)
+    public ResponseEntity<ApiResponse<CheckoutReviewRequiredData>> handleCheckoutReviewRequiredException(
+            CheckoutReviewRequiredException exception) {
+        ApiResponse<CheckoutReviewRequiredData> body = new ApiResponse<>(
+                false,
+                exception.getMessage(),
+                ErrorCode.CHECKOUT_REVIEW_REQUIRED.name(),
+                exception.getData(),
+                null,
+                null
+        );
+        return ResponseEntity.status(exception.getStatus()).body(body);
     }
 }

@@ -4,14 +4,15 @@ import com.asms.checkout.service.CheckoutIdempotencyLockService;
 import com.asms.core.exception.ConflictException;
 import com.asms.core.exception.ErrorCode;
 import com.asms.core.exception.ServiceUnavailableException;
+import jakarta.annotation.PreDestroy;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
+import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.dao.DataAccessException;
 import org.springframework.data.redis.core.StringRedisTemplate;
 import org.springframework.data.redis.core.script.DefaultRedisScript;
 import org.springframework.data.redis.core.script.RedisScript;
 import org.springframework.stereotype.Service;
-import jakarta.annotation.PreDestroy;
 
 import java.nio.charset.StandardCharsets;
 import java.security.MessageDigest;
@@ -63,6 +64,7 @@ public class RedisCheckoutIdempotencyLockService implements CheckoutIdempotencyL
     private final ScheduledThreadPoolExecutor renewalExecutor;
     private final AtomicBoolean closed = new AtomicBoolean();
 
+    @Autowired
     public RedisCheckoutIdempotencyLockService(StringRedisTemplate redisTemplate) {
         this(redisTemplate, DEFAULT_LEASE, DEFAULT_WAIT, DEFAULT_RETRY_DELAY);
     }

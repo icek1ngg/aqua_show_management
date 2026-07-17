@@ -81,7 +81,9 @@ class RedisTicketHoldServiceTest {
 
     @Test
     void effectiveAvailabilityRemovesOnlyExpiredHoldAndCountsActiveHoldInRealRedis() {
-        LettuceConnectionFactory connectionFactory = new LettuceConnectionFactory("localhost", 6379);
+        String host = System.getenv().getOrDefault("REDIS_TEST_HOST", "localhost");
+        int port = Integer.parseInt(System.getenv().getOrDefault("REDIS_TEST_PORT", "6379"));
+        LettuceConnectionFactory connectionFactory = new LettuceConnectionFactory(host, port);
         connectionFactory.afterPropertiesSet();
         connectionFactory.start();
         StringRedisTemplate realRedis = new StringRedisTemplate(connectionFactory);
