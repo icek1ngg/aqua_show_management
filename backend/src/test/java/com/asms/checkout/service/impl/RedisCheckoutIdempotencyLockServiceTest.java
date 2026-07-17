@@ -4,6 +4,7 @@ import com.asms.core.exception.ConflictException;
 import com.asms.core.exception.ErrorCode;
 import com.asms.core.exception.ServiceUnavailableException;
 import org.junit.jupiter.api.BeforeEach;
+import org.junit.jupiter.api.AfterEach;
 import org.junit.jupiter.api.Test;
 import org.mockito.ArgumentCaptor;
 import org.springframework.dao.DataAccessResourceFailureException;
@@ -15,6 +16,8 @@ import java.time.Duration;
 import java.util.List;
 import java.util.UUID;
 import java.util.concurrent.atomic.AtomicBoolean;
+import java.util.concurrent.CountDownLatch;
+import java.util.concurrent.TimeUnit;
 
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.assertThatThrownBy;
@@ -43,6 +46,11 @@ class RedisCheckoutIdempotencyLockServiceTest {
                 Duration.ofMillis(8),
                 Duration.ofMillis(1)
         );
+    }
+
+    @AfterEach
+    void tearDown() {
+        service.close();
     }
 
     @Test
@@ -109,5 +117,105 @@ class RedisCheckoutIdempotencyLockServiceTest {
         })).isInstanceOf(IllegalStateException.class).hasMessage("action failed");
 
         verify(redisTemplate).execute(any(RedisScript.class), anyList(), any(Object[].class));
+    }
+
+    @Test
+    @SuppressWarnings({"rawtypes", "unchecked"})
+    void renewsOwnedLockWithLuaWhileActionIsRunning() {
+        service.close();
+        service = new RedisCheckoutIdempotencyLockService(
+                redisTemplate,
+                Duration.ofMillis(90),
+                Duration.ofMillis(20),
+                Duration.ofMillis(1),
+                Duration.ofMillis(20)
+        );
+        when(valueOperations.setIfAbsent(any(), any(), eq(Duration.ofMillis(90)))).thenReturn(true);
+        CountDownLatch renewed = new CountDownLatch(1);
+        ArgumentCaptor<RedisScript> scripts = ArgumentCaptor.forClass(RedisScript.class);
+        when(redisTemplate.execute(scripts.capture(), anyList(), any(Object[].class))).thenAnswer(invocation -> {
+            RedisScript<?> script = invocation.getArgument(0);
+            if (script.getScriptAsString().contains("PEXPIRE")) {
+                renewed.countDown();
+            }
+            return 1L;
+        });
+
+        String result = service.execute(UUID.randomUUID(), "slow-action", () -> {
+            try {
+                assertThat(renewed.await(300, TimeUnit.MILLISECONDS)).isTrue();
+            } catch (InterruptedException exception) {
+                Thread.currentThread().interrupt();
+                throw new AssertionError(exception);
+            }
+            return "done";
+        });
+
+        assertThat(result).isEqualTo("done");
+        assertThat(scripts.getAllValues()).anySatisfy(script -> assertThat(script.getScriptAsString())
+                .contains("GET", "PEXPIRE", "ARGV[1]", "ARGV[2]"));
+    }
+
+    @Test
+    @SuppressWarnings({"rawtypes", "unchecked"})
+    void schedulerCloseAfterAcquisitionMapsToUnavailableAndReleasesLock() {
+        when(valueOperations.setIfAbsent(any(), any(), any(Duration.class))).thenAnswer(invocation -> {
+            service.close();
+            return true;
+        });
+        when(redisTemplate.execute(any(RedisScript.class), anyList(), any(Object[].class))).thenReturn(1L);
+        AtomicBoolean executed = new AtomicBoolean();
+
+        assertThatThrownBy(() -> service.execute(UUID.randomUUID(), "closing", () -> {
+            executed.set(true);
+            return "never";
+        })).isInstanceOfSatisfying(ServiceUnavailableException.class,
+                exception -> assertThat(exception.getStatus().value()).isEqualTo(503));
+
+        assertThat(executed).isFalse();
+        ArgumentCaptor<RedisScript> releaseScript = ArgumentCaptor.forClass(RedisScript.class);
+        verify(redisTemplate).execute(releaseScript.capture(), anyList(), any(Object[].class));
+        assertThat(releaseScript.getValue().getScriptAsString()).contains("GET", "DEL", "ARGV[1]");
+    }
+
+    @Test
+    @SuppressWarnings({"rawtypes", "unchecked"})
+    void stoppedWatchdogDoesNotRenewAfterRelease() throws Exception {
+        service.close();
+        service = new RedisCheckoutIdempotencyLockService(
+                redisTemplate,
+                Duration.ofMillis(90),
+                Duration.ofMillis(20),
+                Duration.ofMillis(1),
+                Duration.ofMillis(20)
+        );
+        when(valueOperations.setIfAbsent(any(), any(), eq(Duration.ofMillis(90)))).thenReturn(true);
+        CountDownLatch renewed = new CountDownLatch(1);
+        AtomicBoolean released = new AtomicBoolean();
+        AtomicBoolean renewedAfterRelease = new AtomicBoolean();
+        when(redisTemplate.execute(any(RedisScript.class), anyList(), any(Object[].class))).thenAnswer(invocation -> {
+            RedisScript<?> script = invocation.getArgument(0);
+            if (script.getScriptAsString().contains("PEXPIRE")) {
+                renewedAfterRelease.compareAndSet(false, released.get());
+                renewed.countDown();
+            } else {
+                released.set(true);
+            }
+            return 1L;
+        });
+
+        service.execute(UUID.randomUUID(), "stop-renewal", () -> {
+            try {
+                assertThat(renewed.await(300, TimeUnit.MILLISECONDS)).isTrue();
+            } catch (InterruptedException exception) {
+                Thread.currentThread().interrupt();
+                throw new AssertionError(exception);
+            }
+            return "done";
+        });
+        Thread.sleep(80);
+
+        assertThat(released).isTrue();
+        assertThat(renewedAfterRelease).isFalse();
     }
 }
