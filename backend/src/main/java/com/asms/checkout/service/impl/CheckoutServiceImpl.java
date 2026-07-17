@@ -18,10 +18,9 @@ import com.asms.core.exception.ConflictException;
 import com.asms.core.exception.NotFoundException;
 import com.asms.core.exception.UnauthorizedException;
 import com.asms.identity.entity.User;
-import com.asms.payment.entity.Payment;
-import com.asms.payment.repository.PaymentRepository;
-import com.asms.payment.integration.PayOsClient;
-import com.asms.payment.integration.PayOsPaymentLink;
+import com.asms.payment.dto.CreatePaymentResponse;
+import com.asms.payment.service.PaymentService;
+import com.asms.payment.service.PaymentService.PaymentCreationOutcome;
 import com.asms.checkout.service.CheckoutService;
 import com.asms.checkout.service.CheckoutIdempotencyLockService;
 import com.asms.core.exception.ErrorCode;
@@ -33,7 +32,6 @@ import org.springframework.transaction.support.TransactionTemplate;
 
 import java.math.BigDecimal;
 import java.math.RoundingMode;
-import java.time.Duration;
 import java.time.Instant;
 import java.time.LocalDate;
 import java.time.format.DateTimeFormatter;
@@ -52,8 +50,7 @@ public class CheckoutServiceImpl implements CheckoutService {
     private final ShowScheduleRepository scheduleRepository;
     private final RedisTicketHoldService redisTicketHoldService;
     private final TicketPricingService ticketPricingService;
-    private final PaymentRepository paymentRepository;
-    private final PayOsClient payOsClient;
+    private final PaymentService paymentService;
     private final TransactionTemplate transactionTemplate;
     private final CheckoutIdempotencyLockService idempotencyLockService;
 
@@ -62,8 +59,7 @@ public class CheckoutServiceImpl implements CheckoutService {
             ShowScheduleRepository scheduleRepository,
             RedisTicketHoldService redisTicketHoldService,
             TicketPricingService ticketPricingService,
-            PaymentRepository paymentRepository,
-            PayOsClient payOsClient,
+            PaymentService paymentService,
             PlatformTransactionManager transactionManager,
             CheckoutIdempotencyLockService idempotencyLockService
     ) {
@@ -71,8 +67,7 @@ public class CheckoutServiceImpl implements CheckoutService {
         this.scheduleRepository = scheduleRepository;
         this.redisTicketHoldService = redisTicketHoldService;
         this.ticketPricingService = ticketPricingService;
-        this.paymentRepository = paymentRepository;
-        this.payOsClient = payOsClient;
+        this.paymentService = paymentService;
         this.transactionTemplate = new TransactionTemplate(transactionManager);
         this.idempotencyLockService = idempotencyLockService;
     }
@@ -102,7 +97,7 @@ public class CheckoutServiceImpl implements CheckoutService {
                         "Idempotency key was already used with a different checkout payload"
                 );
             }
-            return buildResponse(existing);
+            return resumeExistingBookingPayment(existing);
         }
 
         List<NormalizedLine> normalizedLines = normalizeItems(request.items());
@@ -171,8 +166,7 @@ public class CheckoutServiceImpl implements CheckoutService {
                 .min(Instant::compareTo)
                 .orElseGet(() -> Instant.now().plusSeconds(15 * 60));
 
-        String[] payosOrderCodeRef = new String[1];
-        boolean[] providerLinkCreatedRef = new boolean[1];
+        PaymentCreationOutcome[] paymentOutcomeRef = new PaymentCreationOutcome[1];
 
         try {
             StartPaymentResponse response = transactionTemplate.execute(status -> {
@@ -193,26 +187,9 @@ public class CheckoutServiceImpl implements CheckoutService {
 
                 Booking savedBooking = bookingRepository.save(booking);
 
-                payosOrderCodeRef[0] = generateOrderCode(savedBooking.getId());
-                PayOsPaymentLink payOsPaymentLink;
-                try {
-                    payOsPaymentLink = payOsClient.createPaymentLink(savedBooking, payosOrderCodeRef[0]);
-                    providerLinkCreatedRef[0] = true;
-                } catch (Exception e) {
-                    status.setRollbackOnly();
-                    throw e;
-                }
-
-                Payment payment = new Payment(savedBooking, payosOrderCodeRef[0], savedBooking.getTotalAmount(), payOsPaymentLink.checkoutUrl());
-                payment.setQrCode(payOsPaymentLink.qrCode());
-                payment.setPaymentLinkId(payOsPaymentLink.paymentLinkId());
-                payment.setBankBin(payOsPaymentLink.bin());
-                payment.setAccountNumber(payOsPaymentLink.accountNumber());
-                payment.setAccountName(payOsPaymentLink.accountName());
-                payment.setPaymentDescription(payOsPaymentLink.description());
-                paymentRepository.save(payment);
-
-                return buildResponse(savedBooking, payment, payOsPaymentLink);
+                PaymentCreationOutcome outcome = paymentService.createOrGetPaymentSession(savedBooking);
+                paymentOutcomeRef[0] = outcome;
+                return buildResponse(savedBooking, outcome.response());
             });
             return response;
         } catch (Exception e) {
@@ -223,12 +200,9 @@ public class CheckoutServiceImpl implements CheckoutService {
                     log.error("Failed to release hold {}", holdId, ex);
                 }
             }
-            if (providerLinkCreatedRef[0] && payosOrderCodeRef[0] != null) {
-                try {
-                    payOsClient.cancelPaymentLink(payosOrderCodeRef[0], "CANCELLED");
-                } catch (Exception ex) {
-                    log.error("Failed to cancel PayOS payment link {}", payosOrderCodeRef[0], ex);
-                }
+            PaymentCreationOutcome outcome = paymentOutcomeRef[0];
+            if (outcome != null && outcome.providerSessionCreated()) {
+                paymentService.cancelPaymentSessionBestEffort(outcome.response().payosOrderCode(), "CANCELLED");
             }
             throw e;
         }
@@ -335,23 +309,24 @@ public class CheckoutServiceImpl implements CheckoutService {
         return quantity;
     }
 
-    private StartPaymentResponse buildResponse(Booking booking) {
-        Payment payment = paymentRepository.findByBooking_Id(booking.getId()).orElse(null);
-        return buildResponse(booking, payment, null);
+    private StartPaymentResponse resumeExistingBookingPayment(Booking booking) {
+        PaymentCreationOutcome[] paymentOutcomeRef = new PaymentCreationOutcome[1];
+        try {
+            return transactionTemplate.execute(status -> {
+                PaymentCreationOutcome outcome = paymentService.createOrGetPaymentSession(booking);
+                paymentOutcomeRef[0] = outcome;
+                return buildResponse(booking, outcome.response());
+            });
+        } catch (Exception exception) {
+            PaymentCreationOutcome outcome = paymentOutcomeRef[0];
+            if (outcome != null && outcome.providerSessionCreated()) {
+                paymentService.cancelPaymentSessionBestEffort(outcome.response().payosOrderCode(), "CANCELLED");
+            }
+            throw exception;
+        }
     }
 
-    private StartPaymentResponse buildResponse(Booking booking, Payment payment, PayOsPaymentLink paymentLink) {
-        CheckoutPayment cp = null;
-        if (payment != null) {
-            long expiresInSeconds = Math.max(0, Duration.between(Instant.now(), booking.getExpiresAt()).toSeconds());
-            cp = new CheckoutPayment(
-                    payment.getId().toString(),
-                    payment.getPaymentLink(),
-                    payment.getQrCode(),
-                    (int) expiresInSeconds
-            );
-        }
-
+    private StartPaymentResponse buildResponse(Booking booking, CreatePaymentResponse payment) {
         List<Object> items = booking.getItems().stream().map(item -> Map.of(
                 "scheduleId", item.getScheduleId(),
                 "ticketType", item.getTicketType().name(),
@@ -366,7 +341,7 @@ public class CheckoutServiceImpl implements CheckoutService {
                 items,
                 booking.getTotalQuantity(),
                 booking.getTotalAmount(),
-                cp
+                payment
         );
     }
 
@@ -380,12 +355,6 @@ public class CheckoutServiceImpl implements CheckoutService {
 
     private String randomSuffix() {
         return UUID.randomUUID().toString().replace("-", "").substring(0, 6).toUpperCase(Locale.ROOT);
-    }
-
-    private String generateOrderCode(UUID bookingId) {
-        long base = Instant.now().toEpochMilli() % 900_000_000_000L;
-        long suffix = java.util.concurrent.ThreadLocalRandom.current().nextLong(100, 999);
-        return String.valueOf((base * 1000) + suffix);
     }
 
     private record LineKey(UUID scheduleId, TicketType ticketType) {}

@@ -17,10 +17,10 @@ import com.asms.core.exception.ConflictException;
 import com.asms.core.exception.ErrorCode;
 import com.asms.core.exception.UnauthorizedException;
 import com.asms.identity.entity.User;
-import com.asms.payment.entity.Payment;
-import com.asms.payment.integration.PayOsClient;
-import com.asms.payment.integration.PayOsPaymentLink;
-import com.asms.payment.repository.PaymentRepository;
+import com.asms.payment.dto.CreatePaymentResponse;
+import com.asms.payment.enums.PaymentStatus;
+import com.asms.payment.service.PaymentService;
+import com.asms.payment.service.PaymentService.PaymentCreationOutcome;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.extension.ExtendWith;
@@ -55,8 +55,7 @@ class CheckoutServiceImplTest {
     @Mock private ShowScheduleRepository scheduleRepository;
     @Mock private RedisTicketHoldService redisTicketHoldService;
     @Mock private TicketPricingService ticketPricingService;
-    @Mock private PaymentRepository paymentRepository;
-    @Mock private PayOsClient payOsClient;
+    @Mock private PaymentService paymentService;
     @Mock private PlatformTransactionManager transactionManager;
     @Mock private TransactionStatus transactionStatus;
     @Mock private CheckoutIdempotencyLockService idempotencyLockService;
@@ -69,7 +68,7 @@ class CheckoutServiceImplTest {
     void setUp() {
         checkoutService = new CheckoutServiceImpl(
                 bookingRepository, scheduleRepository, redisTicketHoldService,
-                ticketPricingService, paymentRepository, payOsClient, transactionManager,
+                ticketPricingService, paymentService, transactionManager,
                 idempotencyLockService
         );
         lenient().when(idempotencyLockService.execute(any(), anyString(), any()))
@@ -149,7 +148,7 @@ class CheckoutServiceImplTest {
         when(redisTicketHoldService.holdTickets(anyString(), any(), anyInt(), any()))
                 .thenReturn(successfulHold("hold123"));
         stubSavedBooking();
-        when(payOsClient.createPaymentLink(any(), anyString())).thenReturn(paymentLink());
+        stubPaymentOutcome(true);
 
         StartPaymentResponse resp = checkoutService.startPayment(requestFor(testSchedule, "key2"), testUser);
 
@@ -157,10 +156,11 @@ class CheckoutServiceImplTest {
         assertEquals("PENDING_PAYMENT", resp.bookingStatus());
         assertNotNull(resp.payment());
         assertEquals("http://checkout", resp.payment().checkoutUrl());
+        assertEquals("970422", resp.payment().bankBin());
 
-        verify(paymentRepository).save(any(Payment.class));
+        verify(paymentService).createOrGetPaymentSession(any(Booking.class));
         verify(redisTicketHoldService, never()).releaseHold(anyString());
-        verify(payOsClient, never()).cancelPaymentLink(anyString(), anyString());
+        verify(paymentService, never()).cancelPaymentSessionBestEffort(anyString(), anyString());
     }
 
     @Test
@@ -169,31 +169,30 @@ class CheckoutServiceImplTest {
         when(redisTicketHoldService.holdTickets(anyString(), any(), anyInt(), any()))
                 .thenReturn(successfulHold("hold-payos-failure"));
         stubSavedBooking();
-        when(payOsClient.createPaymentLink(any(), anyString())).thenThrow(new IllegalStateException("PayOS unavailable"));
+        when(paymentService.createOrGetPaymentSession(any())).thenThrow(new IllegalStateException("PayOS unavailable"));
 
         IllegalStateException failure = assertThrows(IllegalStateException.class,
                 () -> checkoutService.startPayment(requestFor(testSchedule, "key-payos-failure"), testUser));
 
         assertEquals("PayOS unavailable", failure.getMessage());
         verify(redisTicketHoldService).releaseHold("hold-payos-failure");
-        verify(payOsClient, never()).cancelPaymentLink(anyString(), anyString());
+        verify(paymentService, never()).cancelPaymentSessionBestEffort(anyString(), anyString());
     }
 
     @Test
-    void paymentSaveFailureReleasesHoldsAndCancelsCreatedProviderLink() {
+    void paymentPersistenceFailureReleasesHoldsAndPreservesServiceCompensationBoundary() {
         stubBookableSchedule(testSchedule);
         when(redisTicketHoldService.holdTickets(anyString(), any(), anyInt(), any()))
                 .thenReturn(successfulHold("hold-payment-save-failure"));
         stubSavedBooking();
-        AtomicReference<String> createdOrderCode = stubCreatedProviderLink();
-        when(paymentRepository.save(any(Payment.class))).thenThrow(new IllegalStateException("payment save failed"));
+        when(paymentService.createOrGetPaymentSession(any())).thenThrow(new IllegalStateException("payment save failed"));
 
         IllegalStateException failure = assertThrows(IllegalStateException.class,
                 () -> checkoutService.startPayment(requestFor(testSchedule, "key-payment-save-failure"), testUser));
 
         assertEquals("payment save failed", failure.getMessage());
         verify(redisTicketHoldService).releaseHold("hold-payment-save-failure");
-        verify(payOsClient).cancelPaymentLink(eq(createdOrderCode.get()), eq("CANCELLED"));
+        verify(paymentService, never()).cancelPaymentSessionBestEffort(anyString(), anyString());
     }
 
     @Test
@@ -202,7 +201,7 @@ class CheckoutServiceImplTest {
         when(redisTicketHoldService.holdTickets(anyString(), any(), anyInt(), any()))
                 .thenReturn(successfulHold("hold-commit-failure"));
         stubSavedBooking();
-        AtomicReference<String> createdOrderCode = stubCreatedProviderLink();
+        stubPaymentOutcome(true);
         doAnswer(invocation -> {
             TransactionSynchronizationManager.clearSynchronization();
             throw new TestTransactionException("commit failed");
@@ -213,7 +212,7 @@ class CheckoutServiceImplTest {
 
         assertEquals("commit failed", failure.getMessage());
         verify(redisTicketHoldService).releaseHold("hold-commit-failure");
-        verify(payOsClient).cancelPaymentLink(eq(createdOrderCode.get()), eq("CANCELLED"));
+        verify(paymentService).cancelPaymentSessionBestEffort(anyString(), eq("CANCELLED"));
     }
 
     @Test
@@ -237,8 +236,7 @@ class CheckoutServiceImplTest {
         assertThrows(ConflictException.class, () -> checkoutService.startPayment(request, testUser));
 
         verify(redisTicketHoldService).releaseHold("hold-first");
-        verifyNoInteractions(payOsClient);
-        verifyNoInteractions(paymentRepository);
+        verifyNoInteractions(paymentService);
     }
 
     @Test
@@ -247,11 +245,34 @@ class CheckoutServiceImplTest {
         when(bookingRepository.findByUserAndIdempotencyKey(testUser, "same-key"))
                 .thenReturn(Optional.of(existing));
 
+        PaymentCreationOutcome reusedPayment = paymentOutcome(existing, false);
+        when(paymentService.createOrGetPaymentSession(existing)).thenReturn(reusedPayment);
         StartPaymentResponse response = checkoutService.startPayment(requestFor(testSchedule, "same-key"), testUser);
 
         assertEquals(existing.getId().toString(), response.bookingId());
-        verifyNoInteractions(scheduleRepository, redisTicketHoldService, payOsClient);
-        verify(paymentRepository).findByBooking_Id(existing.getId());
+        verifyNoInteractions(scheduleRepository, redisTicketHoldService);
+        verify(paymentService).createOrGetPaymentSession(existing);
+        assertEquals("970422", response.payment().bankBin());
+    }
+
+    @Test
+    void existingBookingResumeCommitFailureCancelsNewSessionWithoutReleasingExistingHolds() {
+        Booking existing = mockExistingBooking(new BigDecimal("100.00"));
+        when(bookingRepository.findByUserAndIdempotencyKey(testUser, "resume-commit-failure"))
+                .thenReturn(Optional.of(existing));
+        PaymentCreationOutcome refreshedPayment = paymentOutcome(existing, true);
+        when(paymentService.createOrGetPaymentSession(existing)).thenReturn(refreshedPayment);
+        doAnswer(invocation -> {
+            TransactionSynchronizationManager.clearSynchronization();
+            throw new TestTransactionException("commit failed");
+        }).when(transactionManager).commit(transactionStatus);
+
+        TestTransactionException failure = assertThrows(TestTransactionException.class,
+                () -> checkoutService.startPayment(requestFor(testSchedule, "resume-commit-failure"), testUser));
+
+        assertEquals("commit failed", failure.getMessage());
+        verify(paymentService).cancelPaymentSessionBestEffort("123456789", "CANCELLED");
+        verifyNoInteractions(redisTicketHoldService);
     }
 
     @Test
@@ -264,7 +285,7 @@ class CheckoutServiceImplTest {
                 () -> checkoutService.startPayment(requestFor(testSchedule, "price-mismatch"), testUser));
 
         assertEquals(ErrorCode.IDEMPOTENCY_KEY_REUSED, failure.getCode());
-        verifyNoInteractions(scheduleRepository, redisTicketHoldService, paymentRepository, payOsClient);
+        verifyNoInteractions(scheduleRepository, redisTicketHoldService, paymentService);
     }
 
     @Test
@@ -281,8 +302,8 @@ class CheckoutServiceImplTest {
             committedBooking.set(booking);
             return booking;
         });
-        when(payOsClient.createPaymentLink(any(), anyString())).thenReturn(paymentLink());
-        when(paymentRepository.findByBooking_Id(any())).thenReturn(Optional.empty());
+        when(paymentService.createOrGetPaymentSession(any())).thenAnswer(invocation ->
+                paymentOutcome(invocation.getArgument(0), committedBooking.get() == null));
 
         StartPaymentRequest request = requestFor(testSchedule, "concurrent-key");
         StartPaymentResponse first = checkoutService.startPayment(request, testUser);
@@ -290,7 +311,7 @@ class CheckoutServiceImplTest {
 
         assertEquals(first.bookingId(), second.bookingId());
         verify(redisTicketHoldService, times(1)).holdTickets(anyString(), any(), anyInt(), any());
-        verify(payOsClient, times(1)).createPaymentLink(any(), anyString());
+        verify(paymentService, times(2)).createOrGetPaymentSession(any());
         verify(idempotencyLockService, times(2)).execute(eq(testUser.getId()), eq("concurrent-key"), any());
     }
 
@@ -309,13 +330,17 @@ class CheckoutServiceImplTest {
         });
     }
 
-    private AtomicReference<String> stubCreatedProviderLink() {
-        AtomicReference<String> createdOrderCode = new AtomicReference<>();
-        when(payOsClient.createPaymentLink(any(), anyString())).thenAnswer(invocation -> {
-            createdOrderCode.set(invocation.getArgument(1));
-            return paymentLink();
-        });
-        return createdOrderCode;
+    private void stubPaymentOutcome(boolean providerSessionCreated) {
+        when(paymentService.createOrGetPaymentSession(any())).thenAnswer(invocation ->
+                paymentOutcome(invocation.getArgument(0), providerSessionCreated));
+    }
+
+    private PaymentCreationOutcome paymentOutcome(Booking booking, boolean providerSessionCreated) {
+        return new PaymentCreationOutcome(new CreatePaymentResponse(
+                booking.getId(), UUID.randomUUID(), "123456789", "http://checkout", "http://checkout",
+                "qr", "pid", "970422", "acc", "name", booking.getTotalAmount(), "desc",
+                PaymentStatus.PENDING, 600
+        ), providerSessionCreated);
     }
 
     private StartPaymentRequest requestFor(ShowSchedule schedule, String idempotencyKey) {
@@ -328,10 +353,6 @@ class CheckoutServiceImplTest {
 
     private HoldResult successfulHold(String holdId) {
         return new HoldResult(true, holdId, "schedule", Instant.now().plusSeconds(600));
-    }
-
-    private PayOsPaymentLink paymentLink() {
-        return new PayOsPaymentLink("http://checkout", "qr", "pid", "bin", "acc", "name", new BigDecimal("200.00"), "desc");
     }
 
     private ShowSchedule mockSchedule() {

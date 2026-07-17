@@ -85,26 +85,52 @@ public class PaymentServiceImpl implements PaymentService {
         Booking booking = bookingRepository.findByIdAndUser(request.bookingId(), user)
                 .orElseThrow(() -> new NotFoundException("Booking not found"));
 
+        validatePayableBooking(booking);
+        return createOrGetPaymentSession(booking).response();
+    }
+
+    @Override
+    @Transactional
+    public PaymentCreationOutcome createOrGetPaymentSession(Booking booking) {
+        validatePayableBooking(booking);
+        Payment existing = paymentRepository.findByBooking_Id(booking.getId()).orElse(null);
+        if (existing == null) {
+            Payment created = createNewPendingPayment(booking);
+            return new PaymentCreationOutcome(toCreatePaymentResponse(created), true);
+        }
+
+        if (existing.getStatus() == PaymentStatus.PENDING && !hasProviderPaymentSession(existing)) {
+            Payment refreshed = refreshPendingPaymentSession(existing);
+            return new PaymentCreationOutcome(toCreatePaymentResponse(refreshed), true);
+        }
+
+        return new PaymentCreationOutcome(toCreatePaymentResponse(existing), false);
+    }
+
+    private void validatePayableBooking(Booking booking) {
         if (booking.getStatus() == BookingStatus.EXPIRED) {
             throw new BadRequestException("Expired bookings cannot be paid");
         }
-
         if (booking.getExpiresAt().isBefore(Instant.now()) && booking.getStatus() == BookingStatus.PENDING_PAYMENT) {
             booking.setStatus(BookingStatus.EXPIRED);
             bookingRepository.save(booking);
             throw new BadRequestException("Booking payment window has expired");
         }
-
         if (booking.getStatus() != BookingStatus.PENDING_PAYMENT) {
             throw new BadRequestException("Only pending bookings can create payment links");
         }
+    }
 
-        Payment payment = paymentRepository.findByBooking_Id(booking.getId())
-                .orElseGet(() -> createNewPendingPayment(booking));
-
-        payment = refreshPendingPaymentSessionIfMissing(payment);
-
-        return toCreatePaymentResponse(payment);
+    @Override
+    public void cancelPaymentSessionBestEffort(String orderCode, String reason) {
+        if (!hasText(orderCode)) {
+            return;
+        }
+        try {
+            payOsClient.cancelPaymentLink(orderCode, reason);
+        } catch (Exception exception) {
+            log.error("Failed to cancel PayOS payment link {}", orderCode, exception);
+        }
     }
 
     @Override
@@ -389,17 +415,23 @@ public class PaymentServiceImpl implements PaymentService {
         PayOsPaymentLink payOsPaymentLink = payOsClient.createPaymentLink(booking, payosOrderCode);
         Payment payment = new Payment(booking, payosOrderCode, booking.getTotalAmount(), payOsPaymentLink.checkoutUrl());
         applyPayOsPaymentLink(payment, payOsPaymentLink);
-        return paymentRepository.save(payment);
+        try {
+            return paymentRepository.save(payment);
+        } catch (RuntimeException exception) {
+            cancelPaymentSessionBestEffort(payosOrderCode, "CANCELLED");
+            throw exception;
+        }
     }
 
-    private Payment refreshPendingPaymentSessionIfMissing(Payment payment) {
-        if (payment.getStatus() != PaymentStatus.PENDING || hasProviderPaymentSession(payment)) {
-            return payment;
-        }
-
+    private Payment refreshPendingPaymentSession(Payment payment) {
         PayOsPaymentLink payOsPaymentLink = payOsClient.createPaymentLink(payment.getBooking(), payment.getPayosOrderCode());
         applyPayOsPaymentLink(payment, payOsPaymentLink);
-        return paymentRepository.save(payment);
+        try {
+            return paymentRepository.save(payment);
+        } catch (RuntimeException exception) {
+            cancelPaymentSessionBestEffort(payment.getPayosOrderCode(), "CANCELLED");
+            throw exception;
+        }
     }
 
     private boolean hasProviderPaymentSession(Payment payment) {

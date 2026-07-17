@@ -41,6 +41,7 @@ import java.util.UUID;
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.ArgumentMatchers.anyString;
+import static org.mockito.ArgumentMatchers.eq;
 import static org.mockito.Mockito.mock;
 import static org.mockito.Mockito.verifyNoInteractions;
 import static org.mockito.Mockito.never;
@@ -383,6 +384,71 @@ class PaymentServiceImplTest {
         verify(paymentRepository).save(paymentCaptor.capture());
         assertThat(paymentCaptor.getValue().getAmount()).isEqualByComparingTo("6000");
         assertThat(response.amount()).isEqualByComparingTo("6000");
+    }
+
+    @Test
+    void createOrGetPaymentSessionMarksNewProviderSessionAsCreated() {
+        Payment existingShape = pendingPayment();
+        Booking booking = existingShape.getBooking();
+        when(paymentRepository.findByBooking_Id(booking.getId())).thenReturn(Optional.empty());
+        when(payOsClient.createPaymentLink(eq(booking), anyString())).thenReturn(paymentLink());
+        when(paymentRepository.save(any(Payment.class))).thenAnswer(invocation -> invocation.getArgument(0));
+
+        var outcome = paymentService.createOrGetPaymentSession(booking);
+
+        assertThat(outcome.providerSessionCreated()).isTrue();
+        assertThat(outcome.response().bookingId()).isEqualTo(booking.getId());
+        assertThat(outcome.response().checkoutUrl()).isEqualTo("https://pay.payos.vn/new");
+    }
+
+    @Test
+    void createOrGetPaymentSessionReusesCompleteProviderSession() {
+        Payment payment = pendingPayment();
+        payment.setQrCode("existing-qr");
+        payment.setPaymentLinkId("existing-link-id");
+        when(paymentRepository.findByBooking_Id(payment.getBooking().getId())).thenReturn(Optional.of(payment));
+
+        var outcome = paymentService.createOrGetPaymentSession(payment.getBooking());
+
+        assertThat(outcome.providerSessionCreated()).isFalse();
+        assertThat(outcome.response().qrCode()).isEqualTo("existing-qr");
+        verify(payOsClient, never()).createPaymentLink(any(), anyString());
+        verify(paymentRepository, never()).save(any());
+    }
+
+    @Test
+    void createOrGetPaymentSessionRefreshesIncompletePendingSession() {
+        Payment payment = pendingPayment();
+        when(paymentRepository.findByBooking_Id(payment.getBooking().getId())).thenReturn(Optional.of(payment));
+        when(payOsClient.createPaymentLink(payment.getBooking(), payment.getPayosOrderCode())).thenReturn(paymentLink());
+        when(paymentRepository.save(payment)).thenReturn(payment);
+
+        var outcome = paymentService.createOrGetPaymentSession(payment.getBooking());
+
+        assertThat(outcome.providerSessionCreated()).isTrue();
+        assertThat(outcome.response().paymentLinkId()).isEqualTo("payment-link-id");
+        verify(paymentRepository).save(payment);
+    }
+
+    @Test
+    void newPaymentPersistenceFailureCancelsCreatedProviderSession() {
+        Booking booking = pendingPayment().getBooking();
+        when(paymentRepository.findByBooking_Id(booking.getId())).thenReturn(Optional.empty());
+        when(payOsClient.createPaymentLink(eq(booking), anyString())).thenReturn(paymentLink());
+        when(paymentRepository.save(any(Payment.class))).thenThrow(new IllegalStateException("save failed"));
+
+        org.assertj.core.api.Assertions.assertThatThrownBy(() -> paymentService.createOrGetPaymentSession(booking))
+                .isInstanceOf(IllegalStateException.class)
+                .hasMessage("save failed");
+
+        verify(payOsClient).cancelPaymentLink(anyString(), eq("CANCELLED"));
+    }
+
+    private PayOsPaymentLink paymentLink() {
+        return new PayOsPaymentLink(
+                "https://pay.payos.vn/new", "qr", "payment-link-id", "970422",
+                "123456789", "ASMS", new BigDecimal("100000"), "ASMS payment"
+        );
     }
 
     private Payment pendingPayment() {

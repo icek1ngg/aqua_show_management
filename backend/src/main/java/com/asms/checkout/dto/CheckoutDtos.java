@@ -1,5 +1,6 @@
 package com.asms.checkout.dto;
 
+import com.asms.payment.dto.CreatePaymentResponse;
 import jakarta.validation.Valid;
 import jakarta.validation.constraints.NotEmpty;
 import jakarta.validation.constraints.NotNull;
@@ -24,13 +25,6 @@ public final class CheckoutDtos {
             @NotEmpty(message = "Items are required") @Size(max = 20) List<@Valid CheckoutItemRequest> items
     ) {}
 
-    public record CheckoutPayment(
-            String paymentId,
-            String checkoutUrl,
-            String qrCode,
-            Integer expiresInSeconds
-    ) {}
-
     public record StartPaymentResponse(
             String bookingId,
             String bookingStatus,
@@ -38,7 +32,7 @@ public final class CheckoutDtos {
             List<Object> items,
             Integer totalQuantity,
             BigDecimal totalAmount,
-            CheckoutPayment payment
+            CreatePaymentResponse payment
     ) {}
 
     public record CheckoutReviewItem(
