@@ -2,8 +2,10 @@ package com.asms.catalog.repository;
 
 import com.asms.catalog.entity.ShowSchedule;
 import com.asms.catalog.enums.ScheduleStatus;
+import com.asms.catalog.enums.ShowStatus;
 import org.springframework.data.domain.Page;
 import org.springframework.data.domain.Pageable;
+import org.springframework.data.jpa.repository.EntityGraph;
 import org.springframework.data.jpa.repository.JpaRepository;
 import org.springframework.data.jpa.repository.JpaSpecificationExecutor;
 import org.springframework.data.jpa.repository.Lock;
@@ -20,7 +22,25 @@ import jakarta.persistence.LockModeType;
 
 public interface ShowScheduleRepository extends JpaRepository<ShowSchedule, UUID>, JpaSpecificationExecutor<ShowSchedule> {
 
+    @Override
+    @EntityGraph(attributePaths = {"show", "venue"})
+    Optional<ShowSchedule> findById(UUID id);
+
     List<ShowSchedule> findByShow_IdAndStatusOrderByStartTimeAsc(UUID showId, ScheduleStatus status);
+
+    @EntityGraph(attributePaths = {"show", "venue"})
+    @Query("""
+            select schedule from ShowSchedule schedule
+            where schedule.status = :scheduleStatus
+              and schedule.show.status = :showStatus
+              and schedule.startTime > :after
+            order by schedule.startTime asc, schedule.id asc
+            """)
+    List<ShowSchedule> findUpcomingActiveSchedules(
+            @Param("scheduleStatus") ScheduleStatus scheduleStatus,
+            @Param("showStatus") ShowStatus showStatus,
+            @Param("after") LocalDateTime after
+    );
 
     Optional<ShowSchedule> findFirstByShow_IdAndStatusAndStartTimeAfterOrderByStartTimeAsc(
             UUID showId,

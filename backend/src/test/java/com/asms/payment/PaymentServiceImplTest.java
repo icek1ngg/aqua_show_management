@@ -18,6 +18,7 @@ import com.asms.payment.dto.PayOsCallbackRequest;
 import com.asms.payment.dto.PaymentReconcileRequest;
 import com.asms.payment.entity.Payment;
 import com.asms.payment.enums.PaymentStatus;
+import com.asms.payment.enums.PaymentReconciliationReason;
 import com.asms.payment.integration.PayOsClient;
 import com.asms.payment.integration.PayOsPaymentLink;
 import com.asms.payment.integration.PayOsPaymentStatus;
@@ -172,6 +173,102 @@ class PaymentServiceImplTest {
     }
 
     @Test
+    void capturedPaymentWithInventoryShortfallWaitsForReconciliation() {
+        CapturedInventoryFixture fixture = capturedInventoryFixture(0);
+
+        paymentService.processCallback(successCallback(
+                fixture.payment().getPayosOrderCode(), fixture.payment().getAmount()));
+
+        assertThat(fixture.payment().getStatus()).isEqualTo(PaymentStatus.SUCCESS);
+        assertThat(fixture.payment().getBooking().getStatus()).isEqualTo(BookingStatus.PROCESSING);
+        assertThat(fixture.payment().getReconciliationReason())
+                .isEqualTo(PaymentReconciliationReason.CAPTURED_PAYMENT_INVENTORY_SHORTFALL);
+        assertThat(fixture.payment().getInventoryCommittedAt()).isNull();
+        assertThat(fixture.schedule().availableFor(TicketType.STANDARD)).isZero();
+        verify(ticketGenerationService, never()).generateTicketsIfMissing(any());
+        verify(paymentCompletedPublisher, never()).publish(any());
+    }
+
+    @Test
+    void inventoryShortfallDoesNotPartiallyCommitOtherSchedules() {
+        User user = new User("Atomic", "Inventory", "atomic@example.com", "0900000010", "hash");
+        Show show = new Show("Atomic Show", "Water show", null, 45);
+        Venue venue = new Venue("Atomic Pool", "Central lagoon", 100);
+        LocalDateTime start = LocalDateTime.now().plusDays(1);
+        ShowSchedule availableSchedule = new ShowSchedule(
+                show, venue, start, start.plusMinutes(45), 2, 0, 0, new BigDecimal("100000"));
+        ShowSchedule exhaustedSchedule = new ShowSchedule(
+                show, venue, start.plusDays(1), start.plusDays(1).plusMinutes(45), 0, 0, 0,
+                new BigDecimal("100000"));
+        Booking booking = Booking.create(user, "AQB-ATOMIC", Instant.now().plusSeconds(900));
+        setId(booking, UUID.randomUUID());
+        booking.addItem(BookingItem.create(
+                booking, availableSchedule, TicketType.STANDARD, 1, new BigDecimal("100000"), "hold-a"));
+        booking.addItem(BookingItem.create(
+                booking, exhaustedSchedule, TicketType.STANDARD, 1, new BigDecimal("100000"), "hold-b"));
+        Payment payment = new Payment(booking, "987650002", booking.getTotalAmount(), "https://pay.payos.vn/atomic");
+
+        when(payOsClient.isValidCallback(any())).thenReturn(true);
+        when(paymentRepository.findByPayosOrderCodeForUpdate(payment.getPayosOrderCode()))
+                .thenReturn(Optional.of(payment));
+        when(redisTicketHoldService.getHold("hold-a")).thenReturn(Optional.empty());
+        when(redisTicketHoldService.getHold("hold-b")).thenReturn(Optional.empty());
+        List<UUID> scheduleIds = List.of(availableSchedule.getId(), exhaustedSchedule.getId()).stream()
+                .sorted(Comparator.naturalOrder())
+                .toList();
+        when(showScheduleRepository.findAllByIdForUpdate(scheduleIds))
+                .thenReturn(List.of(availableSchedule, exhaustedSchedule));
+
+        paymentService.processCallback(successCallback(payment.getPayosOrderCode(), booking.getTotalAmount()));
+
+        assertThat(payment.getStatus()).isEqualTo(PaymentStatus.SUCCESS);
+        assertThat(booking.getStatus()).isEqualTo(BookingStatus.PROCESSING);
+        assertThat(availableSchedule.availableFor(TicketType.STANDARD)).isEqualTo(2);
+        assertThat(exhaustedSchedule.availableFor(TicketType.STANDARD)).isZero();
+        verify(showScheduleRepository, never()).saveAll(any());
+        verify(ticketGenerationService, never()).generateTicketsIfMissing(any());
+    }
+
+    @Test
+    void capturedPaymentCompletesWhenInventoryIsRestored() {
+        CapturedInventoryFixture fixture = capturedInventoryFixture(0);
+        PayOsCallbackRequest callback = successCallback(
+                fixture.payment().getPayosOrderCode(), fixture.payment().getAmount());
+
+        paymentService.processCallback(callback);
+        fixture.schedule().setStandardAvailableTickets(1);
+        paymentService.processCallback(callback);
+
+        assertThat(fixture.payment().getStatus()).isEqualTo(PaymentStatus.SUCCESS);
+        assertThat(fixture.payment().getBooking().getStatus()).isEqualTo(BookingStatus.PAID);
+        assertThat(fixture.payment().getReconciliationReason()).isNull();
+        assertThat(fixture.payment().getInventoryCommittedAt()).isNotNull();
+        assertThat(fixture.schedule().availableFor(TicketType.STANDARD)).isZero();
+        verify(ticketGenerationService).generateTicketsIfMissing(fixture.payment().getBooking());
+        verify(paymentCompletedPublisher).publish(any());
+    }
+
+    @Test
+    void automaticReconciliationCompletesCapturedPaymentAfterCapacityRecovery() {
+        CapturedInventoryFixture fixture = capturedInventoryFixture(0);
+        paymentService.processCallback(successCallback(
+                fixture.payment().getPayosOrderCode(), fixture.payment().getAmount()));
+        fixture.schedule().setStandardAvailableTickets(1);
+        when(paymentRepository.findTop100ByStatusAndBooking_StatusOrderByCreatedAtAsc(
+                PaymentStatus.SUCCESS, BookingStatus.PROCESSING))
+                .thenReturn(List.of(fixture.payment()));
+        when(paymentRepository.findByIdForUpdate(fixture.payment().getId()))
+                .thenReturn(Optional.of(fixture.payment()));
+
+        paymentService.reconcileCapturedInventory();
+
+        assertThat(fixture.payment().getBooking().getStatus()).isEqualTo(BookingStatus.PAID);
+        assertThat(fixture.payment().getInventoryCommittedAt()).isNotNull();
+        assertThat(fixture.schedule().availableFor(TicketType.STANDARD)).isZero();
+        verify(ticketGenerationService).generateTicketsIfMissing(fixture.payment().getBooking());
+    }
+
+    @Test
     void redisReleaseFailureDoesNotSuppressCompletionPublication() {
         Payment payment = pendingPayment();
         when(payOsClient.isValidCallback(any())).thenReturn(true);
@@ -200,7 +297,7 @@ class PaymentServiceImplTest {
     }
 
     @Test
-    void holdForAnotherScheduleCannotPayThisBooking() {
+    void capturedPaymentWithMismatchedHoldMovesToReconciliation() {
         Payment payment = pendingPayment();
         BookingItem item = payment.getBooking().getItems().getFirst();
         when(payOsClient.isValidCallback(any())).thenReturn(true);
@@ -210,10 +307,12 @@ class PaymentServiceImplTest {
                 payment.getBooking().getUser().getId(), Instant.now(), Instant.now().plusSeconds(300)
         )));
 
-        org.assertj.core.api.Assertions.assertThatThrownBy(
-                () -> paymentService.processCallback(successCallback(payment.getPayosOrderCode()))
-        ).hasMessageContaining("does not match");
+        paymentService.processCallback(successCallback(payment.getPayosOrderCode()));
 
+        assertThat(payment.getStatus()).isEqualTo(PaymentStatus.SUCCESS);
+        assertThat(payment.getBooking().getStatus()).isEqualTo(BookingStatus.PROCESSING);
+        assertThat(payment.getReconciliationReason())
+                .isEqualTo(PaymentReconciliationReason.CAPTURED_PAYMENT_HOLD_MISMATCH);
         verify(showScheduleRepository, never()).findAllByIdForUpdate(any());
         verify(ticketGenerationService, never()).generateTicketsIfMissing(any());
     }
@@ -442,6 +541,21 @@ class PaymentServiceImplTest {
     }
 
     @Test
+    void idempotentRetryReturnsCapturedPaymentAfterBookingCompletion() {
+        Payment payment = pendingPayment();
+        payment.setStatus(PaymentStatus.SUCCESS);
+        payment.getBooking().setStatus(BookingStatus.PAID);
+        when(paymentRepository.findByBooking_Id(payment.getBooking().getId())).thenReturn(Optional.of(payment));
+
+        var outcome = paymentService.createOrGetPaymentSession(payment.getBooking());
+
+        assertThat(outcome.providerSessionCreated()).isFalse();
+        assertThat(outcome.response().status()).isEqualTo(PaymentStatus.SUCCESS);
+        verify(payOsClient, never()).createPaymentLink(any(), anyString());
+        verify(paymentRepository, never()).save(any());
+    }
+
+    @Test
     void createOrGetPaymentSessionRefreshesIncompletePendingSession() {
         Payment payment = pendingPayment();
         when(paymentRepository.findByBooking_Id(payment.getBooking().getId())).thenReturn(Optional.of(payment));
@@ -495,6 +609,30 @@ class PaymentServiceImplTest {
         return new Payment(booking, "123456789", booking.getTotalAmount(), "https://pay.payos.vn/test");
     }
 
+    private CapturedInventoryFixture capturedInventoryFixture(int available) {
+        User user = new User("Late", "Payment", "late@example.com", "0900000009", "hash");
+        Show show = new Show("Late Capture Show", "Water show", null, 45);
+        Venue venue = new Venue("Recovery Pool", "Central lagoon", 100);
+        LocalDateTime start = LocalDateTime.now().plusDays(1);
+        ShowSchedule schedule = new ShowSchedule(
+                show, venue, start, start.plusMinutes(45), 1, 0, 0, new BigDecimal("100000")
+        );
+        schedule.setStandardAvailableTickets(available);
+        Booking booking = Booking.create(user, "AQB-LATE", Instant.now().minusSeconds(1));
+        setId(booking, UUID.randomUUID());
+        booking.addItem(BookingItem.create(
+                booking, schedule, TicketType.STANDARD, 1, new BigDecimal("100000"), "hold-late"
+        ));
+        Payment payment = new Payment(booking, "987650001", booking.getTotalAmount(), "https://pay.payos.vn/late");
+        when(payOsClient.isValidCallback(any())).thenReturn(true);
+        when(paymentRepository.findByPayosOrderCodeForUpdate(payment.getPayosOrderCode()))
+                .thenReturn(Optional.of(payment));
+        when(redisTicketHoldService.getHold("hold-late")).thenReturn(Optional.empty());
+        when(showScheduleRepository.findAllByIdForUpdate(List.of(schedule.getId())))
+                .thenReturn(List.of(schedule));
+        return new CapturedInventoryFixture(payment, schedule);
+    }
+
     private PayOsCallbackRequest successCallback(String orderCode) {
         return successCallback(orderCode, new BigDecimal("100000"));
     }
@@ -539,5 +677,8 @@ class PaymentServiceImplTest {
         } catch (ReflectiveOperationException exception) {
             throw new IllegalStateException(exception);
         }
+    }
+
+    private record CapturedInventoryFixture(Payment payment, ShowSchedule schedule) {
     }
 }

@@ -1,5 +1,6 @@
 import { cartItemKey } from './cartStorage.js';
 import { normalizeTicketType } from '../../shared/utils/ticketPricing.js';
+import { MAX_CHECKOUT_TICKETS } from '../checkout/checkoutPolicy.js';
 
 const priceFields = {
   STANDARD: 'standardPrice',
@@ -61,19 +62,6 @@ export function reviewCartLine(item, schedule) {
   };
 }
 
-export function buildCheckoutPayload(lines, selectedKeys, idempotencyKey) {
-  return {
-    idempotencyKey,
-    items: lines
-      .filter((line) => selectedKeys.has(line.key || cartItemKey(line)) && line.checkoutAvailable)
-      .map((line) => ({
-        scheduleId: String(line.scheduleId),
-        ticketType: normalizeTicketType(line.ticketType),
-        quantity: Math.trunc(Number(line.quantity)),
-      })),
-  };
-}
-
 export function selectedCartTotals(lines, selectedKeys) {
   return lines.reduce((totals, line) => {
     if (!selectedKeys.has(line.key || cartItemKey(line)) || !line.checkoutAvailable) return totals;
@@ -83,6 +71,27 @@ export function selectedCartTotals(lines, selectedKeys) {
       amount: totals.amount + Number(line.unitPrice) * Number(line.quantity),
     };
   }, { lines: 0, tickets: 0, amount: 0 });
+}
+
+export function selectCartLinesWithinLimit(lines, shouldSelect = () => true) {
+  const selected = new Set();
+  let tickets = 0;
+  for (const line of Array.isArray(lines) ? lines : []) {
+    const key = line.key || cartItemKey(line);
+    const quantity = Math.max(0, Math.trunc(Number(line.quantity) || 0));
+    if (!line.checkoutAvailable || !shouldSelect(line) || quantity < 1) continue;
+    if (tickets + quantity > MAX_CHECKOUT_TICKETS) continue;
+    selected.add(key);
+    tickets += quantity;
+  }
+  return selected;
+}
+
+export function canAddCartLineToSelection(lines, selectedKeys, key) {
+  if (selectedKeys.has(key)) return true;
+  const line = (Array.isArray(lines) ? lines : []).find(candidate => (candidate.key || cartItemKey(candidate)) === key);
+  if (!line?.checkoutAvailable) return false;
+  return selectedCartTotals(lines, selectedKeys).tickets + Number(line.quantity) <= MAX_CHECKOUT_TICKETS;
 }
 
 export function removeCheckedKeysAfterSuccess(currentKeys, checkedOutKeys) {

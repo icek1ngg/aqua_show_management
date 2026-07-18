@@ -1,5 +1,6 @@
 package com.asms.checkout.service.impl;
 
+import com.asms.booking.BookingPolicy;
 import com.asms.booking.entity.Booking;
 import com.asms.booking.entity.BookingItem;
 import com.asms.booking.enums.BookingStatus;
@@ -33,6 +34,9 @@ import org.springframework.transaction.support.TransactionTemplate;
 
 import java.math.BigDecimal;
 import java.math.RoundingMode;
+import java.nio.charset.StandardCharsets;
+import java.security.MessageDigest;
+import java.security.NoSuchAlgorithmException;
 import java.time.Instant;
 import java.time.LocalDate;
 import java.time.format.DateTimeFormatter;
@@ -42,8 +46,6 @@ import java.util.stream.Collectors;
 @Service
 public class CheckoutServiceImpl implements CheckoutService {
     private static final Logger log = LoggerFactory.getLogger(CheckoutServiceImpl.class);
-    private static final int MAX_TICKETS_PER_BOOKING = 10;
-    private static final int MAX_BOOKING_LINES = 20;
     private static final long BOOKING_CUTOFF_MINUTES = 30;
     private static final DateTimeFormatter BOOKING_CODE_DATE_FORMAT = DateTimeFormatter.BASIC_ISO_DATE;
 
@@ -88,11 +90,13 @@ public class CheckoutServiceImpl implements CheckoutService {
     }
 
     private StartPaymentResponse startPaymentLocked(StartPaymentRequest request, User user, String idempotencyKey) {
+        List<NormalizedLine> normalizedLines = normalizeItems(request.items());
+        String payloadHash = canonicalPayloadHash(normalizedLines);
         Optional<Booking> existingBookingOpt = bookingRepository.findByUserAndIdempotencyKey(user, idempotencyKey);
 
         if (existingBookingOpt.isPresent()) {
             Booking existing = existingBookingOpt.get();
-            if (!isSamePayload(existing, request.items())) {
+            if (!isSamePayload(existing, normalizedLines, payloadHash)) {
                 throw new ConflictException(
                         ErrorCode.IDEMPOTENCY_KEY_REUSED,
                         "Idempotency key was already used with a different checkout payload"
@@ -101,7 +105,6 @@ public class CheckoutServiceImpl implements CheckoutService {
             return resumeExistingBookingPayment(existing);
         }
 
-        List<NormalizedLine> normalizedLines = normalizeItems(request.items());
         List<ResolvedLine> resolvedLines = resolveLines(normalizedLines);
 
         List<CheckoutReviewItem> reviewItems = new ArrayList<>();
@@ -173,12 +176,12 @@ public class CheckoutServiceImpl implements CheckoutService {
                 .min(Instant::compareTo)
                 .orElseGet(() -> Instant.now().plusSeconds(15 * 60));
 
-        PaymentCreationOutcome[] paymentOutcomeRef = new PaymentCreationOutcome[1];
-
+        Booking savedBooking;
         try {
-            StartPaymentResponse response = transactionTemplate.execute(status -> {
+            savedBooking = transactionTemplate.execute(status -> {
                 Booking booking = Booking.create(user, generateProductionBookingCode(), expiresAt);
                 booking.setIdempotencyKey(idempotencyKey);
+                booking.setCheckoutPayloadHash(payloadHash);
 
                 for (HeldLine heldLine : heldLines) {
                     ResolvedLine line = heldLine.line;
@@ -193,31 +196,38 @@ public class CheckoutServiceImpl implements CheckoutService {
                     ));
                 }
 
-                Booking savedBooking = bookingRepository.save(booking);
-
-                PaymentCreationOutcome outcome = paymentService.createOrGetPaymentSession(savedBooking);
-                paymentOutcomeRef[0] = outcome;
-                return buildResponse(savedBooking, outcome.response());
+                return bookingRepository.save(booking);
             });
-            return response;
         } catch (Exception e) {
-            for (String holdId : acquiredHoldIds) {
-                try {
-                    redisTicketHoldService.releaseHold(holdId);
-                } catch (Exception ex) {
-                    log.error("Failed to release hold {}", holdId, ex);
-                }
-            }
-            PaymentCreationOutcome outcome = paymentOutcomeRef[0];
-            if (outcome != null && outcome.providerSessionCreated()) {
-                paymentService.cancelPaymentSessionBestEffort(outcome.response().payosOrderCode(), "CANCELLED");
-            }
+            releaseHoldsBestEffort(acquiredHoldIds);
             throw e;
+        }
+
+        try {
+            // Keep the remote PayOS call outside the booking transaction. PaymentService
+            // owns its own short transaction and compensates an orphan provider session.
+            PaymentCreationOutcome outcome = paymentService.createOrGetPaymentSession(savedBooking);
+            return buildResponse(savedBooking, outcome.response());
+        } catch (Exception exception) {
+            markBookingFailedAfterPaymentSetupFailure(savedBooking.getId());
+            releaseHoldsBestEffort(acquiredHoldIds);
+            throw exception;
         }
     }
 
-    private boolean isSamePayload(Booking existing, List<CheckoutItemRequest> items) {
-        List<NormalizedLine> reqNormalized = normalizeItems(items);
+    private boolean isSamePayload(
+            Booking existing,
+            List<NormalizedLine> reqNormalized,
+            String requestedPayloadHash
+    ) {
+        if (existing.getCheckoutPayloadHash() != null) {
+            return MessageDigest.isEqual(
+                    existing.getCheckoutPayloadHash().getBytes(StandardCharsets.US_ASCII),
+                    requestedPayloadHash.getBytes(StandardCharsets.US_ASCII)
+            );
+        }
+
+        // Compatibility for bookings created before the payload hash was introduced.
         if (existing.getItems().size() != reqNormalized.size()) return false;
 
         Map<LineKey, ExistingLineData> existingMap = new HashMap<>();
@@ -252,11 +262,12 @@ public class CheckoutServiceImpl implements CheckoutService {
         if (requestedItems == null || requestedItems.isEmpty()) {
             throw new BadRequestException("At least one booking item is required");
         }
-        if (requestedItems.size() > MAX_BOOKING_LINES) {
+        if (requestedItems.size() > BookingPolicy.MAX_BOOKING_LINES) {
             throw new BadRequestException("Booking must not contain more than 20 items");
         }
 
         Map<LineKey, NormalizedLineData> map = new LinkedHashMap<>();
+        int totalQuantity = 0;
         for (CheckoutItemRequest item : requestedItems) {
             if (item == null) {
                 throw new BadRequestException("Booking item is required");
@@ -270,6 +281,10 @@ public class CheckoutServiceImpl implements CheckoutService {
             TicketType ticketType = TicketType.parse(item.ticketType());
             PassengerType passengerType = PassengerType.parse(item.passengerType());
             int quantity = validateQuantity(item.quantity());
+            totalQuantity = Math.addExact(totalQuantity, quantity);
+            if (totalQuantity > BookingPolicy.MAX_TICKETS_PER_BOOKING) {
+                throw new BadRequestException("Booking must not contain more than 10 tickets");
+            }
             BigDecimal expectedPrice = item.expectedUnitPrice();
             if (expectedPrice == null || expectedPrice.compareTo(BigDecimal.ZERO) < 0) {
                 throw new BadRequestException("Invalid expected unit price");
@@ -282,9 +297,6 @@ public class CheckoutServiceImpl implements CheckoutService {
                     throw new BadRequestException("Conflicting expected prices for same schedule and ticket type");
                 }
                 data.quantity += quantity;
-                if (data.quantity > MAX_TICKETS_PER_BOOKING) {
-                    throw new BadRequestException("Quantity must not exceed 10 per schedule and ticket type");
-                }
             } else {
                 map.put(key, new NormalizedLineData(quantity, expectedPrice));
             }
@@ -319,26 +331,62 @@ public class CheckoutServiceImpl implements CheckoutService {
         if (quantity == null || quantity <= 0) {
             throw new BadRequestException("Quantity must be at least 1");
         }
-        if (quantity > MAX_TICKETS_PER_BOOKING) {
+        if (quantity > BookingPolicy.MAX_TICKETS_PER_BOOKING) {
             throw new BadRequestException("Quantity must not exceed 10");
         }
         return quantity;
     }
 
-    private StartPaymentResponse resumeExistingBookingPayment(Booking booking) {
-        PaymentCreationOutcome[] paymentOutcomeRef = new PaymentCreationOutcome[1];
+    private String canonicalPayloadHash(List<NormalizedLine> normalizedLines) {
+        String canonicalPayload = normalizedLines.stream()
+                .sorted(Comparator
+                        .comparing((NormalizedLine line) -> line.scheduleId.toString())
+                        .thenComparing(line -> line.ticketType.name())
+                        .thenComparing(line -> line.passengerType.name()))
+                .map(line -> line.scheduleId + "|" + line.ticketType.name() + "|"
+                        + line.passengerType.name() + "|" + line.quantity + "|"
+                        + canonicalDecimal(line.expectedUnitPrice))
+                .collect(Collectors.joining("\n"));
         try {
-            return transactionTemplate.execute(status -> {
-                PaymentCreationOutcome outcome = paymentService.createOrGetPaymentSession(booking);
-                paymentOutcomeRef[0] = outcome;
-                return buildResponse(booking, outcome.response());
-            });
-        } catch (Exception exception) {
-            PaymentCreationOutcome outcome = paymentOutcomeRef[0];
-            if (outcome != null && outcome.providerSessionCreated()) {
-                paymentService.cancelPaymentSessionBestEffort(outcome.response().payosOrderCode(), "CANCELLED");
+            byte[] digest = MessageDigest.getInstance("SHA-256")
+                    .digest(canonicalPayload.getBytes(StandardCharsets.UTF_8));
+            return HexFormat.of().formatHex(digest);
+        } catch (NoSuchAlgorithmException exception) {
+            throw new IllegalStateException("SHA-256 is unavailable", exception);
+        }
+    }
+
+    private String canonicalDecimal(BigDecimal value) {
+        BigDecimal normalized = value.stripTrailingZeros();
+        return normalized.signum() == 0 ? "0" : normalized.toPlainString();
+    }
+
+    private StartPaymentResponse resumeExistingBookingPayment(Booking booking) {
+        PaymentCreationOutcome outcome = paymentService.createOrGetPaymentSession(booking);
+        return buildResponse(booking, outcome.response());
+    }
+
+    private void markBookingFailedAfterPaymentSetupFailure(UUID bookingId) {
+        try {
+            transactionTemplate.executeWithoutResult(status -> bookingRepository.findByIdForUpdate(bookingId)
+                    .filter(booking -> booking.getStatus() == BookingStatus.PENDING_PAYMENT)
+                    .ifPresent(booking -> {
+                        booking.setStatus(BookingStatus.FAILED);
+                        bookingRepository.save(booking);
+                    }));
+        } catch (Exception compensationFailure) {
+            log.error("Failed to mark booking {} as FAILED after payment setup failure", bookingId,
+                    compensationFailure);
+        }
+    }
+
+    private void releaseHoldsBestEffort(Collection<String> holdIds) {
+        for (String holdId : holdIds) {
+            try {
+                redisTicketHoldService.releaseHold(holdId);
+            } catch (Exception exception) {
+                log.error("Failed to release hold {}", holdId, exception);
             }
-            throw exception;
         }
     }
 

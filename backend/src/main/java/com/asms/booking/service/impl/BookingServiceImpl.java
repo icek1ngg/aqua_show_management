@@ -1,5 +1,6 @@
 package com.asms.booking.service.impl;
 
+import com.asms.booking.BookingPolicy;
 import com.asms.booking.dto.BookingDtos.BookingResponse;
 import com.asms.booking.dto.BookingDtos.BookingItemResponse;
 import com.asms.booking.dto.BookingDtos.CreateBookingItemRequest;
@@ -69,8 +70,6 @@ import java.util.concurrent.atomic.AtomicBoolean;
 public class BookingServiceImpl implements BookingService {
 
     private static final Logger log = LoggerFactory.getLogger(BookingServiceImpl.class);
-    private static final int MAX_TICKETS_PER_BOOKING = 10;
-    private static final int MAX_BOOKING_LINES = 20;
     private static final long BOOKING_CUTOFF_MINUTES = 30;
     private static final int DEFAULT_MY_BOOKINGS_PAGE_SIZE = 5;
     private static final int MAX_MY_BOOKINGS_PAGE_SIZE = 5;
@@ -311,11 +310,12 @@ public class BookingServiceImpl implements BookingService {
         if (requestedItems == null || requestedItems.isEmpty()) {
             throw new BadRequestException("At least one booking item is required");
         }
-        if (requestedItems.size() > MAX_BOOKING_LINES) {
+        if (requestedItems.size() > BookingPolicy.MAX_BOOKING_LINES) {
             throw new BadRequestException("Booking must not contain more than 20 items");
         }
 
         Map<LineKey, Integer> quantities = new LinkedHashMap<>();
+        int totalQuantity = 0;
         for (CreateBookingItemRequest item : requestedItems) {
             if (item == null) {
                 throw new BadRequestException("Booking item is required");
@@ -324,11 +324,12 @@ public class BookingServiceImpl implements BookingService {
             TicketType ticketType = TicketType.parse(item.ticketType());
             PassengerType passengerType = PassengerType.parse(item.passengerType());
             int quantity = validateQuantity(item.quantity());
+            totalQuantity = Math.addExact(totalQuantity, quantity);
+            if (totalQuantity > BookingPolicy.MAX_TICKETS_PER_BOOKING) {
+                throw new BadRequestException("Booking must not contain more than 10 tickets");
+            }
             LineKey key = new LineKey(scheduleId, ticketType, passengerType);
             int normalizedQuantity = Math.addExact(quantities.getOrDefault(key, 0), quantity);
-            if (normalizedQuantity > MAX_TICKETS_PER_BOOKING) {
-                throw new BadRequestException("Quantity must not exceed 10 per schedule and ticket type");
-            }
             quantities.put(key, normalizedQuantity);
         }
         return quantities.entrySet().stream()
@@ -420,7 +421,7 @@ public class BookingServiceImpl implements BookingService {
         if (quantity == null || quantity <= 0) {
             throw new BadRequestException("Quantity must be at least 1");
         }
-        if (quantity > MAX_TICKETS_PER_BOOKING) {
+        if (quantity > BookingPolicy.MAX_TICKETS_PER_BOOKING) {
             throw new BadRequestException("Quantity must not exceed 10");
         }
         return quantity;
@@ -508,6 +509,8 @@ public class BookingServiceImpl implements BookingService {
                         payment.getAmount(),
                         payment.getStatus(),
                         payment.getPaidAt(),
+                        payment.getInventoryCommittedAt(),
+                        payment.getReconciliationReason(),
                         payment.getCreatedAt()
                 ))
                 .orElse(null);

@@ -14,6 +14,7 @@ import {
   finishCheckoutSubmission,
   purchasedCartKeys,
 } from './checkoutFlow.js';
+import { CHECKOUT_QUANTITY_ERROR, isCheckoutQuantityAllowed } from './checkoutPolicy.js';
 
 function requestId() {
   return globalThis.crypto?.randomUUID?.() || `checkout-${Date.now()}-${Math.random().toString(16).slice(2)}`;
@@ -114,11 +115,20 @@ export default function CheckoutPaymentPage() {
       navigate('/bookings/create');
       return;
     }
-    const savedDraft = saveCheckoutDraft(reviewedDraft);
-    setDraft(savedDraft);
-    setRequiresReview(false);
-    setIdempotencyReused(false);
-    setError('');
+    if (!isCheckoutQuantityAllowed(reviewedDraft.items)) {
+      setError(CHECKOUT_QUANTITY_ERROR);
+      setRequiresReview(true);
+      return;
+    }
+    try {
+      const savedDraft = saveCheckoutDraft(reviewedDraft);
+      setDraft(savedDraft);
+      setRequiresReview(false);
+      setIdempotencyReused(false);
+      setError('');
+    } catch {
+      setError('The reviewed checkout is invalid. Return to your cart and review the selected tickets.');
+    }
   };
 
   const handlePay = async () => {
@@ -128,6 +138,11 @@ export default function CheckoutPaymentPage() {
       finishCheckoutSubmission(submissionLatch);
       clearCheckoutDraft();
       navigate('/bookings/create');
+      return;
+    }
+    if (!isCheckoutQuantityAllowed(activeDraft.items)) {
+      finishCheckoutSubmission(submissionLatch);
+      setError(CHECKOUT_QUANTITY_ERROR);
       return;
     }
     setSubmitting(true);

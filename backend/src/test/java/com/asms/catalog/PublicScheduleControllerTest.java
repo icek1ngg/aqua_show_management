@@ -2,6 +2,7 @@ package com.asms.catalog;
 
 import com.asms.catalog.controller.PublicScheduleController;
 import com.asms.catalog.dto.CatalogDtos.BookingScheduleResponse;
+import com.asms.catalog.dto.CatalogDtos.UpcomingScheduleResponse;
 import com.asms.catalog.enums.ScheduleStatus;
 import com.asms.catalog.service.PublicShowService;
 import com.asms.core.exception.GlobalExceptionHandler;
@@ -22,6 +23,7 @@ import org.springframework.test.web.servlet.MockMvc;
 
 import java.math.BigDecimal;
 import java.time.LocalDateTime;
+import java.util.List;
 import java.util.UUID;
 
 import static org.mockito.Mockito.when;
@@ -94,6 +96,28 @@ class PublicScheduleControllerTest {
                 .andExpect(jsonPath("$.data.familyPrice").value(3750.0))
                 .andExpect(jsonPath("$.data.standardAvailableTickets").value(98))
                 .andExpect(jsonPath("$.data.standardBasePrice").doesNotExist());
+    }
+
+    @Test
+    void anonymousUpcomingScheduleRequestReturnsEveryScheduleInServiceOrder() throws Exception {
+        UUID showId = UUID.randomUUID();
+        LocalDateTime firstStart = LocalDateTime.of(2026, 8, 1, 19, 0);
+        UpcomingScheduleResponse first = new UpcomingScheduleResponse(
+                UUID.randomUUID(), showId, "Aqua Journey", "/images/aqua.jpg",
+                "An ocean adventure", 45, firstStart, firstStart.plusMinutes(45), "Main Plaza Pool"
+        );
+        UpcomingScheduleResponse second = new UpcomingScheduleResponse(
+                UUID.randomUUID(), showId, "Aqua Journey", "/images/aqua.jpg",
+                "An ocean adventure", 45, firstStart.plusDays(1), firstStart.plusDays(1).plusMinutes(45), "Main Plaza Pool"
+        );
+        when(publicShowService.getUpcomingSchedules()).thenReturn(List.of(first, second));
+
+        mockMvc.perform(get("/api/schedules/upcoming"))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.data.length()").value(2))
+                .andExpect(jsonPath("$.data[0].scheduleId").value(first.scheduleId().toString()))
+                .andExpect(jsonPath("$.data[1].scheduleId").value(second.scheduleId().toString()))
+                .andExpect(jsonPath("$.data[0].showId").value(showId.toString()));
     }
 
     @Test

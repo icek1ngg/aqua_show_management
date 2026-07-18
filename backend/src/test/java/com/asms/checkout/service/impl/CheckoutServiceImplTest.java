@@ -168,14 +168,25 @@ class CheckoutServiceImplTest {
         stubBookableSchedule(testSchedule);
         when(redisTicketHoldService.holdTickets(anyString(), any(), anyInt(), any()))
                 .thenReturn(successfulHold("hold-payos-failure"));
-        stubSavedBooking();
+        AtomicReference<Booking> savedBooking = new AtomicReference<>();
+        when(bookingRepository.save(any(Booking.class))).thenAnswer(invocation -> {
+            Booking booking = invocation.getArgument(0);
+            if (booking.getId() == null) {
+                ReflectionTestUtils.setField(booking, "id", UUID.randomUUID());
+            }
+            savedBooking.set(booking);
+            return booking;
+        });
+        when(bookingRepository.findByIdForUpdate(any())).thenAnswer(invocation -> Optional.of(savedBooking.get()));
         when(paymentService.createOrGetPaymentSession(any())).thenThrow(new IllegalStateException("PayOS unavailable"));
 
         IllegalStateException failure = assertThrows(IllegalStateException.class,
                 () -> checkoutService.startPayment(requestFor(testSchedule, "key-payos-failure"), testUser));
 
         assertEquals("PayOS unavailable", failure.getMessage());
+        assertEquals(com.asms.booking.enums.BookingStatus.FAILED, savedBooking.get().getStatus());
         verify(redisTicketHoldService).releaseHold("hold-payos-failure");
+        verify(bookingRepository, times(2)).save(savedBooking.get());
         verify(paymentService, never()).cancelPaymentSessionBestEffort(anyString(), anyString());
     }
 
@@ -196,12 +207,11 @@ class CheckoutServiceImplTest {
     }
 
     @Test
-    void commitFailureReleasesHoldsAndCancelsCreatedProviderLink() {
+    void bookingCommitFailureReleasesHoldsBeforeCallingPaymentProvider() {
         stubBookableSchedule(testSchedule);
         when(redisTicketHoldService.holdTickets(anyString(), any(), anyInt(), any()))
                 .thenReturn(successfulHold("hold-commit-failure"));
         stubSavedBooking();
-        stubPaymentOutcome(true);
         doAnswer(invocation -> {
             TransactionSynchronizationManager.clearSynchronization();
             throw new TestTransactionException("commit failed");
@@ -212,7 +222,7 @@ class CheckoutServiceImplTest {
 
         assertEquals("commit failed", failure.getMessage());
         verify(redisTicketHoldService).releaseHold("hold-commit-failure");
-        verify(paymentService).cancelPaymentSessionBestEffort(anyString(), eq("CANCELLED"));
+        verifyNoInteractions(paymentService);
     }
 
     @Test
@@ -256,22 +266,19 @@ class CheckoutServiceImplTest {
     }
 
     @Test
-    void existingBookingResumeCommitFailureCancelsNewSessionWithoutReleasingExistingHolds() {
+    void existingBookingResumeDoesNotWrapTheProviderCallInAnOuterTransaction() {
         Booking existing = mockExistingBooking(new BigDecimal("100.00"));
         when(bookingRepository.findByUserAndIdempotencyKey(testUser, "resume-commit-failure"))
                 .thenReturn(Optional.of(existing));
-        PaymentCreationOutcome refreshedPayment = paymentOutcome(existing, true);
+        PaymentCreationOutcome refreshedPayment = paymentOutcome(existing, false);
         when(paymentService.createOrGetPaymentSession(existing)).thenReturn(refreshedPayment);
-        doAnswer(invocation -> {
-            TransactionSynchronizationManager.clearSynchronization();
-            throw new TestTransactionException("commit failed");
-        }).when(transactionManager).commit(transactionStatus);
 
-        TestTransactionException failure = assertThrows(TestTransactionException.class,
-                () -> checkoutService.startPayment(requestFor(testSchedule, "resume-commit-failure"), testUser));
+        StartPaymentResponse response = checkoutService.startPayment(
+                requestFor(testSchedule, "resume-commit-failure"), testUser);
 
-        assertEquals("commit failed", failure.getMessage());
-        verify(paymentService).cancelPaymentSessionBestEffort("123456789", "CANCELLED");
+        assertEquals(existing.getId().toString(), response.bookingId());
+        verify(transactionManager, never()).getTransaction(any());
+        verify(paymentService, never()).cancelPaymentSessionBestEffort(anyString(), anyString());
         verifyNoInteractions(redisTicketHoldService);
     }
 
@@ -305,6 +312,36 @@ class CheckoutServiceImplTest {
     }
 
     @Test
+    void rejectsMoreThanTenTicketsAcrossPassengerLinesBeforeAnySideEffect() {
+        StartPaymentRequest tooLarge = new StartPaymentRequest("too-large", List.of(
+                new CheckoutItemRequest(
+                        testSchedule.getId().toString(), "STANDARD", "ADULT", 6, new BigDecimal("100.00")),
+                new CheckoutItemRequest(
+                        testSchedule.getId().toString(), "STANDARD", "CHILD", 5, new BigDecimal("100.00"))
+        ));
+
+        BadRequestException failure = assertThrows(BadRequestException.class,
+                () -> checkoutService.startPayment(tooLarge, testUser));
+
+        assertEquals("Booking must not contain more than 10 tickets", failure.getMessage());
+        verifyNoInteractions(bookingRepository, scheduleRepository, redisTicketHoldService, paymentService);
+    }
+
+    @Test
+    void persistedPayloadHashRejectsAChangedRetryWithoutLoadingInventory() {
+        Booking existing = mockExistingBooking(new BigDecimal("100.00"));
+        when(existing.getCheckoutPayloadHash()).thenReturn("0".repeat(64));
+        when(bookingRepository.findByUserAndIdempotencyKey(testUser, "hashed-key"))
+                .thenReturn(Optional.of(existing));
+
+        ConflictException failure = assertThrows(ConflictException.class,
+                () -> checkoutService.startPayment(requestFor(testSchedule, "hashed-key"), testUser));
+
+        assertEquals(ErrorCode.IDEMPOTENCY_KEY_REUSED, failure.getCode());
+        verifyNoInteractions(scheduleRepository, redisTicketHoldService, paymentService);
+    }
+
+    @Test
     void serializedRetryRequeriesBookingAndDoesNotDuplicateCheckoutSideEffects() {
         stubBookableSchedule(testSchedule);
         AtomicReference<Booking> committedBooking = new AtomicReference<>();
@@ -326,6 +363,8 @@ class CheckoutServiceImplTest {
         StartPaymentResponse second = checkoutService.startPayment(request, testUser);
 
         assertEquals(first.bookingId(), second.bookingId());
+        assertNotNull(committedBooking.get().getCheckoutPayloadHash());
+        assertEquals(64, committedBooking.get().getCheckoutPayloadHash().length());
         verify(redisTicketHoldService, times(1)).holdTickets(anyString(), any(), anyInt(), any());
         verify(paymentService, times(2)).createOrGetPaymentSession(any());
         verify(idempotencyLockService, times(2)).execute(eq(testUser.getId()), eq("concurrent-key"), any());
@@ -390,11 +429,11 @@ class CheckoutServiceImplTest {
         lenient().when(booking.getExpiresAt()).thenReturn(Instant.now().plusSeconds(600));
         lenient().when(booking.getTotalQuantity()).thenReturn(2);
         lenient().when(booking.getTotalAmount()).thenReturn(unitPrice.multiply(BigDecimal.valueOf(2)));
-        when(booking.getItems()).thenReturn(List.of(item));
-        when(item.getScheduleId()).thenReturn(scheduleId);
-        when(item.getTicketType()).thenReturn(com.asms.booking.enums.TicketType.STANDARD);
-        when(item.getQuantity()).thenReturn(2);
-        when(item.getUnitPrice()).thenReturn(unitPrice);
+        lenient().when(booking.getItems()).thenReturn(List.of(item));
+        lenient().when(item.getScheduleId()).thenReturn(scheduleId);
+        lenient().when(item.getTicketType()).thenReturn(com.asms.booking.enums.TicketType.STANDARD);
+        lenient().when(item.getQuantity()).thenReturn(2);
+        lenient().when(item.getUnitPrice()).thenReturn(unitPrice);
         return booking;
     }
 

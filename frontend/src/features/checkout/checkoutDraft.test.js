@@ -10,6 +10,7 @@ import {
 } from './checkoutDraft.js';
 
 const scheduleId = '123e4567-e89b-42d3-a456-426614174000';
+const secondScheduleId = '223e4567-e89b-42d3-a456-426614174001';
 
 const validDraft = () => ({
   idempotencyKey: ' checkout-key ',
@@ -59,6 +60,14 @@ describe('checkoutDraft', () => {
   });
 
   it('rejects invalid input instead of persisting it', () => {
+    const overLimitDraft = {
+      ...validDraft(),
+      cartKeys: [`${scheduleId}:STANDARD`, `${secondScheduleId}:VIP`],
+      items: [
+        { ...validDraft().items[0], quantity: 6 },
+        { ...validDraft().items[0], scheduleId: secondScheduleId, ticketType: 'VIP', quantity: 5 },
+      ],
+    };
     for (const draft of [
       { ...validDraft(), idempotencyKey: ' ' },
       { ...validDraft(), cartKeys: [] },
@@ -75,6 +84,7 @@ describe('checkoutDraft', () => {
       { ...validDraft(), items: [{ ...validDraft().items[0], expectedUnitPrice: null }] },
       { ...validDraft(), items: [validDraft().items[0], validDraft().items[0]] },
       { ...validDraft(), cartKeys: ['unrelated:key'] },
+      overLimitDraft,
     ]) {
       assert.throws(() => saveCheckoutDraft(draft), /checkout draft/i);
       assert.equal(sessionStorage.getItem('aqua_pulse_checkout_draft'), null);

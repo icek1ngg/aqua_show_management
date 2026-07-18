@@ -1,7 +1,6 @@
 package com.asms.booking.controller;
 
 import com.asms.booking.dto.BookingDtos.BookingResponse;
-import com.asms.booking.dto.BookingDtos.CreateBookingRequest;
 import com.asms.booking.dto.BookingDtos.CreateBookingResponse;
 import com.asms.booking.dto.BookingDtos.DevSampleBookingBatchRequest;
 import com.asms.booking.dto.BookingDtos.DevSampleBookingRequest;
@@ -34,10 +33,15 @@ public class BookingController {
         this.bookingService = bookingService;
     }
 
-    @PostMapping
+    /**
+     * Kept temporarily for source compatibility with internal callers. There is deliberately no
+     * request mapping: production booking creation is only available through
+     * POST /api/checkout/start-payment.
+     */
+    @Deprecated(forRemoval = true)
     public ApiResponse<CreateBookingResponse> createBooking(
             @AuthenticationPrincipal User user,
-            @Valid @RequestBody CreateBookingRequest request
+            com.asms.booking.dto.BookingDtos.CreateBookingRequest request
     ) {
         return ApiResponse.success(
                 "Booking created successfully.",

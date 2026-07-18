@@ -7,11 +7,15 @@ import com.asms.booking.dto.BookingDtos.CreateBookingItemRequest;
 import com.asms.booking.dto.BookingDtos.CreateBookingRequest;
 import com.asms.booking.repository.BookingItemRepository;
 import com.asms.booking.repository.BookingRepository;
+import com.asms.booking.controller.BookingController;
 import com.asms.catalog.entity.Show;
 import com.asms.catalog.entity.ShowSchedule;
 import com.asms.catalog.entity.Venue;
 import com.asms.identity.entity.User;
 import org.junit.jupiter.api.Test;
+import org.springframework.web.bind.annotation.PostMapping;
+
+import jakarta.persistence.Table;
 
 import java.math.BigDecimal;
 import java.time.Instant;
@@ -64,6 +68,17 @@ class BookingAggregateTest {
         )).isNotNull();
         assertThat(BookingRepository.class.getMethod("findByIdempotencyKey", String.class)).isNotNull();
         assertThat(Booking.class.getDeclaredField("idempotencyKey")).isNotNull();
+        assertThat(Booking.class.getDeclaredField("checkoutPayloadHash")).isNotNull();
+        Table table = Booking.class.getAnnotation(Table.class);
+        assertThat(table.uniqueConstraints()).anySatisfy(constraint ->
+                assertThat(constraint.columnNames()).containsExactly("user_id", "idempotency_key"));
+    }
+
+    @Test
+    void legacyBookingCreationMethodIsNotExposedAsAnHttpEndpoint() throws Exception {
+        assertThat(BookingController.class.getMethod(
+                "createBooking", User.class, CreateBookingRequest.class
+        ).getAnnotation(PostMapping.class)).isNull();
     }
 
 }

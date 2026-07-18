@@ -7,6 +7,7 @@ import com.asms.catalog.dto.CatalogDtos.BookingScheduleResponse;
 import com.asms.catalog.dto.CatalogDtos.ScheduleBriefResponse;
 import com.asms.catalog.dto.CatalogDtos.ShowDetailResponse;
 import com.asms.catalog.dto.CatalogDtos.ShowListItemResponse;
+import com.asms.catalog.dto.CatalogDtos.UpcomingScheduleResponse;
 import com.asms.catalog.entity.Show;
 import com.asms.catalog.entity.ShowSchedule;
 import com.asms.catalog.enums.ScheduleStatus;
@@ -68,6 +69,18 @@ public class PublicShowService {
         return scheduleRepository.findByShow_IdAndStatusOrderByStartTimeAsc(showId, ScheduleStatus.ACTIVE)
                 .stream()
                 .map(CatalogMapper::toScheduleBrief)
+                .toList();
+    }
+
+    @Transactional(readOnly = true)
+    public List<UpcomingScheduleResponse> getUpcomingSchedules() {
+        return scheduleRepository.findUpcomingActiveSchedules(
+                        ScheduleStatus.ACTIVE,
+                        ShowStatus.ACTIVE,
+                        LocalDateTime.now()
+                )
+                .stream()
+                .map(CatalogMapper::toUpcomingSchedule)
                 .toList();
     }
 

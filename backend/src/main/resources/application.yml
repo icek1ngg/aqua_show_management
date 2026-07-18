@@ -43,7 +43,7 @@ spring:
 
   rabbitmq:
     host: "${RABBITMQ_HOST:localhost}"
-    port: "${RABBITMQ_PORT:5672}"
+    port: "${RABBITMQ_PORT:61672}"
     username: "${RABBITMQ_USERNAME:asms_user}"
     password: "${RABBITMQ_PASSWORD:asms_password}"
 

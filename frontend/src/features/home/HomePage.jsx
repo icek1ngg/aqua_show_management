@@ -1,9 +1,12 @@
-import { useEffect, useMemo, useRef, useState } from 'react';
+import { useEffect, useMemo, useState } from 'react';
 import { Link, useLocation, useNavigate } from 'react-router-dom';
 
 import { showTicketTarget } from '../cart/showTicketNavigation.js';
-import { getShows } from '../../services/showService.js';
+import { featuredShowsFromSchedules, sortUpcomingSchedules } from './homeScheduleState.js';
+import { getUpcomingSchedules } from '../../services/showService.js';
 import MainLayout from '../../shared/layouts/MainLayout.jsx';
+
+const FEATURED_SHOWS_PAGE_SIZE = 6;
 
 const fallbackShowImage =
   'https://lh3.googleusercontent.com/aida-public/AB6AXuANv7I9nTUaKmdiA6IfaIaY0YwJUIWoqM0X6m_tgMmcJ71PacmGbCJL7U7jN8rhBXSUuV7fovx9LDsAc6N5PhTyiCp6LssLe6FgDdZmMcwFIlWNhrmPMXPWNaNGaENraIJuHz9U8O5qXFdHXwD12d0tWFF6pkX61XHVJWiPscKVSeVXPJHPLntIinpKKiq48E_jrrE2A6BF6g5CVGhbzwWhTMCs07mHdwovKDWCZJwE9QP5SidUIrVjslByRhoxaZve3By201M-MkjJ';
@@ -31,8 +34,8 @@ const benefits = [
   },
 ];
 
-function getShowsErrorMessage(error) {
-  return error?.response?.data?.message || error?.message || 'Could not load active shows. Please try again.';
+function getHomepageErrorMessage(error) {
+  return error?.response?.data?.message || error?.message || 'Could not load upcoming shows. Please try again.';
 }
 
 function formatScheduleDate(value) {
@@ -60,7 +63,7 @@ function formatScheduleDate(value) {
 }
 
 function scheduleStatus(show) {
-  return show.nextStartTime
+  return (show.nextStartTime || show.startTime)
     ? {
         label: 'Upcoming',
         className: 'bg-emerald-50 text-emerald-600',
@@ -97,15 +100,7 @@ import TicketSearchBar from './TicketSearchBar.jsx';
 export default function HomePage() {
   const location = useLocation();
   const navigate = useNavigate();
-  const [shows, setShows] = useState([]);
-  const [pagination, setPagination] = useState({
-    page: 0,
-    size: 6,
-    totalItems: 0,
-    totalPages: 0,
-    hasNext: false,
-    hasPrevious: false,
-  });
+  const [scheduleItems, setScheduleItems] = useState([]);
   const [currentPage, setCurrentPage] = useState(0);
   const [keyword, setKeyword] = useState('');
   const [submittedKeyword, setSubmittedKeyword] = useState('');
@@ -140,41 +135,24 @@ export default function HomePage() {
   useEffect(() => {
     let isActive = true;
 
-    async function loadShows() {
+    async function loadHomepageSchedules() {
       setIsLoadingShows(true);
       setShowsError('');
 
       try {
-        const response = await getShows({ keyword: submittedKeyword, page: currentPage, size: pagination.size });
+        const response = await getUpcomingSchedules();
         if (!isActive) {
           return;
         }
 
-        const items = Array.isArray(response?.items) ? response.items : [];
-        setShows(items);
-        setPagination({
-          page: response?.page ?? currentPage,
-          size: response?.size ?? pagination.size,
-          totalItems: response?.totalItems ?? items.length,
-          totalPages: response?.totalPages ?? (items.length ? 1 : 0),
-          hasNext: Boolean(response?.hasNext),
-          hasPrevious: Boolean(response?.hasPrevious),
-        });
+        setScheduleItems(Array.isArray(response) ? response : []);
       } catch (error) {
         if (!isActive) {
           return;
         }
 
-        setShows([]);
-        setPagination((current) => ({
-          ...current,
-          page: currentPage,
-          totalItems: 0,
-          totalPages: 0,
-          hasNext: false,
-          hasPrevious: false,
-        }));
-        setShowsError(getShowsErrorMessage(error));
+        setScheduleItems([]);
+        setShowsError(getHomepageErrorMessage(error));
       } finally {
         if (isActive) {
           setIsLoadingShows(false);
@@ -182,27 +160,43 @@ export default function HomePage() {
       }
     }
 
-    loadShows();
+    loadHomepageSchedules();
 
     return () => {
       isActive = false;
     };
-  }, [currentPage, pagination.size, reloadKey, submittedKeyword]);
+  }, [reloadKey]);
 
   const upcomingSchedules = useMemo(
     () =>
-      shows
-        .filter((show) => show.nextScheduleId && show.nextStartTime)
-        .map((show) => ({ ...show, formattedSchedule: formatScheduleDate(show.nextStartTime) }))
-        .filter((show) => show.formattedSchedule)
-        .sort((first, second) => new Date(first.nextStartTime).getTime() - new Date(second.nextStartTime).getTime())
-        .slice(0, 3),
-    [shows],
+      sortUpcomingSchedules(scheduleItems)
+        .map((schedule) => ({ ...schedule, formattedSchedule: formatScheduleDate(schedule.startTime) }))
+        .filter((schedule) => schedule.formattedSchedule),
+    [scheduleItems],
   );
-  const firstBookableShow = upcomingSchedules.find((show) => show.nextScheduleId);
+  const matchingFeaturedShows = useMemo(
+    () => featuredShowsFromSchedules(scheduleItems, submittedKeyword),
+    [scheduleItems, submittedKeyword],
+  );
+  const totalFeaturedPages = Math.ceil(matchingFeaturedShows.length / FEATURED_SHOWS_PAGE_SIZE);
+  const featuredPage = Math.min(currentPage, Math.max(0, totalFeaturedPages - 1));
+  const shows = matchingFeaturedShows.slice(
+    featuredPage * FEATURED_SHOWS_PAGE_SIZE,
+    (featuredPage + 1) * FEATURED_SHOWS_PAGE_SIZE,
+  );
+  const pagination = {
+    page: featuredPage,
+    totalItems: matchingFeaturedShows.length,
+    totalPages: totalFeaturedPages,
+    hasNext: featuredPage + 1 < totalFeaturedPages,
+    hasPrevious: featuredPage > 0,
+  };
 
-  const goToShowTickets = (show) => {
-    navigate(showTicketTarget({ showId: show?.id }));
+  const goToShowTickets = (schedule) => {
+    navigate(showTicketTarget({
+      showId: schedule?.showId || schedule?.id,
+      date: schedule?.startTime?.slice(0, 10),
+    }));
   };
 
   const handleShowSearch = (event) => {
@@ -264,7 +258,7 @@ export default function HomePage() {
           </div>
           <form className="flex w-full flex-col gap-3 sm:w-auto sm:min-w-[320px]" onSubmit={handleShowSearch}>
             <label className="sr-only" htmlFor="show-keyword">
-              Search active shows
+              Search upcoming shows
             </label>
             <div className="flex rounded-full border border-cyan-100 bg-white p-1 shadow-sm">
               <input
@@ -313,13 +307,13 @@ export default function HomePage() {
         ) : shows.length === 0 ? (
           <div className="rounded-[2rem] border border-cyan-100 bg-white p-10 text-center shadow-sm">
             <span className="material-symbols-outlined text-5xl text-cyan-700">theater_comedy</span>
-            <h3 className="mt-3 text-2xl font-black text-slate-950">No active shows found</h3>
+            <h3 className="mt-3 text-2xl font-black text-slate-950">No upcoming shows found</h3>
             <p className="mx-auto mt-2 max-w-xl text-slate-600">
-              {submittedKeyword ? 'No active shows match your search yet.' : 'There are no active shows available right now. Please check back soon.'}
+              {submittedKeyword ? 'No upcoming shows match your search yet.' : 'There are no upcoming shows available right now. Please check back soon.'}
             </p>
             {submittedKeyword && (
               <button className="mt-6 rounded-full bg-cyan-700 px-6 py-3 font-bold text-white transition hover:bg-cyan-800" type="button" onClick={clearShowSearch}>
-                Show all active shows
+                Show all upcoming shows
               </button>
             )}
           </div>
@@ -417,14 +411,14 @@ export default function HomePage() {
               <article className="rounded-[2rem] border border-cyan-100 bg-white p-8 text-center shadow-sm">
                 <span className="material-symbols-outlined text-5xl text-cyan-700">event_busy</span>
                 <h3 className="mt-3 text-2xl font-black text-slate-950">No upcoming schedules</h3>
-                <p className="mt-2 text-slate-600">Active shows are available, but their next schedule has not been published yet.</p>
+                <p className="mt-2 text-slate-600">No future active show schedules have been published yet.</p>
               </article>
             ) : (
               upcomingSchedules.map((schedule) => {
                 const status = scheduleStatus(schedule);
 
                 return (
-                  <article className="flex flex-col items-center justify-between gap-6 rounded-[2rem] border border-cyan-100 bg-white p-6 shadow-sm transition hover:shadow-lg md:flex-row" key={`${schedule.id}-${schedule.nextStartTime}`}>
+                  <article className="flex flex-col items-center justify-between gap-6 rounded-[2rem] border border-cyan-100 bg-white p-6 shadow-sm transition hover:shadow-lg md:flex-row" key={schedule.scheduleId}>
                 <div className="flex w-full items-center gap-6 md:w-1/4">
                   <div className="min-w-[90px] rounded-2xl border border-cyan-100 bg-cyan-50 p-4 text-center">
                     <p className="text-2xl font-black text-cyan-700">{schedule.formattedSchedule.day}</p>
@@ -437,7 +431,7 @@ export default function HomePage() {
                 </div>
 
                 <div className="w-full text-center md:w-1/3 md:text-left">
-                  <h3 className="text-xl font-black text-slate-950">{schedule.title}</h3>
+                  <h3 className="text-xl font-black text-slate-950">{schedule.showTitle}</h3>
                   <p className="mt-1 flex items-center justify-center gap-1 text-sm text-slate-600 md:justify-start">
                     <span className="material-symbols-outlined text-sm">location_on</span>
                     {schedule.venueName || 'Venue TBA'}

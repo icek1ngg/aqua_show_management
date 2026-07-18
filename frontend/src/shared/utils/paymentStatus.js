@@ -19,12 +19,21 @@ export function normalizeBookingPaymentStatus(booking, payment = booking?.paymen
   const paymentStatus = normalizeStatus(payment?.status);
 
   // PostgreSQL detail/history responses are authoritative; this only keeps temporary UI state consistent.
-  if (isPaidStatus(bookingStatus) || isPaidStatus(paymentStatus)) {
+  if (isPaidStatus(bookingStatus)) {
     return {
       status: 'PAID',
       bookingStatus,
       paymentStatus: paymentStatus || 'SUCCESS',
       label: 'Paid',
+    };
+  }
+
+  if (isPaidStatus(paymentStatus) && bookingStatus === 'PROCESSING') {
+    return {
+      status: 'PROCESSING',
+      bookingStatus,
+      paymentStatus,
+      label: 'Payment received, processing',
     };
   }
 

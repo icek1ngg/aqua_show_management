@@ -16,6 +16,7 @@ import jakarta.persistence.OneToMany;
 import jakarta.persistence.PrePersist;
 import jakarta.persistence.PreUpdate;
 import jakarta.persistence.Table;
+import jakarta.persistence.UniqueConstraint;
 
 import java.math.BigDecimal;
 import java.time.Instant;
@@ -26,7 +27,13 @@ import java.util.List;
 import java.util.UUID;
 
 @Entity
-@Table(name = "bookings")
+@Table(
+        name = "bookings",
+        uniqueConstraints = @UniqueConstraint(
+                name = "uk_bookings_user_idempotency_key",
+                columnNames = {"user_id", "idempotency_key"}
+        )
+)
 public class Booking {
 
     @Id
@@ -39,8 +46,11 @@ public class Booking {
     @Column(nullable = false, unique = true, length = 50)
     private String bookingCode;
 
-    @Column(nullable = false, unique = true, length = 100)
+    @Column(name = "idempotency_key", nullable = false, length = 100)
     private String idempotencyKey;
+
+    @Column(name = "checkout_payload_hash", length = 64)
+    private String checkoutPayloadHash;
 
     @OneToMany(mappedBy = "booking", cascade = CascadeType.ALL, orphanRemoval = true)
     private List<BookingItem> items = new ArrayList<>();
@@ -153,6 +163,14 @@ public class Booking {
 
     public void setIdempotencyKey(String idempotencyKey) {
         this.idempotencyKey = idempotencyKey;
+    }
+
+    public String getCheckoutPayloadHash() {
+        return checkoutPayloadHash;
+    }
+
+    public void setCheckoutPayloadHash(String checkoutPayloadHash) {
+        this.checkoutPayloadHash = checkoutPayloadHash;
     }
 
     public List<BookingItem> getItems() {

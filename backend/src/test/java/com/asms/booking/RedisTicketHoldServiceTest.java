@@ -112,6 +112,7 @@ class RedisTicketHoldServiceTest {
             assertThat(realRedis.opsForZSet().score(activeHoldsKey, expiredHoldId)).isNull();
             assertThat(realRedis.hasKey(activeHoldKey)).isTrue();
             assertThat(realRedis.opsForZSet().score(activeHoldsKey, activeHoldId)).isNotNull();
+            assertThat(realRedis.getExpire(activeHoldsKey)).isPositive();
         } finally {
             realRedis.delete(List.of(inventoryKey, activeHoldsKey, expiredHoldKey, activeHoldKey));
             connectionFactory.destroy();
@@ -141,7 +142,7 @@ class RedisTicketHoldServiceTest {
         @SuppressWarnings("unchecked")
         ArgumentCaptor<RedisScript<Long>> script = ArgumentCaptor.forClass(RedisScript.class);
         verify(redisTemplate).execute(script.capture(), anyList(), any(Object[].class));
-        assertThat(script.getValue().getScriptAsString()).contains("ZREM", "DEL");
+        assertThat(script.getValue().getScriptAsString()).contains("ZREM", "DEL", "EXPIREAT");
     }
 
     @Test

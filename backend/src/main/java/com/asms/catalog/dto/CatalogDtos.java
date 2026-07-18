@@ -52,6 +52,19 @@ public final class CatalogDtos {
     ) {
     }
 
+    public record UpcomingScheduleResponse(
+            UUID scheduleId,
+            UUID showId,
+            String showTitle,
+            String showImageUrl,
+            String showShortDescription,
+            Integer durationMinutes,
+            LocalDateTime startTime,
+            LocalDateTime endTime,
+            String venueName
+    ) {
+    }
+
     public record BookingScheduleResponse(
             UUID scheduleId,
             UUID showId,

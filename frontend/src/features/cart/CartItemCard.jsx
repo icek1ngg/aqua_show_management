@@ -14,7 +14,7 @@ function formatSchedule(startTime, endTime) {
   return `${date} · ${startLabel}${endLabel}`;
 }
 
-export default function CartItemCard({ line, checked, reviewed, onToggle, onQuantity, onRemove, onAcceptReview }) {
+export default function CartItemCard({ line, checked, reviewed, maxSelectedQuantity, onToggle, onQuantity, onRemove, onAcceptReview }) {
   const [isEditing, setIsEditing] = useState(false);
   const [showDetailModal, setShowDetailModal] = useState(false);
   const [showDetailData, setShowDetailData] = useState(null);
@@ -24,7 +24,7 @@ export default function CartItemCard({ line, checked, reviewed, onToggle, onQuan
       getShowDetail(line.showId).then(setShowDetailData).catch(console.error);
     }
   }, [showDetailModal, line.showId, showDetailData]);
-  const maximum = Math.min(10, Math.max(1, Number(line.availableTickets) || 1));
+  const maximum = Math.min(10, Math.max(1, Number(line.availableTickets) || 1), Math.max(1, Number(maxSelectedQuantity) || 10));
   const needsReview = line.requiresReview && !reviewed;
   
   const ages = line.ages || { adult: line.quantity, child: 0, senior: 0 };
@@ -41,7 +41,7 @@ export default function CartItemCard({ line, checked, reviewed, onToggle, onQuan
   return (
     <article className={`overflow-hidden rounded-[2rem] border bg-white shadow-sm ${line.checkoutAvailable ? 'border-cyan-100' : 'border-red-100'}`}>
       <div className="flex flex-col gap-5 p-5 sm:flex-row sm:p-6">
-        <input aria-label={`Select ${line.showTitle}`} checked={checked} className="mt-1 h-5 w-5 rounded border-slate-300 text-cyan-600 focus:ring-cyan-500" disabled={!line.checkoutAvailable || needsReview} type="checkbox" onChange={() => onToggle(line.key)} />
+        <input aria-label={`Select ${line.showTitle}`} checked={checked} className="mt-1 h-5 w-5 cursor-pointer rounded border-slate-300 accent-cyan-700 focus:ring-2 focus:ring-cyan-500 focus:ring-offset-2 disabled:cursor-not-allowed disabled:opacity-40" disabled={!line.checkoutAvailable || needsReview} type="checkbox" onChange={() => onToggle(line.key)} />
         <div className="h-28 w-full shrink-0 overflow-hidden rounded-2xl bg-cyan-50 sm:w-32">
           {line.imageUrl ? <img alt={line.showTitle} className="h-full w-full object-cover" src={line.imageUrl} /> : <span className="material-symbols-outlined flex h-full items-center justify-center text-5xl text-cyan-300">water</span>}
         </div>

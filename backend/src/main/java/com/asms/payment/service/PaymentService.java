@@ -27,4 +27,6 @@ public interface PaymentService {
     PaymentReconcileResponse reconcilePayment(PaymentReconcileRequest request, User user);
 
     void reconcilePendingPayments();
+
+    void reconcileCapturedInventory();
 }

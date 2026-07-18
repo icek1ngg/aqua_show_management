@@ -300,6 +300,24 @@ class BookingServiceControllerTest {
     }
 
     @Test
+    void rejectsMoreThanTenTicketsAcrossTheWholeLegacyRequest() {
+        User user = user("user@example.com");
+        ShowSchedule schedule = schedule();
+        when(userRepository.findByEmailIgnoreCase(user.getEmail())).thenReturn(Optional.of(user));
+
+        CreateBookingRequest request = new CreateBookingRequest("too-many-tickets", List.of(
+                new CreateBookingItemRequest(schedule.getId().toString(), "STANDARD", "ADULT", 6),
+                new CreateBookingItemRequest(schedule.getId().toString(), "STANDARD", "CHILD", 5)
+        ));
+
+        assertThatThrownBy(() -> bookingService.createBooking(request, user.getEmail()))
+                .isInstanceOf(BadRequestException.class)
+                .hasMessageContaining("more than 10 tickets");
+        verify(scheduleRepository, never()).findById(any());
+        verify(redisTicketHoldService, never()).holdTickets(any(), any(), anyInt(), any());
+    }
+
+    @Test
     void createBookingRejectsUnknownTicketType() {
         User user = user("user@example.com");
         when(userRepository.findByEmailIgnoreCase("user@example.com")).thenReturn(Optional.of(user));

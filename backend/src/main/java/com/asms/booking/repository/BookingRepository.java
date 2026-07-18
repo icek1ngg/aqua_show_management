@@ -24,6 +24,14 @@ public interface BookingRepository extends JpaRepository<Booking, UUID>, JpaSpec
     @Query("select b from Booking b where b.id = :id")
     Optional<Booking> findByIdForUpdate(@Param("id") UUID id);
 
+    @Query("""
+            select b.id from Booking b
+            where b.status = com.asms.booking.enums.BookingStatus.PENDING_PAYMENT
+              and b.expiresAt <= :now
+            order by b.expiresAt asc, b.id asc
+            """)
+    List<UUID> findExpirationCandidateIds(@Param("now") Instant now, Pageable pageable);
+
     Optional<Booking> findByIdAndUser(UUID id, User user);
 
     List<Booking> findByUserOrderByCreatedAtDesc(User user);

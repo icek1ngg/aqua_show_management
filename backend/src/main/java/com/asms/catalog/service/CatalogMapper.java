@@ -5,6 +5,7 @@ import com.asms.catalog.dto.CatalogDtos.ScheduleBriefResponse;
 import com.asms.catalog.dto.CatalogDtos.ScheduleManagementResponse;
 import com.asms.catalog.dto.CatalogDtos.ShowDetailResponse;
 import com.asms.catalog.dto.CatalogDtos.ShowManagementResponse;
+import com.asms.catalog.dto.CatalogDtos.UpcomingScheduleResponse;
 import com.asms.catalog.dto.CatalogDtos.VenueResponse;
 import com.asms.catalog.entity.Show;
 import com.asms.catalog.entity.ShowSchedule;
@@ -53,6 +54,21 @@ final class CatalogMapper {
                 venueName(schedule),
                 schedule.getTotalAvailableTickets(),
                 schedule.getStandardPrice()
+        );
+    }
+
+    static UpcomingScheduleResponse toUpcomingSchedule(ShowSchedule schedule) {
+        Show show = schedule.getShow();
+        return new UpcomingScheduleResponse(
+                schedule.getId(),
+                show.getId(),
+                show.getTitle(),
+                show.getImageUrl(),
+                shortDescription(show.getDescription()),
+                show.getDurationMinutes(),
+                schedule.getStartTime(),
+                schedule.getEndTime(),
+                venueName(schedule)
         );
     }
 
@@ -131,6 +147,13 @@ final class CatalogMapper {
     static String venueName(ShowSchedule schedule) {
         Venue venue = venue(schedule);
         return venue == null ? null : venue.getName();
+    }
+
+    private static String shortDescription(String description) {
+        if (description == null || description.length() <= 140) {
+            return description;
+        }
+        return description.substring(0, 137) + "...";
     }
 
     private static Venue venue(ShowSchedule schedule) {

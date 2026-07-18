@@ -32,6 +32,7 @@ GET /api/shows
 GET /api/shows/{id}
 GET /api/shows/{id}/schedules
 GET /api/schedules/{id}
+GET /api/schedules/upcoming
 ```
 
 ## Manager Shows and Schedules
@@ -55,22 +56,38 @@ GET   /api/manager/schedules/{id}
 
 ## Booking
 ```http
-POST /api/bookings
-GET  /api/bookings/my-history
+POST /api/checkout/start-payment
+GET  /api/bookings/my
+GET  /api/bookings/{id}
 ```
 
-Create booking request:
+Start checkout and create payment request:
 ```json
 {
-  "scheduleId": "uuid",
-  "quantity": 2
+  "idempotencyKey": "client-generated-key",
+  "items": [
+    {
+      "scheduleId": "uuid",
+      "ticketType": "STANDARD",
+      "passengerType": "ADULT",
+      "quantity": 2,
+      "expectedUnitPrice": 100000
+    }
+  ]
 }
 ```
 
 Expected flow:
 ```text
-Validate request -> Redis hold -> BookingService saves PENDING_PAYMENT booking
+Validate and normalize request -> Redis hold -> save PENDING_PAYMENT booking -> create PayOS session
 ```
+
+The checkout may contain at most 10 tickets in total. `POST /api/bookings` is not a
+production creation endpoint; checkout is the only supported production path.
+
+The booking row is committed before calling PayOS, so the booking transaction does
+not stay open during the remote request. A PayOS setup failure marks the booking
+`FAILED` and releases its Redis holds.
 
 ## Payment
 ```http

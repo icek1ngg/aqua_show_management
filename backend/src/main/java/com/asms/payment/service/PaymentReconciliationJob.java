@@ -21,7 +21,13 @@ public class PaymentReconciliationJob {
         try {
             paymentService.reconcilePendingPayments();
         } catch (Exception exception) {
-            log.error("Automatic PayOS reconciliation run failed", exception);
+            log.error("Automatic pending PayOS reconciliation run failed", exception);
+        }
+
+        try {
+            paymentService.reconcileCapturedInventory();
+        } catch (Exception exception) {
+            log.error("Automatic captured inventory reconciliation run failed", exception);
         }
     }
 }

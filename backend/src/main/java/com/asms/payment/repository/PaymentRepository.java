@@ -2,6 +2,7 @@ package com.asms.payment.repository;
 
 import com.asms.payment.entity.Payment;
 import com.asms.payment.enums.PaymentStatus;
+import com.asms.booking.enums.BookingStatus;
 import jakarta.persistence.LockModeType;
 import org.springframework.data.jpa.repository.JpaRepository;
 import org.springframework.data.jpa.repository.Lock;
@@ -32,4 +33,9 @@ public interface PaymentRepository extends JpaRepository<Payment, UUID> {
     Optional<Payment> findByIdForUpdate(@Param("paymentId") UUID paymentId);
 
     List<Payment> findTop100ByStatusAndCreatedAtAfterOrderByCreatedAtAsc(PaymentStatus status, Instant createdAfter);
+
+    List<Payment> findTop100ByStatusAndBooking_StatusOrderByCreatedAtAsc(
+            PaymentStatus status,
+            BookingStatus bookingStatus
+    );
 }

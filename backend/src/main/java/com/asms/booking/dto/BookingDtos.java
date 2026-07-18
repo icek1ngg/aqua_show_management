@@ -6,6 +6,7 @@ import com.asms.booking.enums.PassengerType;
 import com.asms.notification.enums.EmailNotificationStatus;
 import com.asms.notification.enums.EmailNotificationType;
 import com.asms.payment.enums.PaymentStatus;
+import com.asms.payment.enums.PaymentReconciliationReason;
 import com.asms.ticketing.enums.TicketStatus;
 import jakarta.validation.Valid;
 import jakarta.validation.constraints.Max;
@@ -182,6 +183,8 @@ public final class BookingDtos {
             BigDecimal amount,
             PaymentStatus status,
             Instant paidAt,
+            Instant inventoryCommittedAt,
+            PaymentReconciliationReason reconciliationReason,
             Instant createdAt
     ) {
     }

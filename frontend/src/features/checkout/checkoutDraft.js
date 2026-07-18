@@ -1,3 +1,5 @@
+import { isCheckoutQuantityAllowed } from './checkoutPolicy.js';
+
 const DRAFT_KEY = 'aqua_pulse_checkout_draft';
 const DRAFT_VERSION = 1;
 export const CHECKOUT_DRAFT_TTL_MS = 30 * 60 * 1000;
@@ -67,6 +69,7 @@ function normalizeContents(value) {
   const rawItems = Array.isArray(value.items) ? value.items : [];
   const items = rawItems.map(normalizeItem);
   if (!idempotencyKey || cartKeys.length === 0 || items.length === 0 || items.some(item => !item)) return null;
+  if (!isCheckoutQuantityAllowed(items)) return null;
   const itemKeys = items.map(item => `${item.scheduleId}:${item.ticketType}:${item.passengerType}`);
   if (new Set(itemKeys).size !== itemKeys.length) return null;
   const itemCartKeys = [...new Set(items.map(item => `${item.scheduleId}:${item.ticketType}`))];

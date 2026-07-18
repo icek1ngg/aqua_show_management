@@ -90,12 +90,15 @@ tickets 1 - n check_in_logs
 ### bookings
 - id: UUID PK
 - user_id: UUID FK
-- schedule_id: UUID FK
+- booking_code: VARCHAR(50) UNIQUE
+- idempotency_key: VARCHAR(100)
+- checkout_payload_hash: VARCHAR(64)
 - total_quantity: INT
 - total_amount: DECIMAL(12,2)
 - status: VARCHAR(30)
 - created_at: TIMESTAMP
 - expired_at: TIMESTAMP
+- UNIQUE(user_id, idempotency_key)
 
 ### payments
 - id: UUID PK
@@ -106,7 +109,14 @@ tickets 1 - n check_in_logs
 - payment_link: VARCHAR(500)
 - status: VARCHAR(30)
 - paid_at: TIMESTAMP
+- inventory_committed_at: TIMESTAMP NULL
+- reconciliation_reason: VARCHAR(80) NULL
 - created_at: TIMESTAMP
+
+`payments.status = SUCCESS` means the provider captured the money. Tickets are only
+issued after `inventory_committed_at` is set and the related booking becomes `PAID`.
+When inventory cannot be committed immediately, the booking stays `PROCESSING` and
+`reconciliation_reason` records why the automatic retry is required.
 
 ### tickets
 - id: UUID PK
