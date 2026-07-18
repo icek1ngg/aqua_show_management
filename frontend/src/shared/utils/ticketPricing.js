@@ -33,6 +33,11 @@ export function getTicketTypeLabel(value) {
   return ticketTypeOptions.find((option) => option.value === normalized)?.label || value || 'Standard Entry';
 }
 
+export function formatTicketCount(value) {
+  const quantity = Math.max(0, Math.trunc(Number(value) || 0));
+  return `${quantity} ticket${quantity === 1 ? '' : 's'}`;
+}
+
 export function getTicketTypePrice(standardPrice, value) {
   const base = Number(standardPrice);
   const multiplier = ticketTypeMultipliers[normalizeTicketType(value)];
