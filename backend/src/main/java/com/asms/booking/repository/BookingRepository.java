@@ -3,19 +3,34 @@ package com.asms.booking.repository;
 import com.asms.booking.entity.Booking;
 import com.asms.booking.enums.BookingStatus;
 import com.asms.identity.entity.User;
+import jakarta.persistence.LockModeType;
 import org.springframework.data.domain.Page;
 import org.springframework.data.domain.Pageable;
 import org.springframework.data.jpa.repository.JpaRepository;
 import org.springframework.data.jpa.repository.JpaSpecificationExecutor;
+import org.springframework.data.jpa.repository.Lock;
 import org.springframework.data.jpa.repository.Query;
 import org.springframework.data.repository.query.Param;
 
 import java.time.Instant;
 import java.util.List;
 import java.util.Optional;
+import java.util.Collection;
 import java.util.UUID;
 
 public interface BookingRepository extends JpaRepository<Booking, UUID>, JpaSpecificationExecutor<Booking> {
+
+    @Lock(LockModeType.PESSIMISTIC_WRITE)
+    @Query("select b from Booking b where b.id = :id")
+    Optional<Booking> findByIdForUpdate(@Param("id") UUID id);
+
+    @Query("""
+            select b.id from Booking b
+            where b.status = com.asms.booking.enums.BookingStatus.PENDING_PAYMENT
+              and b.expiresAt <= :now
+            order by b.expiresAt asc, b.id asc
+            """)
+    List<UUID> findExpirationCandidateIds(@Param("now") Instant now, Pageable pageable);
 
     Optional<Booking> findByIdAndUser(UUID id, User user);
 
@@ -24,6 +39,43 @@ public interface BookingRepository extends JpaRepository<Booking, UUID>, JpaSpec
     List<Booking> findByUserAndStatusOrderByCreatedAtDesc(User user, BookingStatus status);
 
     Page<Booking> findByUserOrderByCreatedAtDesc(User user, Pageable pageable);
+
+    @Query(
+            value = """
+                    select distinct b from Booking b left join b.items i
+                    where b.user = :user
+                      and ((:pendingGroup = true and b.status in (com.asms.booking.enums.BookingStatus.PROCESSING, com.asms.booking.enums.BookingStatus.PENDING_PAYMENT))
+                           or (:pendingGroup = false and (:status is null or b.status = :status)))
+                      and (:keyword is null
+                           or lower(b.bookingCode) like lower(concat('%', :keyword, '%'))
+                           or lower(i.showName) like lower(concat('%', :keyword, '%'))
+                           or lower(i.venueName) like lower(concat('%', :keyword, '%')))
+                    order by b.createdAt desc
+                    """,
+            countQuery = """
+                    select count(distinct b) from Booking b left join b.items i
+                    where b.user = :user
+                      and ((:pendingGroup = true and b.status in (com.asms.booking.enums.BookingStatus.PROCESSING, com.asms.booking.enums.BookingStatus.PENDING_PAYMENT))
+                           or (:pendingGroup = false and (:status is null or b.status = :status)))
+                      and (:keyword is null
+                           or lower(b.bookingCode) like lower(concat('%', :keyword, '%'))
+                           or lower(i.showName) like lower(concat('%', :keyword, '%'))
+                           or lower(i.venueName) like lower(concat('%', :keyword, '%')))
+                    """
+    )
+    Page<Booking> searchMyBookings(
+            @Param("user") User user,
+            @Param("keyword") String keyword,
+            @Param("status") BookingStatus status,
+            @Param("pendingGroup") boolean pendingGroup,
+            Pageable pageable
+    );
+
+    long countByUser(User user);
+
+    long countByUserAndStatus(User user, BookingStatus status);
+
+    long countByUserAndStatusIn(User user, Collection<BookingStatus> statuses);
 
     boolean existsByBookingCode(String bookingCode);
 

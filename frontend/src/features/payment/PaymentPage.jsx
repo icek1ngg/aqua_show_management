@@ -6,6 +6,7 @@ import { createPayment, reconcilePayment } from '../../services/paymentService.j
 import MainLayout from '../../shared/layouts/MainLayout.jsx';
 import { isTerminalBookingStatus, normalizeBookingPaymentStatus } from '../../shared/utils/paymentStatus.js';
 import { formatCurrency, getTicketTypeLabel } from '../../shared/utils/ticketPricing.js';
+import { getRoutedPaymentSession } from './paymentSessionState.js';
 
 const fallbackImageUrl =
   'https://images.unsplash.com/photo-1507525428034-b723cf961d3e?auto=format&fit=crop&w=1400&q=80';
@@ -201,8 +202,12 @@ export default function PaymentPage() {
   const { bookingId } = useParams();
   const navigate = useNavigate();
   const location = useLocation();
+  const routedPaymentSession = useMemo(
+    () => getRoutedPaymentSession(location.state, bookingId),
+    [bookingId, location.state],
+  );
   const [booking, setBooking] = useState(null);
-  const [paymentSession, setPaymentSession] = useState(null);
+  const [paymentSession, setPaymentSession] = useState(() => routedPaymentSession);
   const [countdownSeconds, setCountdownSeconds] = useState(null);
   const [loading, setLoading] = useState(true);
   const [submitting, setSubmitting] = useState(false);
@@ -210,6 +215,10 @@ export default function PaymentPage() {
   const [reconcileMessage, setReconcileMessage] = useState('');
   const [error, setError] = useState('');
   const hasRedirectedToResultRef = useRef(false);
+
+  useEffect(() => {
+    setPaymentSession(routedPaymentSession);
+  }, [bookingId, routedPaymentSession]);
 
   async function refreshBooking({ showLoading = false } = {}) {
     if (showLoading) {
@@ -535,12 +544,12 @@ export default function PaymentPage() {
 
                   <button
                     className="mt-6 flex w-full items-center justify-center gap-2 rounded-full bg-cyan-700 px-6 py-4 font-black text-white shadow-lg shadow-cyan-700/20 transition hover:bg-cyan-800 disabled:cursor-not-allowed disabled:bg-slate-300 disabled:shadow-none"
-                    disabled={!canPay || submitting}
+                    disabled={!canPay || submitting || Boolean(paymentSession)}
                     onClick={handlePay}
                     type="button"
                   >
                     <span className="material-symbols-outlined">payments</span>
-                    {isPaid ? 'Payment completed' : submitting ? 'Creating QR...' : 'Show PayOS QR'}
+                    {isPaid ? 'Payment completed' : paymentSession ? 'Payment session ready' : submitting ? 'Creating QR...' : 'Show PayOS QR'}
                   </button>
 
                   {!canPay ? (

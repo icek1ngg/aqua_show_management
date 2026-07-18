@@ -35,7 +35,7 @@ public class JwtService {
         this.expirationMs = expirationMs;
     }
 
-    public String generateToken(User user) {
+    public String generateToken(User user, String sid) {
         Instant now = Instant.now();
         Instant expiresAt = now.plusMillis(expirationMs);
 
@@ -46,10 +46,11 @@ public class JwtService {
 
         Map<String, Object> payload = new LinkedHashMap<>();
         payload.put("sub", user.getEmail());
-        payload.put("userId", user.getId().toString());
-        payload.put("email", user.getEmail());
-        payload.put("name", user.getFullName());
-        payload.put("fullName", user.getFullName());
+        payload.put("sid", sid);
+        payload.put("jti", java.util.UUID.randomUUID().toString());
+        payload.put("iss", "asms");
+        payload.put("aud", "asms-client");
+        payload.put("authVersion", user.getAuthVersion());
         payload.put("role", user.getRole().name());
         payload.put("iat", now.getEpochSecond());
         payload.put("exp", expiresAt.getEpochSecond());
@@ -65,10 +66,21 @@ public class JwtService {
         return getClaims(token).get("sub").toString();
     }
 
+    public Map<String, Object> extractClaims(String token) {
+        return getClaims(token);
+    }
+
     public boolean isValid(String token) {
         try {
             String[] parts = token.split("\\.");
             if (parts.length != 3) {
+                return false;
+            }
+
+            // Check alg header
+            byte[] decodedHeader = Base64.getUrlDecoder().decode(parts[0]);
+            Map<String, Object> header = objectMapper.readValue(decodedHeader, MAP_TYPE);
+            if (!"HS256".equals(header.get("alg"))) {
                 return false;
             }
 
@@ -77,10 +89,20 @@ public class JwtService {
                 return false;
             }
 
-            Object exp = getClaims(token).get("exp");
+            Map<String, Object> claims = getClaims(token);
+
+            if (!"asms".equals(claims.get("iss")) || !"asms-client".equals(claims.get("aud"))) {
+                return false;
+            }
+
+            if (!claims.containsKey("sid") || !claims.containsKey("authVersion")) {
+                return false;
+            }
+
+            Object exp = claims.get("exp");
             long expiresAt = exp instanceof Number number ? number.longValue() : Long.parseLong(exp.toString());
             return expiresAt > Instant.now().getEpochSecond();
-        } catch (RuntimeException exception) {
+        } catch (Exception exception) {
             return false;
         }
     }

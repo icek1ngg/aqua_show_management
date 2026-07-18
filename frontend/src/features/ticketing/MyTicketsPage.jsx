@@ -2,6 +2,7 @@ import { useCallback, useEffect, useRef, useState } from 'react';
 import { Link, useLocation, useNavigate, useSearchParams } from 'react-router-dom';
 
 import { getBookingDetail } from '../../services/bookingService.js';
+import { getMyTickets } from '../../services/ticketService.js';
 import MainLayout from '../../shared/layouts/MainLayout.jsx';
 import { normalizeBookingPaymentStatus } from '../../shared/utils/paymentStatus.js';
 import { getTicketTypeLabel } from '../../shared/utils/ticketPricing.js';
@@ -68,11 +69,92 @@ function TicketCard({ ticket, index }) {
   );
 }
 
-export default function MyTicketsPage() {
-  const [searchParams] = useSearchParams();
+function AllTicketsPage() {
   const navigate = useNavigate();
   const location = useLocation();
-  const bookingId = searchParams.get('bookingId');
+  const [tickets, setTickets] = useState([]);
+  const [pagination, setPagination] = useState({ page: 0, totalPages: 0, totalItems: 0, hasNext: false, hasPrevious: false });
+  const [page, setPage] = useState(0);
+  const [search, setSearch] = useState('');
+  const [query, setQuery] = useState('');
+  const [status, setStatus] = useState('ALL');
+  const [isLoading, setIsLoading] = useState(true);
+  const [error, setError] = useState('');
+
+  useEffect(() => {
+    const timer = window.setTimeout(() => { setPage(0); setQuery(search.trim()); }, 300);
+    return () => window.clearTimeout(timer);
+  }, [search]);
+
+  useEffect(() => {
+    let active = true;
+    setIsLoading(true);
+    setError('');
+    getMyTickets({ page, size: 12, q: query, status })
+      .then((response) => {
+        if (!active) return;
+        setTickets(Array.isArray(response?.items) ? response.items : []);
+        setPagination({
+          page: response?.page ?? page,
+          totalPages: response?.totalPages ?? 0,
+          totalItems: response?.totalItems ?? 0,
+          hasNext: Boolean(response?.hasNext),
+          hasPrevious: Boolean(response?.hasPrevious),
+        });
+      })
+      .catch((loadError) => {
+        if (!active) return;
+        if (loadError?.response?.status === 401) {
+          navigate('/login', { replace: true, state: { from: location } });
+          return;
+        }
+        setError(loadError?.response?.data?.message || 'Unable to load your tickets.');
+      })
+      .finally(() => { if (active) setIsLoading(false); });
+    return () => { active = false; };
+  }, [location, navigate, page, query, status]);
+
+  return (
+    <MainLayout>
+      <section className="bg-gradient-to-br from-cyan-900 via-cyan-700 to-teal-500 px-4 py-14 text-white sm:px-6 lg:px-8">
+        <div className="mx-auto max-w-6xl">
+          <span className="inline-flex rounded-full bg-white/15 px-4 py-1.5 text-xs font-black uppercase tracking-[0.24em]">My Tickets</span>
+          <h1 className="mt-5 text-4xl font-black sm:text-5xl">All Your AquaPulse Tickets</h1>
+          <p className="mt-3 text-cyan-50/90">Search and access tickets from every paid booking.</p>
+        </div>
+      </section>
+      <main className="mx-auto min-h-[520px] max-w-6xl px-4 py-10 sm:px-6">
+        <div className="mb-8 flex flex-col gap-3 rounded-3xl border border-cyan-100 bg-cyan-50/50 p-5 sm:flex-row">
+          <input className="flex-1 rounded-full border border-cyan-200 bg-white px-5 py-3 outline-none focus:border-cyan-600" onChange={(event) => setSearch(event.target.value)} placeholder="Search by show or booking code" value={search} />
+          <select className="rounded-full border border-cyan-200 bg-white px-5 py-3 font-bold text-slate-700" onChange={(event) => { setPage(0); setStatus(event.target.value); }} value={status}>
+            <option value="ALL">All statuses</option><option value="VALID">Valid</option><option value="USED">Used</option><option value="EXPIRED">Expired</option>
+          </select>
+        </div>
+        {isLoading ? <p className="py-16 text-center font-bold text-cyan-700">Loading your tickets...</p> : null}
+        {!isLoading && error ? <p className="rounded-2xl bg-red-50 p-8 text-center font-bold text-red-700">{error}</p> : null}
+        {!isLoading && !error && tickets.length === 0 ? <p className="rounded-2xl border border-dashed border-cyan-200 p-12 text-center font-bold text-slate-600">No tickets match your filters.</p> : null}
+        {!isLoading && !error && tickets.length > 0 ? (
+          <div className="space-y-8">
+            {tickets.map((ticket, index) => (
+              <section key={ticket.id}>
+                <div className="mb-3 flex flex-wrap items-end justify-between gap-2">
+                  <div><h2 className="text-2xl font-black text-slate-950">{ticket.showName}</h2><p className="font-semibold text-slate-500">{formatDateTime(ticket.showStartTime)} · {getTicketTypeLabel(ticket.ticketType)} · {ticket.passengerType || 'ADULT'}</p></div>
+                  <Link className="font-bold text-cyan-700 hover:underline" to={`/bookings/${ticket.bookingId}`}>Booking {ticket.bookingCode}</Link>
+                </div>
+                <TicketCard index={index} ticket={ticket} />
+              </section>
+            ))}
+          </div>
+        ) : null}
+        {!isLoading && pagination.totalItems > 0 ? <div className="mt-10 flex items-center justify-center gap-4"><button className="rounded-full border px-5 py-2 font-bold disabled:opacity-40" disabled={!pagination.hasPrevious} onClick={() => setPage((value) => Math.max(0, value - 1))}>Previous</button><span className="font-bold">Page {pagination.page + 1} of {Math.max(1, pagination.totalPages)}</span><button className="rounded-full border px-5 py-2 font-bold disabled:opacity-40" disabled={!pagination.hasNext} onClick={() => setPage((value) => value + 1)}>Next</button></div> : null}
+      </main>
+    </MainLayout>
+  );
+}
+
+function BookingTicketsPage({ bookingId }) {
+  const navigate = useNavigate();
+  const location = useLocation();
   const [booking, setBooking] = useState(null);
   const [isLoading, setIsLoading] = useState(true);
   const [error, setError] = useState('');
@@ -209,7 +291,7 @@ export default function MyTicketsPage() {
               {ticketGroups.filter((group) => group.tickets.length > 0).map(({ item, tickets: groupTickets }) => (
                 <section key={item.id}>
                   <h2 className="text-2xl font-black text-slate-950">{item.showName}</h2>
-                  <p className="mb-4 mt-1 font-semibold text-slate-500">{formatDateTime(item.startTime)} · {getTicketTypeLabel(item.ticketType)}</p>
+                  <p className="mb-4 mt-1 font-semibold text-slate-500">{formatDateTime(item.startTime)} · {getTicketTypeLabel(item.ticketType)} · {item.passengerType || 'ADULT'}</p>
                   <div className="grid gap-6 lg:grid-cols-2">
                     {groupTickets.map((ticket, index) => <TicketCard key={ticket.id} ticket={ticket} index={index} />)}
                   </div>
@@ -240,4 +322,10 @@ export default function MyTicketsPage() {
       </section>
     </MainLayout>
   );
+}
+
+export default function MyTicketsPage() {
+  const [searchParams] = useSearchParams();
+  const bookingId = searchParams.get('bookingId');
+  return bookingId ? <BookingTicketsPage bookingId={bookingId} /> : <AllTicketsPage />;
 }

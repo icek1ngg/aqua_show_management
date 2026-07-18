@@ -1,6 +1,7 @@
 package com.asms.catalog.controller;
 
 import com.asms.catalog.dto.CatalogDtos.BookingScheduleResponse;
+import com.asms.catalog.dto.CatalogDtos.UpcomingScheduleResponse;
 import com.asms.catalog.service.PublicShowService;
 import com.asms.core.response.ApiResponse;
 import org.springframework.web.bind.annotation.GetMapping;
@@ -8,6 +9,7 @@ import org.springframework.web.bind.annotation.PathVariable;
 import org.springframework.web.bind.annotation.RequestMapping;
 import org.springframework.web.bind.annotation.RestController;
 
+import java.util.List;
 import java.util.UUID;
 
 @RestController
@@ -18,6 +20,11 @@ public class PublicScheduleController {
 
     public PublicScheduleController(PublicShowService publicShowService) {
         this.publicShowService = publicShowService;
+    }
+
+    @GetMapping("/upcoming")
+    public ApiResponse<List<UpcomingScheduleResponse>> getUpcomingSchedules() {
+        return ApiResponse.success("Upcoming schedules fetched successfully", publicShowService.getUpcomingSchedules());
     }
 
     @GetMapping("/{id}")

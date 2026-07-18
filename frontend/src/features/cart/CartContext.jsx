@@ -1,36 +1,46 @@
 import { createContext, useCallback, useContext, useEffect, useMemo, useState } from 'react';
+import { useAuth } from '../auth/AuthContext.jsx';
 
 import {
-  CART_STORAGE_KEY,
   addCartItem,
   addCartItems,
   cartTotalQuantity,
-  readCart,
+  cartStorageKey,
+  readCartForOwner,
   removeCartItem,
   removeCartItems as removeSelectedCartItems,
   updateCartItemQuantity,
-  writeCart,
+  writeCartForOwner,
 } from './cartStorage.js';
 
 const CartContext = createContext(null);
 
 export function CartProvider({ children }) {
-  const [items, setItems] = useState(() => readCart());
+  const { user, loading: authLoading } = useAuth();
+  const owner = user?.id || user?.email || 'guest';
+  const [items, setItems] = useState([]);
+  const [loadedOwner, setLoadedOwner] = useState(null);
 
   useEffect(() => {
-    writeCart(items);
-  }, [items]);
+    if (authLoading) return;
+    setItems(readCartForOwner(owner));
+    setLoadedOwner(owner);
+  }, [authLoading, owner]);
+
+  useEffect(() => {
+    if (loadedOwner === owner) writeCartForOwner(owner, items);
+  }, [items, loadedOwner, owner]);
 
   useEffect(() => {
     const handleStorage = (event) => {
-      if (event.key === CART_STORAGE_KEY) {
-        setItems(readCart());
+      if (event.key === cartStorageKey(owner)) {
+        setItems(readCartForOwner(owner));
       }
     };
 
     window.addEventListener('storage', handleStorage);
     return () => window.removeEventListener('storage', handleStorage);
-  }, []);
+  }, [owner]);
 
   const addItem = useCallback((item, maxQuantity) => {
     setItems((currentItems) => addCartItem(currentItems, item, maxQuantity));

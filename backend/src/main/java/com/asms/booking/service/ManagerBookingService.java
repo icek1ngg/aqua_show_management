@@ -109,6 +109,7 @@ public class ManagerBookingService {
                 item.getEndTime(),
                 item.getVenueName(),
                 item.getTicketType(),
+                item.getPassengerType(),
                 item.getQuantity(),
                 item.getUnitPrice(),
                 item.getLineTotal()

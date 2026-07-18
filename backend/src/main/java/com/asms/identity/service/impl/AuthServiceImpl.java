@@ -1,6 +1,7 @@
 package com.asms.identity.service.impl;
 
-import com.asms.core.exception.ConflictException;
+import com.asms.core.exception.AuthRateLimitException;
+import com.asms.core.exception.ErrorCode;
 import com.asms.core.exception.MailSendingException;
 import com.asms.core.exception.UnauthorizedException;
 import com.asms.identity.dto.AuthDtos.AuthSession;
@@ -15,114 +16,184 @@ import com.asms.identity.enums.UserStatus;
 import com.asms.identity.repository.UserRepository;
 import com.asms.identity.security.JwtService;
 import com.asms.identity.service.AuthService;
-import com.asms.identity.service.EmailVerificationService;
-import com.asms.identity.service.RefreshTokenService;
-import com.asms.identity.service.RefreshTokenService.RefreshTokenIssue;
-import com.asms.identity.service.RefreshTokenService.RefreshTokenRotation;
+import com.asms.identity.service.AuthRateLimitService;
+import com.asms.identity.service.RegistrationPersistenceService;
+import com.asms.identity.service.RegistrationPersistenceService.PendingRegistration;
+import com.asms.identity.dto.SessionDtos.ClientContext;
+import com.asms.identity.service.AuthSessionService;
+import com.asms.identity.service.VerificationEmailSender;
+import com.asms.identity.dto.SessionDtos.SessionIssue;
+import com.asms.identity.dto.SessionDtos.SessionRotation;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.security.crypto.password.PasswordEncoder;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
+import java.util.Locale;
+
 @Service
 public class AuthServiceImpl implements AuthService {
+
+    private static final String DUMMY_BCRYPT_HASH =
+            "$2a$10$N9qo8uLOickgx2ZMRZoMyeIjZAgcfl7p92ldGxad68LJZdL17lhWy";
 
     private final UserRepository userRepository;
     private final PasswordEncoder passwordEncoder;
     private final JwtService jwtService;
-    private final EmailVerificationService emailVerificationService;
-    private final RefreshTokenService refreshTokenService;
+    private final AuthSessionService authSessionService;
+    private final RegistrationPersistenceService registrationPersistenceService;
+    private final VerificationEmailSender verificationEmailSender;
+    private final AuthRateLimitService authRateLimitService;
 
     @Autowired
     public AuthServiceImpl(
             UserRepository userRepository,
             PasswordEncoder passwordEncoder,
             JwtService jwtService,
-            EmailVerificationService emailVerificationService,
-            RefreshTokenService refreshTokenService
+            AuthSessionService authSessionService,
+            RegistrationPersistenceService registrationPersistenceService,
+            VerificationEmailSender verificationEmailSender,
+            AuthRateLimitService authRateLimitService
     ) {
         this.userRepository = userRepository;
         this.passwordEncoder = passwordEncoder;
         this.jwtService = jwtService;
-        this.emailVerificationService = emailVerificationService;
-        this.refreshTokenService = refreshTokenService;
+        this.authSessionService = authSessionService;
+        this.registrationPersistenceService = registrationPersistenceService;
+        this.verificationEmailSender = verificationEmailSender;
+        this.authRateLimitService = authRateLimitService;
     }
 
     public AuthServiceImpl(
             UserRepository userRepository,
             PasswordEncoder passwordEncoder,
             JwtService jwtService,
-            EmailVerificationService emailVerificationService
+            AuthSessionService authSessionService,
+            RegistrationPersistenceService registrationPersistenceService,
+            VerificationEmailSender verificationEmailSender
     ) {
-        this(userRepository, passwordEncoder, jwtService, emailVerificationService, null);
+        this(
+                userRepository,
+                passwordEncoder,
+                jwtService,
+                authSessionService,
+                registrationPersistenceService,
+                verificationEmailSender,
+                new AuthRateLimitService() {
+                    @Override
+                    public void checkRegistration(String normalizedEmail, String remoteIp) {
+                        throw rateLimitUnavailable();
+                    }
+
+                    @Override
+                    public void checkResend(String normalizedEmail) {
+                        throw rateLimitUnavailable();
+                    }
+
+                    @Override
+                    public void checkLoginFailure(String normalizedEmail, String remoteIp) {
+                        throw rateLimitUnavailable();
+                    }
+
+                    @Override
+                    public void clearLoginFailure(String normalizedEmail, String remoteIp) {
+                    }
+
+                    @Override
+                    public boolean checkForgot(String normalizedEmail, String remoteIp) {
+                        return false;
+                    }
+
+                    @Override
+                    public void checkReset(String remoteIp) {
+                        throw rateLimitUnavailable();
+                    }
+
+                    @Override
+                    public void checkRefresh(String remoteIp) {
+                        throw rateLimitUnavailable();
+                    }
+                }
+        );
     }
 
     @Override
-    @Transactional(noRollbackFor = MailSendingException.class)
-    public RegisterResponse register(RegisterRequest request) {
-        String email = normalizeEmail(request.email());
-        if (userRepository.existsByEmailIgnoreCase(email)) {
-            throw new ConflictException("Email is already registered");
+    public RegisterResponse register(RegisterRequest request, String remoteIp) {
+        authRateLimitService.checkRegistration(normalizeEmail(request.email()), remoteIp);
+        PendingRegistration pending = registrationPersistenceService.create(request);
+        boolean verificationEmailSent = true;
+        try {
+            verificationEmailSender.send(pending.user(), pending.rawToken());
+        } catch (MailSendingException exception) {
+            verificationEmailSent = false;
         }
-
-        User user = new User(
-                request.lastName().trim(),
-                normalizeNullable(request.firstMiddleName()),
-                email,
-                normalizeNullable(request.phoneNumber()),
-                passwordEncoder.encode(request.password())
+        return new RegisterResponse(
+                pending.user().getId(),
+                pending.user().getEmail(),
+                verificationEmailSent
         );
-        user.setStatus(UserStatus.PENDING_VERIFICATION);
-
-        User savedUser = userRepository.save(user);
-
-        emailVerificationService.sendVerificationEmail(savedUser);
-
-        return new RegisterResponse(savedUser.getId(), savedUser.getEmail());
     }
 
     @Override
     @Transactional
-    public AuthSession login(LoginRequest request) {
-        User user = userRepository.findByEmailIgnoreCase(normalizeEmail(request.email()))
-                .orElseThrow(() -> new UnauthorizedException("Invalid email or password"));
+    public AuthSession login(LoginRequest request, ClientContext clientContext) {
+        String normalizedEmail = normalizeEmail(request.email());
+        String remoteIp = clientContext.ipAddress();
+
+        authRateLimitService.checkLoginFailure(normalizedEmail, remoteIp);
+
+        User user = userRepository.findByEmailIgnoreCase(normalizedEmail).orElse(null);
+        boolean localUserWithPassword = user != null
+                && user.getAuthProvider() == AuthProvider.LOCAL
+                && user.getPasswordHash() != null;
+        String passwordHash = localUserWithPassword ? user.getPasswordHash() : DUMMY_BCRYPT_HASH;
+        boolean passwordMatches = passwordEncoder.matches(request.password(), passwordHash);
+
+        if (!localUserWithPassword || !passwordMatches) {
+            throw invalidCredentials();
+        }
+
+        authRateLimitService.clearLoginFailure(normalizedEmail, remoteIp);
 
         if (user.getStatus() == UserStatus.PENDING_VERIFICATION) {
-            throw new UnauthorizedException("Please verify your email before signing in.");
+            throw new UnauthorizedException(
+                    ErrorCode.EMAIL_VERIFICATION_REQUIRED,
+                    "Please verify your email before signing in."
+            );
         }
 
-        if (!user.isEnabled()
-                || user.getAuthProvider() != AuthProvider.LOCAL
-                || user.getPasswordHash() == null
-                || !passwordEncoder.matches(request.password(), user.getPasswordHash())) {
-            throw new UnauthorizedException("Invalid email or password");
+        if (!user.isEnabled()) {
+            throw invalidCredentials();
         }
 
-        String accessToken = jwtService.generateToken(user);
-        LoginResponse response = new LoginResponse(accessToken, "Bearer", jwtService.getExpirationSeconds(), toProfileResponse(user));
-
-        if (refreshTokenService == null) {
+        if (authSessionService == null) {
+            String accessToken = jwtService.generateToken(user, "");
+            LoginResponse response = new LoginResponse(accessToken, "Bearer", jwtService.getExpirationSeconds(), toProfileResponse(user));
             return new AuthSession(response, "", -1);
         }
 
-        RefreshTokenIssue refreshToken = refreshTokenService.createRefreshToken(user, Boolean.TRUE.equals(request.rememberMe()));
-        return new AuthSession(response, refreshToken.token(), refreshToken.cookieMaxAgeSeconds());
+        SessionIssue sessionIssue = authSessionService.create(user, Boolean.TRUE.equals(request.rememberMe()), clientContext);
+        String accessToken = jwtService.generateToken(user, sessionIssue.sid());
+        LoginResponse response = new LoginResponse(accessToken, "Bearer", jwtService.getExpirationSeconds(), toProfileResponse(user));
+        return new AuthSession(response, sessionIssue.token(), sessionIssue.cookieMaxAgeSeconds());
     }
 
     @Override
-    @Transactional(readOnly = true)
-    public AuthSession refresh(String refreshToken) {
-        RefreshTokenRotation rotatedRefreshToken = refreshTokenService.rotateRefreshToken(refreshToken);
-        User user = rotatedRefreshToken.user();
-        String accessToken = jwtService.generateToken(user);
+    @Transactional
+    public AuthSession refresh(String refreshToken, ClientContext clientContext) {
+        authRateLimitService.checkRefresh(clientContext.ipAddress());
+
+        SessionRotation rotatedSession = authSessionService.rotate(refreshToken, clientContext);
+        User user = rotatedSession.user();
+        String accessToken = jwtService.generateToken(user, rotatedSession.sid());
         LoginResponse response = new LoginResponse(accessToken, "Bearer", jwtService.getExpirationSeconds(), toProfileResponse(user));
-        return new AuthSession(response, rotatedRefreshToken.token(), rotatedRefreshToken.cookieMaxAgeSeconds());
+        return new AuthSession(response, rotatedSession.token(), rotatedSession.cookieMaxAgeSeconds());
     }
 
     @Override
     public void logout(String refreshToken) {
-        if (refreshTokenService != null) {
-            refreshTokenService.revokeRefreshToken(refreshToken);
+        if (authSessionService != null) {
+            authSessionService.revoke(refreshToken);
         }
     }
 
@@ -145,13 +216,19 @@ public class AuthServiceImpl implements AuthService {
     }
 
     private String normalizeEmail(String email) {
-        return email.trim().toLowerCase();
+        return email.trim().toLowerCase(Locale.ROOT);
     }
 
-    private String normalizeNullable(String value) {
-        if (value == null || value.isBlank()) {
-            return "";
-        }
-        return value.trim();
+    private UnauthorizedException invalidCredentials() {
+        return new UnauthorizedException(ErrorCode.INVALID_CREDENTIALS, "Invalid email or password");
     }
+
+    private static AuthRateLimitException rateLimitUnavailable() {
+        return new AuthRateLimitException(
+                org.springframework.http.HttpStatus.SERVICE_UNAVAILABLE,
+                ErrorCode.RATE_LIMIT_SERVICE_UNAVAILABLE,
+                "Authentication rate limit service is temporarily unavailable."
+        );
+    }
+
 }

@@ -33,20 +33,26 @@ import org.springframework.web.cors.UrlBasedCorsConfigurationSource;
 public class SecurityConfig {
 
     private final ObjectMapper objectMapper;
+    private final CsrfAndOriginValidationFilter csrfAndOriginValidationFilter;
     private final JwtAuthenticationFilter jwtAuthenticationFilter;
     private final OAuth2AuthenticationSuccessHandler oAuth2AuthenticationSuccessHandler;
     private final String frontendBaseUrl;
+    private final FrontendOriginPolicy frontendOriginPolicy;
 
     public SecurityConfig(
             ObjectMapper objectMapper,
+            CsrfAndOriginValidationFilter csrfAndOriginValidationFilter,
             JwtAuthenticationFilter jwtAuthenticationFilter,
             OAuth2AuthenticationSuccessHandler oAuth2AuthenticationSuccessHandler,
-            @Value("${asms.frontend.base-url}") String frontendBaseUrl
+            @Value("${asms.frontend.base-url}") String frontendBaseUrl,
+            FrontendOriginPolicy frontendOriginPolicy
     ) {
         this.objectMapper = objectMapper;
+        this.csrfAndOriginValidationFilter = csrfAndOriginValidationFilter;
         this.jwtAuthenticationFilter = jwtAuthenticationFilter;
         this.oAuth2AuthenticationSuccessHandler = oAuth2AuthenticationSuccessHandler;
         this.frontendBaseUrl = frontendBaseUrl;
+        this.frontendOriginPolicy = frontendOriginPolicy;
     }
 
     @Bean
@@ -55,6 +61,11 @@ public class SecurityConfig {
                 .csrf(AbstractHttpConfigurer::disable)
                 .cors(cors -> cors.configurationSource(corsConfigurationSource()))
                 .sessionManagement(session -> session.sessionCreationPolicy(SessionCreationPolicy.IF_REQUIRED))
+                .headers(headers -> headers
+                        .contentSecurityPolicy(csp -> csp.policyDirectives("default-src 'self'; object-src 'none'; base-uri 'self'; frame-ancestors 'none'; form-action 'self'; script-src 'self' 'unsafe-inline'; style-src 'self' 'unsafe-inline' https://fonts.googleapis.com; font-src 'self' https://fonts.gstatic.com; img-src 'self' data: https://lh3.googleusercontent.com"))
+                        .referrerPolicy(referrer -> referrer.policy(org.springframework.security.web.header.writers.ReferrerPolicyHeaderWriter.ReferrerPolicy.NO_REFERRER))
+                        .permissionsPolicy(permissions -> permissions.policy("geolocation=(), camera=(), microphone=()"))
+                )
                 .exceptionHandling(exceptionHandling -> exceptionHandling
                         .authenticationEntryPoint((request, response, exception) ->
                                 writeErrorResponse(response, HttpServletResponse.SC_UNAUTHORIZED, "Authentication required"))
@@ -62,8 +73,8 @@ public class SecurityConfig {
                                 writeErrorResponse(response, HttpServletResponse.SC_FORBIDDEN, "Access denied"))
                 )
                 .authorizeHttpRequests(authorize -> authorize
-                        .requestMatchers(HttpMethod.POST, "/api/auth/register", "/api/auth/login", "/api/auth/refresh", "/api/auth/logout", "/api/auth/resend-verification", "/api/auth/forgot-password", "/api/auth/reset-password").permitAll()
-                        .requestMatchers(HttpMethod.GET, "/api/auth/verify-email").permitAll()
+                        .requestMatchers(HttpMethod.POST, "/api/auth/register", "/api/auth/login", "/api/auth/refresh", "/api/auth/logout", "/api/auth/resend-verification", "/api/auth/forgot-password", "/api/auth/reset-password", "/api/auth/oauth2/complete").permitAll()
+                        .requestMatchers(HttpMethod.GET, "/api/auth/verify-email", "/api/auth/csrf").permitAll()
                         .requestMatchers(HttpMethod.GET, "/api/shows", "/api/shows/**", "/api/schedules/**").permitAll()
                         .requestMatchers(HttpMethod.POST, "/api/payments/callback").permitAll()
                         .requestMatchers(HttpMethod.POST, "/api/bookings/dev-samples", "/api/bookings/dev-samples/batch").hasAnyRole("USER", "STAFF", "MANAGER", "ADMIN")
@@ -80,6 +91,7 @@ public class SecurityConfig {
                         .successHandler(oAuth2AuthenticationSuccessHandler)
                         .failureHandler(new SimpleUrlAuthenticationFailureHandler(oAuth2FailureUrl()))
                 )
+                .addFilterBefore(csrfAndOriginValidationFilter, UsernamePasswordAuthenticationFilter.class)
                 .addFilterBefore(jwtAuthenticationFilter, UsernamePasswordAuthenticationFilter.class)
                 .build();
     }
@@ -92,14 +104,9 @@ public class SecurityConfig {
     @Bean
     public CorsConfigurationSource corsConfigurationSource() {
         CorsConfiguration configuration = new CorsConfiguration();
-        configuration.setAllowedOriginPatterns(List.of(
-                "http://localhost:5173",
-                "http://localhost:5174",
-                "https://*.ngrok-free.app",
-                "https://*.ngrok-free.dev"
-        ));
+        configuration.setAllowedOrigins(frontendOriginPolicy.allowedOrigins());
         configuration.setAllowedMethods(List.of("GET", "POST", "PUT", "PATCH", "DELETE", "OPTIONS"));
-        configuration.setAllowedHeaders(List.of("Authorization", "Content-Type", "ngrok-skip-browser-warning"));
+        configuration.setAllowedHeaders(List.of("Authorization", "Content-Type", "X-XSRF-TOKEN", "ngrok-skip-browser-warning"));
         configuration.setAllowCredentials(true);
 
         UrlBasedCorsConfigurationSource source = new UrlBasedCorsConfigurationSource();

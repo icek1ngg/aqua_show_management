@@ -15,7 +15,11 @@ public interface BookingService {
 
     CreateBookingResponse createBooking(CreateBookingRequest request, String currentUserEmail);
 
-    PageBookingResponse getMyBookings(String currentUserEmail, int page, int size);
+    PageBookingResponse getMyBookings(String currentUserEmail, int page, int size, String keyword, String status);
+
+    default PageBookingResponse getMyBookings(String currentUserEmail, int page, int size) {
+        return getMyBookings(currentUserEmail, page, size, null, null);
+    }
 
     BookingResponse getBookingDetail(UUID id, String currentUserEmail);
 

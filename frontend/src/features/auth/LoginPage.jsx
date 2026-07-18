@@ -5,7 +5,9 @@ import AuthLayout from '../../shared/layouts/AuthLayout.jsx';
 import Logo from '../../shared/components/navigation/Logo.jsx';
 import { validateEmail, validateRequired } from '../../shared/utils/validation.js';
 import { useAuth } from './AuthContext.jsx';
+import { shouldOfferVerificationResend } from './authError.js';
 import { getRedirectPathAfterLogin } from './authRedirect.js';
+import { getVerificationResult } from './verificationResult.js';
 import * as authService from '../../services/authService.js';
 
 const loginBubbles = [
@@ -174,15 +176,23 @@ export default function LoginPage() {
   const [showPassword, setShowPassword] = useState(false);
   const [fieldErrors, setFieldErrors] = useState({});
   const [isSubmitting, setIsSubmitting] = useState(false);
+  const [offerVerificationResend, setOfferVerificationResend] = useState(false);
 
   useEffect(() => {
+    const verificationResult = getVerificationResult(searchParams);
     if (searchParams.get('oauthError') === 'true') {
       setErrorMessage('Google authentication failed. Please try again.');
       setSuccessMessage('');
-    } else if (searchParams.get('verified') === 'true') {
+    } else if (verificationResult === 'success') {
       setSuccessMessage('Email verified successfully. You can now sign in.');
       setErrorMessage('');
-    } else if (searchParams.get('verified') === 'false') {
+    } else if (verificationResult === 'expired') {
+      setErrorMessage('Verification link has expired. Sign in to request another email.');
+      setSuccessMessage('');
+    } else if (verificationResult === 'used') {
+      setSuccessMessage('This verification link has already been used. You can sign in.');
+      setErrorMessage('');
+    } else if (verificationResult === 'invalid') {
       setErrorMessage('Verification link is invalid or expired.');
       setSuccessMessage('');
     }
@@ -191,6 +201,7 @@ export default function LoginPage() {
   const clearFieldError = (fieldName) => {
     setErrorMessage('');
     setSuccessMessage('');
+    setOfferVerificationResend(false);
     setFieldErrors((currentErrors) => {
       if (!currentErrors[fieldName]) {
         return currentErrors;
@@ -241,6 +252,7 @@ export default function LoginPage() {
 
     setErrorMessage('');
     setFieldErrors({});
+    setOfferVerificationResend(false);
 
     const nextErrors = {
       email: validateEmail(credentials.email),
@@ -264,6 +276,7 @@ export default function LoginPage() {
       navigate(redirectTarget, { replace: true });
     } catch (error) {
       setErrorMessage(error.message);
+      setOfferVerificationResend(shouldOfferVerificationResend(error));
     } finally {
       setIsSubmitting(false);
     }
@@ -401,7 +414,7 @@ export default function LoginPage() {
               {errorMessage && (
                 <div className="rounded-2xl border border-red-100 bg-red-50 px-4 py-3 text-sm font-semibold text-red-700" role="alert">
                   <p>{errorMessage}</p>
-                  {errorMessage === 'Please verify your email before signing in.' && (
+                  {offerVerificationResend && (
                     <div className="mt-2">
                       <button
                         className="inline-flex items-center gap-1.5 text-cyan-800 hover:text-cyan-950 font-bold transition-colors duration-150 focus:outline-none disabled:cursor-not-allowed disabled:opacity-50"

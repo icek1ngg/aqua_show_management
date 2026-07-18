@@ -4,6 +4,8 @@ import com.asms.booking.entity.Booking;
 import com.asms.booking.entity.BookingItem;
 import com.asms.booking.dto.TicketHoldDtos.TicketHoldInfo;
 import com.asms.booking.enums.BookingStatus;
+import com.asms.booking.enums.TicketType;
+import com.asms.booking.exception.TicketHoldServiceUnavailableException;
 import com.asms.booking.repository.BookingRepository;
 import com.asms.booking.service.RedisTicketHoldService;
 import com.asms.catalog.entity.ShowSchedule;
@@ -21,6 +23,7 @@ import com.asms.payment.dto.PaymentReconcileRequest;
 import com.asms.payment.dto.PaymentReconcileResponse;
 import com.asms.payment.entity.Payment;
 import com.asms.payment.enums.PaymentStatus;
+import com.asms.payment.enums.PaymentReconciliationReason;
 import com.asms.payment.integration.PayOsClient;
 import com.asms.payment.integration.PayOsPaymentLink;
 import com.asms.payment.integration.PayOsPaymentStatus;
@@ -45,7 +48,6 @@ import java.util.List;
 import java.util.Locale;
 import java.util.Map;
 import java.util.UUID;
-import java.util.concurrent.ThreadLocalRandom;
 
 @Service
 public class PaymentServiceImpl implements PaymentService {
@@ -85,26 +87,61 @@ public class PaymentServiceImpl implements PaymentService {
         Booking booking = bookingRepository.findByIdAndUser(request.bookingId(), user)
                 .orElseThrow(() -> new NotFoundException("Booking not found"));
 
+        validatePayableBooking(booking);
+        return createOrGetPaymentSession(booking).response();
+    }
+
+    @Override
+    @Transactional
+    public PaymentCreationOutcome createOrGetPaymentSession(Booking booking) {
+        Payment existing = paymentRepository.findByBooking_Id(booking.getId()).orElse(null);
+        if (existing != null) {
+            // A client may retry after the provider callback completed but before it received
+            // the original checkout response. Return the persisted outcome instead of turning
+            // a successful idempotent retry into "only pending bookings can be paid".
+            if (existing.getStatus() == PaymentStatus.SUCCESS
+                    && (booking.getStatus() == BookingStatus.PAID
+                    || booking.getStatus() == BookingStatus.PROCESSING)) {
+                return new PaymentCreationOutcome(toCreatePaymentResponse(existing), false);
+            }
+
+            validatePayableBooking(booking);
+            if (existing.getStatus() == PaymentStatus.PENDING && !hasProviderPaymentSession(existing)) {
+                Payment refreshed = refreshPendingPaymentSession(existing);
+                return new PaymentCreationOutcome(toCreatePaymentResponse(refreshed), true);
+            }
+            return new PaymentCreationOutcome(toCreatePaymentResponse(existing), false);
+        }
+
+        validatePayableBooking(booking);
+        Payment created = createNewPendingPayment(booking);
+        return new PaymentCreationOutcome(toCreatePaymentResponse(created), true);
+    }
+
+    private void validatePayableBooking(Booking booking) {
         if (booking.getStatus() == BookingStatus.EXPIRED) {
             throw new BadRequestException("Expired bookings cannot be paid");
         }
-
         if (booking.getExpiresAt().isBefore(Instant.now()) && booking.getStatus() == BookingStatus.PENDING_PAYMENT) {
             booking.setStatus(BookingStatus.EXPIRED);
             bookingRepository.save(booking);
             throw new BadRequestException("Booking payment window has expired");
         }
-
         if (booking.getStatus() != BookingStatus.PENDING_PAYMENT) {
             throw new BadRequestException("Only pending bookings can create payment links");
         }
+    }
 
-        Payment payment = paymentRepository.findByBooking_Id(booking.getId())
-                .orElseGet(() -> createNewPendingPayment(booking));
-
-        payment = refreshPendingPaymentSessionIfMissing(payment);
-
-        return toCreatePaymentResponse(payment);
+    @Override
+    public void cancelPaymentSessionBestEffort(String orderCode, String reason) {
+        if (!hasText(orderCode)) {
+            return;
+        }
+        try {
+            payOsClient.cancelPaymentLink(orderCode, reason);
+        } catch (Exception exception) {
+            log.error("Failed to cancel PayOS payment link {}", orderCode, exception);
+        }
     }
 
     @Override
@@ -251,20 +288,38 @@ public class PaymentServiceImpl implements PaymentService {
 
         int generatedTickets = 0;
         if (incomingStatus == PaymentStatus.SUCCESS) {
-            boolean firstSuccessfulTransition =
-                    oldPaymentStatus != PaymentStatus.SUCCESS || oldBookingStatus != BookingStatus.PAID;
-            if (firstSuccessfulTransition) {
-                commitHeldInventory(booking);
-            }
             payment.setStatus(PaymentStatus.SUCCESS);
             if (payment.getPaidAt() == null) {
                 payment.setPaidAt(providerStatus.paidAt() == null ? Instant.now() : providerStatus.paidAt());
             }
-            booking.setStatus(BookingStatus.PAID);
-            bookingRepository.save(booking);
-            paymentRepository.save(payment);
-            if (firstSuccessfulTransition) {
+
+            boolean needsInventoryCommit = oldBookingStatus != BookingStatus.PAID;
+            InventoryCommitResult inventoryResult = needsInventoryCommit
+                    ? commitCapturedInventory(booking)
+                    : InventoryCommitResult.success();
+
+            if (inventoryResult.committed()) {
+                if (needsInventoryCommit) {
+                    payment.markInventoryCommitted(Instant.now());
+                }
+                booking.setStatus(BookingStatus.PAID);
+                bookingRepository.save(booking);
+                paymentRepository.save(payment);
+            } else {
+                payment.markInventoryReconciliationRequired(inventoryResult.reason());
+                booking.setStatus(BookingStatus.PROCESSING);
+                bookingRepository.save(booking);
+                paymentRepository.save(payment);
+                releaseHoldsAfterCommit(booking);
+                log.error(
+                        "Captured payment requires inventory reconciliation: bookingId={}, orderCode={}, shortage={}",
+                        booking.getId(), payment.getPayosOrderCode(), inventoryResult.description());
+            }
+
+            if (inventoryResult.committed() && needsInventoryCommit) {
                 generatedTickets = ticketGenerationService.generateTicketsIfMissing(booking).size();
+            }
+            if (inventoryResult.committed()) {
                 completePaymentAfterCommit(payment, booking);
             }
         } else if (incomingStatus == PaymentStatus.EXPIRED && oldPaymentStatus == PaymentStatus.PENDING) {
@@ -298,19 +353,39 @@ public class PaymentServiceImpl implements PaymentService {
         return new AppliedPaymentStatus(changed, generatedTickets);
     }
 
-    private void commitHeldInventory(Booking booking) {
+    private InventoryCommitResult commitCapturedInventory(Booking booking) {
         for (BookingItem item : booking.getItems()) {
-            TicketHoldInfo hold = redisTicketHoldService.getHold(item.getHoldId()).orElse(null);
-            if (hold == null || !hold.expiresAt().isAfter(Instant.now())) {
-                throw new BadRequestException("A ticket hold has expired. Please select the tickets again.");
+            TicketHoldInfo hold = null;
+            try {
+                hold = redisTicketHoldService.getHold(item.getHoldId()).orElse(null);
+            } catch (TicketHoldServiceUnavailableException exception) {
+                log.warn(
+                        "Ticket hold evidence unavailable while honoring captured payment: bookingId={}, holdId={}",
+                        booking.getId(),
+                        item.getHoldId(),
+                        exception
+                );
             }
-            boolean matchesItem = item.getHoldId().equals(hold.holdId())
-                    && item.getScheduleId().equals(hold.scheduleId())
-                    && item.getTicketType().name().equals(hold.ticketType())
-                    && item.getQuantity() == hold.quantity()
-                    && booking.getUser().getId().equals(hold.userId());
-            if (!matchesItem) {
-                throw new BadRequestException("A ticket hold does not match the booking item");
+            if (hold != null) {
+                boolean matchesItem = item.getHoldId().equals(hold.holdId())
+                        && item.getScheduleId().equals(hold.scheduleId())
+                        && item.getTicketType().name().equals(hold.ticketType())
+                        && item.getQuantity() == hold.quantity()
+                        && booking.getUser().getId().equals(hold.userId());
+                if (!matchesItem) {
+                    return InventoryCommitResult.reconciliationRequired(
+                            PaymentReconciliationReason.CAPTURED_PAYMENT_HOLD_MISMATCH,
+                            "holdId=" + item.getHoldId());
+                }
+            } else {
+                log.warn(
+                        "Honoring captured payment after ticket hold expiry: bookingId={}, holdId={}, scheduleId={}, ticketType={}, quantity={}",
+                        booking.getId(),
+                        item.getHoldId(),
+                        item.getScheduleId(),
+                        item.getTicketType(),
+                        item.getQuantity()
+                );
             }
         }
 
@@ -322,19 +397,43 @@ public class PaymentServiceImpl implements PaymentService {
                 .toList();
         List<ShowSchedule> schedules = showScheduleRepository.findAllByIdForUpdate(scheduleIds);
         if (schedules.size() != scheduleIds.size()) {
-            throw new BadRequestException("One or more show schedules no longer exist");
+            return InventoryCommitResult.reconciliationRequired(
+                    PaymentReconciliationReason.CAPTURED_PAYMENT_SCHEDULE_MISSING,
+                    "One or more show schedules no longer exist");
         }
         Map<UUID, ShowSchedule> scheduleById = new HashMap<>();
         schedules.forEach(schedule -> scheduleById.put(schedule.getId(), schedule));
 
+        Map<InventoryKey, Integer> requestedByInventory = new HashMap<>();
         for (BookingItem item : booking.getItems()) {
-            ShowSchedule schedule = scheduleById.get(parseScheduleId(item.getScheduleId()));
-            if (schedule == null) {
-                throw new BadRequestException("One or more show schedules no longer exist");
-            }
-            schedule.decrementAvailable(item.getTicketType(), item.getQuantity());
+            InventoryKey key = new InventoryKey(parseScheduleId(item.getScheduleId()), item.getTicketType());
+            requestedByInventory.merge(key, item.getQuantity(), Integer::sum);
+        }
+
+        List<String> shortages = requestedByInventory.entrySet().stream()
+                .filter(entry -> {
+                    ShowSchedule schedule = scheduleById.get(entry.getKey().scheduleId());
+                    return schedule == null || schedule.availableFor(entry.getKey().ticketType()) < entry.getValue();
+                })
+                .map(entry -> {
+                    ShowSchedule schedule = scheduleById.get(entry.getKey().scheduleId());
+                    int available = schedule == null ? 0 : schedule.availableFor(entry.getKey().ticketType());
+                    return entry.getKey().scheduleId() + ":" + entry.getKey().ticketType()
+                            + " requested=" + entry.getValue() + " available=" + available;
+                })
+                .toList();
+        if (!shortages.isEmpty()) {
+            return InventoryCommitResult.reconciliationRequired(
+                    PaymentReconciliationReason.CAPTURED_PAYMENT_INVENTORY_SHORTFALL,
+                    String.join(", ", shortages));
+        }
+
+        for (Map.Entry<InventoryKey, Integer> entry : requestedByInventory.entrySet()) {
+            ShowSchedule schedule = scheduleById.get(entry.getKey().scheduleId());
+            schedule.decrementAvailable(entry.getKey().ticketType(), entry.getValue());
         }
         showScheduleRepository.saveAll(schedules);
+        return InventoryCommitResult.success();
     }
 
     private UUID parseScheduleId(String scheduleId) {
@@ -354,7 +453,11 @@ public class PaymentServiceImpl implements PaymentService {
         );
 
         runAfterCommit(() -> {
-            releaseHolds(booking);
+            try {
+                releaseHolds(booking);
+            } catch (RuntimeException exception) {
+                log.warn("Failed to release paid booking holds: bookingId={}", booking.getId(), exception);
+            }
             paymentCompletedPublisher.publish(message);
         });
     }
@@ -389,17 +492,59 @@ public class PaymentServiceImpl implements PaymentService {
         PayOsPaymentLink payOsPaymentLink = payOsClient.createPaymentLink(booking, payosOrderCode);
         Payment payment = new Payment(booking, payosOrderCode, booking.getTotalAmount(), payOsPaymentLink.checkoutUrl());
         applyPayOsPaymentLink(payment, payOsPaymentLink);
-        return paymentRepository.save(payment);
+        try {
+            return paymentRepository.save(payment);
+        } catch (RuntimeException exception) {
+            cancelPaymentSessionBestEffort(payosOrderCode, "CANCELLED");
+            throw exception;
+        }
     }
 
-    private Payment refreshPendingPaymentSessionIfMissing(Payment payment) {
-        if (payment.getStatus() != PaymentStatus.PENDING || hasProviderPaymentSession(payment)) {
-            return payment;
+    @Override
+    @Transactional
+    public void reconcileCapturedInventory() {
+        List<Payment> candidates = paymentRepository
+                .findTop100ByStatusAndBooking_StatusOrderByCreatedAtAsc(
+                        PaymentStatus.SUCCESS, BookingStatus.PROCESSING);
+        for (Payment candidate : candidates) {
+            try {
+                Payment payment = paymentRepository.findByIdForUpdate(candidate.getId()).orElse(null);
+                if (payment == null
+                        || payment.getStatus() != PaymentStatus.SUCCESS
+                        || payment.getBooking().getStatus() != BookingStatus.PROCESSING) {
+                    continue;
+                }
+                PayOsPaymentStatus captured = new PayOsPaymentStatus(
+                        payment.getPayosOrderCode(),
+                        "SUCCESS",
+                        PaymentStatus.SUCCESS,
+                        payment.getTransactionId(),
+                        payment.getPaidAt(),
+                        payment.getAmount()
+                );
+                AppliedPaymentStatus applied = applyProviderPaymentStatus(
+                        payment, captured, "CAPTURED_INVENTORY_RECONCILIATION");
+                log.info(
+                        "Captured inventory reconciliation paymentId={} bookingId={} changed={} bookingStatus={}",
+                        payment.getId(), payment.getBooking().getId(), applied.changed(),
+                        payment.getBooking().getStatus());
+            } catch (Exception exception) {
+                log.warn(
+                        "Captured inventory reconciliation failed paymentId={} bookingId={}",
+                        candidate.getId(), candidate.getBooking().getId(), exception);
+            }
         }
+    }
 
+    private Payment refreshPendingPaymentSession(Payment payment) {
         PayOsPaymentLink payOsPaymentLink = payOsClient.createPaymentLink(payment.getBooking(), payment.getPayosOrderCode());
         applyPayOsPaymentLink(payment, payOsPaymentLink);
-        return paymentRepository.save(payment);
+        try {
+            return paymentRepository.save(payment);
+        } catch (RuntimeException exception) {
+            cancelPaymentSessionBestEffort(payment.getPayosOrderCode(), "CANCELLED");
+            throw exception;
+        }
     }
 
     private boolean hasProviderPaymentSession(Payment payment) {
@@ -443,7 +588,9 @@ public class PaymentServiceImpl implements PaymentService {
             boolean changed
     ) {
         String message = switch (payment.getStatus()) {
-            case SUCCESS -> "Payment confirmed. Your booking is paid.";
+            case SUCCESS -> payment.getBooking().getStatus() == BookingStatus.PROCESSING
+                    ? "Payment was captured. Your booking is awaiting inventory reconciliation."
+                    : "Payment confirmed. Your booking is paid.";
             case FAILED -> "Payment failed on PayOS.";
             case EXPIRED -> "Payment expired on PayOS.";
             case PENDING -> "Payment is still pending on PayOS. Please wait a moment.";
@@ -462,9 +609,9 @@ public class PaymentServiceImpl implements PaymentService {
     }
 
     private String generateOrderCode(UUID bookingId) {
-        long base = Instant.now().toEpochMilli() % 900_000_000_000L;
-        long suffix = ThreadLocalRandom.current().nextLong(100, 999);
-        return String.valueOf((base * 1000) + suffix);
+        long mixed = bookingId.getMostSignificantBits() ^ Long.rotateLeft(bookingId.getLeastSignificantBits(), 29);
+        long value = 100_000_000_000_000L + Long.remainderUnsigned(mixed, 900_000_000_000_000L);
+        return Long.toString(value);
     }
 
     private CreatePaymentResponse toCreatePaymentResponse(Payment payment) {
@@ -513,5 +660,25 @@ public class PaymentServiceImpl implements PaymentService {
     }
 
     private record AppliedPaymentStatus(boolean changed, int generatedTickets) {
+    }
+
+    private record InventoryKey(UUID scheduleId, TicketType ticketType) {
+    }
+
+    private record InventoryCommitResult(
+            boolean committed,
+            PaymentReconciliationReason reason,
+            String description
+    ) {
+        private static InventoryCommitResult success() {
+            return new InventoryCommitResult(true, null, null);
+        }
+
+        private static InventoryCommitResult reconciliationRequired(
+                PaymentReconciliationReason reason,
+                String description
+        ) {
+            return new InventoryCommitResult(false, reason, description);
+        }
     }
 }

@@ -278,6 +278,21 @@ public class ShowSchedule {
         syncLegacyColumns();
     }
 
+    public int decrementAvailableForCapturedPayment(TicketType type, int quantity) {
+        if (quantity <= 0) {
+            throw new BadRequestException("Quantity must be greater than 0");
+        }
+        int available = availableFor(type);
+        int remaining = Math.max(0, available - quantity);
+        switch (type) {
+            case STANDARD -> standardAvailableTickets = remaining;
+            case VIP -> vipAvailableTickets = remaining;
+            case FAMILY -> familyAvailableTickets = remaining;
+        }
+        syncLegacyColumns();
+        return Math.max(0, quantity - available);
+    }
+
     public int getCapacity() {
         return getTotalCapacity();
     }

@@ -2,6 +2,7 @@ package com.asms.payment.entity;
 
 import com.asms.booking.entity.Booking;
 import com.asms.payment.enums.PaymentStatus;
+import com.asms.payment.enums.PaymentReconciliationReason;
 import jakarta.persistence.Column;
 import jakarta.persistence.Entity;
 import jakarta.persistence.EnumType;
@@ -64,6 +65,13 @@ public class Payment {
 
     @Column
     private Instant paidAt;
+
+    @Column
+    private Instant inventoryCommittedAt;
+
+    @Enumerated(EnumType.STRING)
+    @Column(length = 80)
+    private PaymentReconciliationReason reconciliationReason;
 
     @Column(nullable = false, updatable = false)
     private Instant createdAt;
@@ -191,5 +199,23 @@ public class Payment {
 
     public Instant getCreatedAt() {
         return createdAt;
+    }
+
+    public Instant getInventoryCommittedAt() {
+        return inventoryCommittedAt;
+    }
+
+    public PaymentReconciliationReason getReconciliationReason() {
+        return reconciliationReason;
+    }
+
+    public void markInventoryCommitted(Instant committedAt) {
+        this.inventoryCommittedAt = committedAt == null ? Instant.now() : committedAt;
+        this.reconciliationReason = null;
+    }
+
+    public void markInventoryReconciliationRequired(PaymentReconciliationReason reason) {
+        this.inventoryCommittedAt = null;
+        this.reconciliationReason = reason;
     }
 }

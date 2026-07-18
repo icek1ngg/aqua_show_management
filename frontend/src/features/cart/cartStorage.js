@@ -1,5 +1,5 @@
-export const CART_STORAGE_KEY = 'aquapulse.cart.v1';
-export const CART_STORAGE_VERSION = 1;
+export const CART_STORAGE_KEY = 'aquapulse.cart.v2';
+export const CART_STORAGE_VERSION = 2;
 export const CART_MAX_QUANTITY = 10;
 
 export function normalizeTicketType(ticketType) {
@@ -31,6 +31,10 @@ function clampQuantity(quantity, maxQuantity = CART_MAX_QUANTITY) {
 }
 
 function normalizeItem(item, maxQuantity = CART_MAX_QUANTITY) {
+  if (!item || typeof item !== 'object') return null;
+  const scheduleId = String(item.scheduleId || '').trim();
+  const ticketType = normalizeTicketType(item.ticketType);
+  if (!scheduleId || !['STANDARD', 'VIP', 'FAMILY'].includes(ticketType)) return null;
   let initialQuantity = item?.quantity;
   let ages = item?.ages;
 
@@ -38,7 +42,12 @@ function normalizeItem(item, maxQuantity = CART_MAX_QUANTITY) {
     ages = { adult: initialQuantity ? Number(initialQuantity) : 1, child: 0, senior: 0 };
   }
   
-  const total = (ages.adult || 0) + (ages.child || 0) + (ages.senior || 0);
+  ages = {
+    adult: Math.max(0, Math.trunc(Number(ages.adult) || 0)),
+    child: Math.max(0, Math.trunc(Number(ages.child) || 0)),
+    senior: Math.max(0, Math.trunc(Number(ages.senior) || 0)),
+  };
+  const total = ages.adult + ages.child + ages.senior;
   const clampedQuantity = clampQuantity(total, maxQuantity);
   
   if (total !== clampedQuantity) {
@@ -47,7 +56,8 @@ function normalizeItem(item, maxQuantity = CART_MAX_QUANTITY) {
 
   return {
     ...item,
-    ticketType: normalizeTicketType(item?.ticketType),
+    scheduleId,
+    ticketType,
     quantity: clampedQuantity,
     ages,
   };
@@ -55,6 +65,7 @@ function normalizeItem(item, maxQuantity = CART_MAX_QUANTITY) {
 
 export function addCartItem(items, item, maxQuantity = CART_MAX_QUANTITY) {
   const normalizedItem = normalizeItem(item, maxQuantity);
+  if (!normalizedItem) return Array.isArray(items) ? items : [];
   const key = cartItemKey(normalizedItem);
   const existingIndex = items.findIndex((candidate) => cartItemKey(candidate) === key);
 
@@ -140,6 +151,11 @@ function browserStorage() {
   }
 }
 
+export function cartStorageKey(owner = 'guest') {
+  const normalizedOwner = String(owner || 'guest').trim().toLowerCase().replace(/[^a-z0-9@._-]/g, '_');
+  return `${CART_STORAGE_KEY}:${normalizedOwner || 'guest'}`;
+}
+
 export function readCart(storage) {
   const resolvedStorage = arguments.length === 0 ? browserStorage() : storage;
   if (!resolvedStorage) {
@@ -151,9 +167,34 @@ export function readCart(storage) {
     if (value?.version !== CART_STORAGE_VERSION || !Array.isArray(value.items)) {
       return [];
     }
-    return value.items.map((item) => normalizeItem(item));
+    return value.items.map((item) => normalizeItem(item)).filter(Boolean);
   } catch {
     return [];
+  }
+}
+
+export function readCartForOwner(owner, storage = browserStorage()) {
+  if (!storage) return [];
+  try {
+    const value = JSON.parse(storage.getItem(cartStorageKey(owner)));
+    if (value?.version !== CART_STORAGE_VERSION || value?.owner !== String(owner || 'guest') || !Array.isArray(value.items)) return [];
+    return value.items.map((item) => normalizeItem(item)).filter(Boolean);
+  } catch {
+    return [];
+  }
+}
+
+export function writeCartForOwner(owner, items, storage = browserStorage()) {
+  if (!storage) return;
+  const normalizedItems = (Array.isArray(items) ? items : []).map((item) => normalizeItem(item)).filter(Boolean);
+  try {
+    storage.setItem(cartStorageKey(owner), JSON.stringify({
+      version: CART_STORAGE_VERSION,
+      owner: String(owner || 'guest'),
+      items: normalizedItems,
+    }));
+  } catch {
+    // Persistence remains best-effort.
   }
 }
 

@@ -6,40 +6,33 @@ import { useCart } from '../cart/CartContext.jsx';
 import CartItemCard from '../cart/CartItemCard.jsx';
 import CartOrderSummary from '../cart/CartOrderSummary.jsx';
 import {
-  buildCheckoutPayload,
+  canAddCartLineToSelection,
   reviewCartLine,
+  selectCartLinesWithinLimit,
   selectedCartTotals,
 } from '../cart/cartCheckout.js';
 import { cartItemKey } from '../cart/cartStorage.js';
-import { createBooking } from '../../services/bookingService.js';
 import { getSchedule } from '../../services/showService.js';
 import MainLayout from '../../shared/layouts/MainLayout.jsx';
-
-function bookingErrorMessage(error) {
-  if (error?.response?.status === 409) return 'Ticket availability changed. We refreshed the cart with the latest information.';
-  if (error?.response?.status === 503) return 'Booking service is temporarily unavailable. Please try again.';
-  const errors = error?.response?.data?.errors;
-  if (errors) return Object.values(errors).filter(Boolean).join(' ');
-  return error?.response?.data?.message || error?.message || 'Could not create the booking.';
-}
+import { saveCheckoutDraft } from '../checkout/checkoutDraft.js';
+import { CHECKOUT_QUANTITY_ERROR, MAX_CHECKOUT_TICKETS } from '../checkout/checkoutPolicy.js';
 
 function requestId() {
   return globalThis.crypto?.randomUUID?.() || `cart-${Date.now()}-${Math.random().toString(16).slice(2)}`;
 }
 
 export default function CreateBookingPage() {
-  const { items, updateQuantity, removeItem, removeItems } = useCart();
+  const { items, updateQuantity, removeItem } = useCart();
   const { isAuthenticated, loading: authLoading } = useAuth();
   const navigate = useNavigate();
   const location = useLocation();
   const initializedSelection = useRef(false);
+  const selectAllRef = useRef(null);
   const [lines, setLines] = useState([]);
   const [selectedKeys, setSelectedKeys] = useState(new Set());
   const [reviewedKeys, setReviewedKeys] = useState(new Set());
   const [isLoading, setIsLoading] = useState(true);
-  const [isSubmitting, setIsSubmitting] = useState(false);
   const [error, setError] = useState('');
-  const [refreshKey, setRefreshKey] = useState(0);
 
   useEffect(() => {
     let active = true;
@@ -67,9 +60,9 @@ export default function CreateBookingPage() {
         setSelectedKeys((current) => {
           if (!initializedSelection.current) {
             initializedSelection.current = true;
-            return new Set(nextLines.filter((line) => line.checkoutAvailable && !line.requiresReview).map((line) => line.key));
+            return selectCartLinesWithinLimit(nextLines, line => !line.requiresReview);
           }
-          return new Set([...current].filter((key) => availableKeys.has(key)));
+          return selectCartLinesWithinLimit(nextLines, line => current.has(line.key) && availableKeys.has(line.key));
         });
         setReviewedKeys((current) => new Set([...current].filter((key) => availableKeys.has(key))));
       })
@@ -77,18 +70,63 @@ export default function CreateBookingPage() {
       .finally(() => active && setIsLoading(false));
 
     return () => { active = false; };
-  }, [items, refreshKey]);
+  }, [items]);
 
   const totals = useMemo(() => selectedCartTotals(lines, selectedKeys), [lines, selectedKeys]);
+  const readyLineCount = lines.filter(
+    (line) => line.checkoutAvailable && (!line.requiresReview || reviewedKeys.has(line.key)),
+  ).length;
+  const bulkSelectableKeys = useMemo(
+    () => selectCartLinesWithinLimit(
+      lines,
+      (line) => !line.requiresReview || reviewedKeys.has(line.key),
+    ),
+    [lines, reviewedKeys],
+  );
+  const bulkSelectionIsCapped = bulkSelectableKeys.size < readyLineCount;
+  const allSelectableLinesSelected = bulkSelectableKeys.size > 0
+    && [...bulkSelectableKeys].every((key) => selectedKeys.has(key));
+  const someSelectableLinesSelected = [...bulkSelectableKeys].some((key) => selectedKeys.has(key));
   const hasPendingReview = lines.some((line) => selectedKeys.has(line.key) && line.requiresReview && !reviewedKeys.has(line.key));
 
+  useEffect(() => {
+    if (selectAllRef.current) {
+      selectAllRef.current.indeterminate = someSelectableLinesSelected && !allSelectableLinesSelected;
+    }
+  }, [allSelectableLinesSelected, someSelectableLinesSelected]);
+
   const toggleLine = (key) => {
-    setSelectedKeys((current) => {
-      const next = new Set(current);
-      if (next.has(key)) next.delete(key); else next.add(key);
-      return next;
-    });
+    const next = new Set(selectedKeys);
+    if (next.has(key)) {
+      next.delete(key);
+    } else if (canAddCartLineToSelection(lines, selectedKeys, key)) {
+      next.add(key);
+    } else {
+      setError(CHECKOUT_QUANTITY_ERROR);
+      return;
+    }
     setError('');
+    setSelectedKeys(next);
+  };
+
+  const toggleAllLines = () => {
+    setError('');
+    setSelectedKeys(allSelectableLinesSelected ? new Set() : new Set(bulkSelectableKeys));
+  };
+
+  const changeQuantity = (key, quantity, maxQuantity, ages) => {
+    const selectedLine = lines.find(line => line.key === key);
+    const currentQuantity = Number(selectedLine?.quantity) || 0;
+    const otherSelectedTickets = selectedKeys.has(key) ? totals.tickets - currentQuantity : 0;
+    const checkoutMaximum = selectedKeys.has(key)
+      ? Math.min(Number(maxQuantity), MAX_CHECKOUT_TICKETS - otherSelectedTickets)
+      : Number(maxQuantity);
+    if (Number(quantity) > checkoutMaximum) {
+      setError(CHECKOUT_QUANTITY_ERROR);
+      return;
+    }
+    setError('');
+    updateQuantity(key, quantity, checkoutMaximum, ages);
   };
 
   const removeLine = (key) => {
@@ -102,12 +140,17 @@ export default function CreateBookingPage() {
 
   const acceptReview = (line) => {
     setReviewedKeys((current) => new Set(current).add(line.key));
-    setSelectedKeys((current) => new Set(current).add(line.key));
-    updateQuantity(line.key, line.quantity, Math.min(10, line.availableTickets));
+    if (selectedKeys.has(line.key) || canAddCartLineToSelection(lines, selectedKeys, line.key)) {
+      setSelectedKeys(new Set(selectedKeys).add(line.key));
+      setError('');
+    } else {
+      setError(CHECKOUT_QUANTITY_ERROR);
+    }
+    updateQuantity(line.key, line.quantity, Math.min(MAX_CHECKOUT_TICKETS, line.availableTickets));
   };
 
-  const handleContinue = async () => {
-    if (authLoading || isSubmitting) return;
+  const handleContinue = () => {
+    if (authLoading) return;
     if (!isAuthenticated) {
       navigate('/login', { state: { from: location } });
       return;
@@ -118,25 +161,39 @@ export default function CreateBookingPage() {
       setError(unreviewed ? 'Review updated cart items before continuing.' : 'Select at least one available ticket.');
       return;
     }
+    if (selectedLines.reduce((sum, line) => sum + Number(line.quantity), 0) > MAX_CHECKOUT_TICKETS) {
+      setError(CHECKOUT_QUANTITY_ERROR);
+      return;
+    }
 
-    const checkedOutKeys = new Set(selectedLines.map((line) => line.key || cartItemKey(line)));
-    const payload = buildCheckoutPayload(lines, checkedOutKeys, requestId());
+    const checkedOutKeys = Array.from(new Set(selectedLines.map((line) => line.key || cartItemKey(line))));
+    
+    const draft = {
+      idempotencyKey: requestId(),
+      cartKeys: checkedOutKeys,
+      items: selectedLines.flatMap(line => Object.entries(line.ages || { adult: line.quantity })
+        .filter(([, quantity]) => Number(quantity) > 0)
+        .map(([passengerType, quantity]) => ({
+          scheduleId: String(line.scheduleId),
+          ticketType: line.ticketType,
+          passengerType: passengerType.toUpperCase(),
+          quantity: Math.trunc(Number(quantity)),
+          expectedUnitPrice: Number(line.unitPrice),
+          displaySnapshot: {
+            showTitle: line.showTitle,
+            imageUrl: line.imageUrl,
+            venueName: line.venueName,
+            startTime: line.startTime,
+            endTime: line.endTime
+          }
+        })))
+    };
+    
     try {
-      setIsSubmitting(true);
-      setError('');
-      const response = await createBooking(payload);
-      if (!response?.bookingId) throw new Error('Booking ID was not returned.');
-      removeItems(checkedOutKeys);
-      navigate(`/bookings/${response.bookingId}/payment`);
-    } catch (submitError) {
-      if (submitError?.response?.status === 401) {
-        navigate('/login', { state: { from: location } });
-        return;
-      }
-      setError(bookingErrorMessage(submitError));
-      if (submitError?.response?.status === 409) setRefreshKey((value) => value + 1);
-    } finally {
-      setIsSubmitting(false);
+      saveCheckoutDraft(draft);
+      navigate('/checkout/payment');
+    } catch {
+      setError('The checkout selection is invalid. Review the selected tickets and try again.');
     }
   };
 
@@ -167,25 +224,47 @@ export default function CreateBookingPage() {
           ) : (
             <div className="grid items-start gap-8 lg:grid-cols-[minmax(0,1fr)_380px]">
               <section className="space-y-5">
-                {isLoading ? <div className="rounded-[2rem] bg-white p-10 text-center font-black text-cyan-700">Refreshing prices and availability...</div> : lines.map((line) => (
-                  <CartItemCard
-                    checked={selectedKeys.has(line.key)}
-                    key={line.key}
-                    line={line}
-                    reviewed={reviewedKeys.has(line.key)}
-                    onAcceptReview={acceptReview}
-                    onQuantity={updateQuantity}
-                    onRemove={removeLine}
-                    onToggle={toggleLine}
-                  />
-                ))}
+                {isLoading ? (
+                  <div className="rounded-[2rem] bg-white p-10 text-center font-black text-cyan-700">Refreshing prices and availability...</div>
+                ) : (
+                  <>
+                    <div className="flex flex-wrap items-center justify-between gap-3 rounded-2xl border border-cyan-100 bg-white px-5 py-4 shadow-sm sm:px-6">
+                      <label className="flex cursor-pointer items-center gap-3 font-black text-slate-800">
+                        <input
+                          aria-checked={someSelectableLinesSelected && !allSelectableLinesSelected ? 'mixed' : allSelectableLinesSelected}
+                          aria-label="Select all available cart items"
+                          checked={allSelectableLinesSelected}
+                          className="h-5 w-5 cursor-pointer rounded border-slate-300 accent-cyan-700 focus:ring-2 focus:ring-cyan-500 focus:ring-offset-2 disabled:cursor-not-allowed disabled:opacity-40"
+                          disabled={bulkSelectableKeys.size === 0}
+                          ref={selectAllRef}
+                          type="checkbox"
+                          onChange={toggleAllLines}
+                        />
+                        {bulkSelectionIsCapped ? `Select up to ${MAX_CHECKOUT_TICKETS} tickets` : 'Select all'}
+                      </label>
+                      <p className="text-sm font-semibold text-slate-500">Up to {MAX_CHECKOUT_TICKETS} tickets per checkout</p>
+                    </div>
+                    {lines.map((line) => (
+                      <CartItemCard
+                        checked={selectedKeys.has(line.key)}
+                        key={line.key}
+                        line={line}
+                        maxSelectedQuantity={selectedKeys.has(line.key) ? MAX_CHECKOUT_TICKETS - totals.tickets + Number(line.quantity) : MAX_CHECKOUT_TICKETS}
+                        reviewed={reviewedKeys.has(line.key)}
+                        onAcceptReview={acceptReview}
+                        onQuantity={changeQuantity}
+                        onRemove={removeLine}
+                        onToggle={toggleLine}
+                      />
+                    ))}
+                  </>
+                )}
               </section>
               <CartOrderSummary
                 authenticated={isAuthenticated}
                 error={error}
                 hasPendingReview={hasPendingReview}
                 isLoading={isLoading || authLoading}
-                isSubmitting={isSubmitting}
                 totals={totals}
                 onContinue={handleContinue}
               />

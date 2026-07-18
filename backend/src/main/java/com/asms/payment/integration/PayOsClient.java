@@ -1,11 +1,14 @@
 package com.asms.payment.integration;
 
 import com.asms.booking.entity.Booking;
+import com.asms.booking.entity.BookingItem;
 import com.asms.core.exception.BadRequestException;
+import com.asms.core.exception.ServiceUnavailableException;
 import com.asms.payment.dto.PayOsCallbackRequest;
 import com.fasterxml.jackson.core.JsonProcessingException;
 import com.fasterxml.jackson.databind.JsonNode;
 import com.fasterxml.jackson.databind.ObjectMapper;
+import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.beans.factory.annotation.Value;
 import org.springframework.http.MediaType;
 import org.springframework.stereotype.Component;
@@ -49,6 +52,7 @@ public class PayOsClient {
     private final RestClient restClient;
     private final ObjectMapper objectMapper;
 
+    @Autowired
     public PayOsClient(
             @Value("${asms.payos.client-id}") String clientId,
             @Value("${asms.payos.api-key}") String apiKey,
@@ -58,6 +62,28 @@ public class PayOsClient {
             @Value("${asms.frontend.base-url}") String frontendBaseUrl,
             ObjectMapper objectMapper
     ) {
+        this(
+                clientId,
+                apiKey,
+                checksumKey,
+                allowUnsignedCallbacks,
+                activeProfiles,
+                frontendBaseUrl,
+                objectMapper,
+                RestClient.builder().baseUrl(PAYOS_BASE_URL).build()
+        );
+    }
+
+    PayOsClient(
+            String clientId,
+            String apiKey,
+            String checksumKey,
+            boolean allowUnsignedCallbacks,
+            String activeProfiles,
+            String frontendBaseUrl,
+            ObjectMapper objectMapper,
+            RestClient restClient
+    ) {
         this.clientId = clientId;
         this.apiKey = apiKey;
         this.checksumKey = checksumKey;
@@ -65,19 +91,20 @@ public class PayOsClient {
         this.activeProfiles = activeProfiles == null ? "" : activeProfiles;
         this.frontendBaseUrl = frontendBaseUrl;
         this.objectMapper = objectMapper;
-        this.restClient = RestClient.builder()
-                .baseUrl(PAYOS_BASE_URL)
-                .build();
+        this.restClient = restClient;
     }
 
     public PayOsPaymentLink createPaymentLink(Booking booking, String payosOrderCode) {
         if (clientId == null || clientId.isBlank() || apiKey == null || apiKey.isBlank() || checksumKey == null || checksumKey.isBlank()) {
-            return new PayOsPaymentLink(createLocalPaymentLink(booking, payosOrderCode, "pending"), null, null, null, null, null, booking.getTotalAmount(), buildDescription(payosOrderCode));
+            throw new ServiceUnavailableException("PayOS payment service is not configured");
         }
+        if (booking == null || booking.getTotalAmount() == null) {
+            throw new BadRequestException("A booking with a total amount is required to create a PayOS payment link");
+        }
+        long amount = toPayOsVndAmount(booking.getTotalAmount());
+        List<Map<String, Object>> items = buildPayOsItems(booking, amount);
 
         long orderCode = Long.parseLong(payosOrderCode);
-        long amount = toPayOsVndAmount(booking.getTotalAmount());
-        long itemPrice = toPayOsVndAmount(booking.getUnitPrice());
         String returnUrl = createLocalPaymentLink(booking, payosOrderCode, "pending");
         String cancelUrl = createLocalPaymentLink(booking, payosOrderCode, "failed");
         String description = buildDescription(payosOrderCode);
@@ -94,11 +121,7 @@ public class PayOsClient {
         request.put("buyerName", booking.getUser().getFullName());
         request.put("buyerEmail", booking.getUser().getEmail());
         request.put("buyerPhone", booking.getUser().getPhoneNumber());
-        request.put("items", java.util.List.of(Map.of(
-                "name", booking.getShowName(),
-                "quantity", booking.getQuantity(),
-                "price", itemPrice
-        )));
+        request.put("items", items);
         request.put("cancelUrl", cancelUrl);
         request.put("returnUrl", returnUrl);
         request.put("expiredAt", booking.getExpiresAt().getEpochSecond());
@@ -134,6 +157,65 @@ public class PayOsClient {
                 data.path("amount").isMissingNode() ? booking.getTotalAmount() : data.path("amount").decimalValue(),
                 data.path("description").asText(description)
         );
+    }
+
+    private List<Map<String, Object>> buildPayOsItems(Booking booking, long bookingAmount) {
+        List<BookingItem> bookingItems = booking.getItems();
+        if (bookingItems == null || bookingItems.isEmpty()) {
+            throw new BadRequestException("Cannot create a PayOS payment link for a booking without items");
+        }
+
+        long mappedTotal = 0;
+        List<Map<String, Object>> payOsItems = new java.util.ArrayList<>(bookingItems.size());
+        for (BookingItem item : bookingItems) {
+            if (item == null
+                    || item.getShowName() == null || item.getShowName().isBlank()
+                    || item.getTicketType() == null
+                    || item.getQuantity() == null || item.getQuantity() <= 0
+                    || item.getUnitPrice() == null) {
+                throw new BadRequestException("Cannot create a PayOS payment link from an incomplete booking item");
+            }
+
+            long unitPrice = toPayOsVndAmount(item.getUnitPrice());
+            try {
+                mappedTotal = Math.addExact(mappedTotal, Math.multiplyExact(unitPrice, item.getQuantity().longValue()));
+            } catch (ArithmeticException overflow) {
+                throw new BadRequestException("PayOS booking item total is too large");
+            }
+            payOsItems.add(Map.of(
+                    "name", item.getShowName().trim() + " - " + item.getTicketType().name()
+                            + " - " + item.getPassengerType().name(),
+                    "quantity", item.getQuantity(),
+                    "price", unitPrice
+            ));
+        }
+
+        if (mappedTotal != bookingAmount) {
+            throw new BadRequestException(
+                    "PayOS item total " + mappedTotal + " does not match booking total " + bookingAmount
+            );
+        }
+        return List.copyOf(payOsItems);
+    }
+
+    public void cancelPaymentLink(String orderCode, String cancellationReason) {
+        if (clientId == null || clientId.isBlank() || apiKey == null || apiKey.isBlank()) {
+            return;
+        }
+
+        try {
+            Map<String, Object> request = Map.of("cancellationReason", cancellationReason == null ? "CANCELLED" : cancellationReason);
+            restClient.post()
+                    .uri("/v2/payment-requests/{id}/cancel", orderCode)
+                    .contentType(MediaType.APPLICATION_JSON)
+                    .header("x-client-id", clientId)
+                    .header("x-api-key", apiKey)
+                    .body(request)
+                    .retrieve()
+                    .toBodilessEntity();
+        } catch (Exception e) {
+            log.warn("Failed to cancel PayOS payment link for order {}: {}", orderCode, e.getMessage());
+        }
     }
 
     public PayOsPaymentStatus getPaymentStatus(String orderCodeOrPaymentLinkId) {

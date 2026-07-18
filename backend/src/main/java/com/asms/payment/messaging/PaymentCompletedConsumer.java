@@ -49,7 +49,7 @@ public class PaymentCompletedConsumer {
                 message.payosOrderCode()
         );
 
-        Booking booking = bookingRepository.findById(message.bookingId())
+        Booking booking = bookingRepository.findByIdForUpdate(message.bookingId())
                 .orElseThrow(() -> new IllegalStateException("Booking not found for payment completed message: " + message.bookingId()));
 
         if (booking.getStatus() != BookingStatus.PAID) {

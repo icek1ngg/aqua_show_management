@@ -11,6 +11,7 @@ import {
   validatePhone,
 } from '../../shared/utils/validation.js';
 import { useAuth } from './AuthContext.jsx';
+import { buildRegistrationPayload, REGISTRATION_LIMITS } from './registrationForm.js';
 
 const registerBubbles = [
   {
@@ -159,15 +160,6 @@ function BubbleLayer({ bubbles }) {
   );
 }
 
-function splitFullName(fullName) {
-  const parts = fullName.trim().split(/\s+/).filter(Boolean);
-
-  return {
-    lastName: parts[0] || '',
-    firstMiddleName: parts.slice(1).join(' '),
-  };
-}
-
 function FieldError({ children }) {
   if (!children) {
     return null;
@@ -210,7 +202,8 @@ export default function RegisterPage() {
     event.preventDefault();
 
     const formData = new FormData(event.currentTarget);
-    const fullName = String(formData.get('fullName') || '').trim();
+    const lastName = String(formData.get('lastName') || '').trim();
+    const firstMiddleName = String(formData.get('firstMiddleName') || '').trim();
     const email = String(formData.get('email') || '').trim();
     const phone = String(formData.get('phone') || '').trim();
     const password = String(formData.get('password') || '');
@@ -222,18 +215,14 @@ export default function RegisterPage() {
     setFieldErrors({});
 
     const nextErrors = {
-      fullName: validateName(fullName, 'Full name', { min: 2 }),
+      lastName: validateName(lastName, 'Last name', { min: 1 }),
+      firstMiddleName: validateName(firstMiddleName, 'First and middle name', { min: 1 }),
       email: validateEmail(email),
       phone: validatePhone(phone),
       password: validatePassword(password),
       confirmPassword: password === confirmPassword ? '' : 'Password confirmation does not match.',
       acceptedTerms: acceptedTerms ? '' : 'Please agree to the Terms and Conditions and Privacy Policy.',
     };
-
-    const { lastName, firstMiddleName } = splitFullName(fullName);
-    if (!nextErrors.fullName && !firstMiddleName) {
-      nextErrors.fullName = 'Please enter both last name and first or middle name.';
-    }
 
     const activeErrors = Object.fromEntries(Object.entries(nextErrors).filter(([, message]) => message));
     if (Object.keys(activeErrors).length > 0) {
@@ -245,14 +234,20 @@ export default function RegisterPage() {
     setIsSubmitting(true);
 
     try {
-      await register({
+      const response = await register(buildRegistrationPayload({
         lastName,
         firstMiddleName,
         email,
         phoneNumber: phone,
         password,
-      });
-      setSuccessMessage('Registration successful. Please check your email to verify your account.');
+        acceptedTerms,
+      }));
+      const verificationEmailSent = response?.data?.verificationEmailSent ?? response?.verificationEmailSent;
+      setSuccessMessage(
+        verificationEmailSent
+          ? 'Account created. Check your email to verify it.'
+          : 'Account created, but the verification email could not be sent. Go to sign in and request another email.',
+      );
     } catch (error) {
       setErrorMessage(error.message);
     } finally {
@@ -316,7 +311,7 @@ export default function RegisterPage() {
                 <div className="rounded-2xl border border-emerald-100 bg-emerald-50/90 p-8 text-sm font-semibold text-emerald-800 shadow-sm backdrop-blur" role="status">
                   <p className="text-lg font-bold mb-4 text-emerald-950">{successMessage}</p>
                   <p className="text-slate-600 font-normal mb-8 leading-relaxed">
-                    We've sent a verification link to your email. Click the link to activate your AquaPulse account and sign in.
+                    Continue to sign in when you are ready.
                   </p>
                   <Link
                     to="/login"
@@ -329,25 +324,50 @@ export default function RegisterPage() {
               </div>
             ) : (
               <form className="space-y-6" onSubmit={handleSubmit}>
-              <div className="space-y-2">
-                <label className="ml-1 block text-sm font-bold text-slate-600" htmlFor="register-name">
-                  Full Name
-                </label>
-                <div className="group relative">
-                  <span className="material-symbols-outlined absolute left-4 top-1/2 -translate-y-1/2 text-slate-400 transition group-focus-within:text-cyan-700">
-                    person
-                  </span>
-                  <input
-                    className="w-full rounded-full border border-transparent bg-cyan-50/70 py-4 pl-12 pr-4 text-slate-900 outline-none transition focus:border-cyan-500 focus:bg-white focus:ring-2 focus:ring-cyan-200"
-                    id="register-name"
-                    name="fullName"
-                    placeholder="John Doe"
-                    required
-                    type="text"
-                    onChange={() => clearFieldError('fullName')}
-                  />
+              <div className="grid grid-cols-1 gap-4 md:grid-cols-2">
+                <div className="space-y-2">
+                  <label className="ml-1 block text-sm font-bold text-slate-600" htmlFor="register-last-name">
+                    Last Name
+                  </label>
+                  <div className="group relative">
+                    <span className="material-symbols-outlined absolute left-4 top-1/2 -translate-y-1/2 text-slate-400 transition group-focus-within:text-cyan-700">
+                      person
+                    </span>
+                    <input
+                      className="w-full rounded-full border border-transparent bg-cyan-50/70 py-4 pl-12 pr-4 text-slate-900 outline-none transition focus:border-cyan-500 focus:bg-white focus:ring-2 focus:ring-cyan-200"
+                      id="register-last-name"
+                      name="lastName"
+                      maxLength={REGISTRATION_LIMITS.lastName}
+                      placeholder="Nguyen"
+                      required
+                      type="text"
+                      onChange={() => clearFieldError('lastName')}
+                    />
+                  </div>
+                  <FieldError>{fieldErrors.lastName}</FieldError>
                 </div>
-                <FieldError>{fieldErrors.fullName}</FieldError>
+
+                <div className="space-y-2">
+                  <label className="ml-1 block text-sm font-bold text-slate-600" htmlFor="register-first-middle-name">
+                    First and Middle Name
+                  </label>
+                  <div className="group relative">
+                    <span className="material-symbols-outlined absolute left-4 top-1/2 -translate-y-1/2 text-slate-400 transition group-focus-within:text-cyan-700">
+                      person
+                    </span>
+                    <input
+                      className="w-full rounded-full border border-transparent bg-cyan-50/70 py-4 pl-12 pr-4 text-slate-900 outline-none transition focus:border-cyan-500 focus:bg-white focus:ring-2 focus:ring-cyan-200"
+                      id="register-first-middle-name"
+                      name="firstMiddleName"
+                      maxLength={REGISTRATION_LIMITS.firstMiddleName}
+                      placeholder="Van A"
+                      required
+                      type="text"
+                      onChange={() => clearFieldError('firstMiddleName')}
+                    />
+                  </div>
+                  <FieldError>{fieldErrors.firstMiddleName}</FieldError>
+                </div>
               </div>
 
               <div className="grid grid-cols-1 gap-4 md:grid-cols-2">
@@ -363,6 +383,7 @@ export default function RegisterPage() {
                       className="w-full rounded-full border border-transparent bg-cyan-50/70 py-4 pl-12 pr-4 text-slate-900 outline-none transition focus:border-cyan-500 focus:bg-white focus:ring-2 focus:ring-cyan-200"
                       id="register-email"
                       name="email"
+                      maxLength={REGISTRATION_LIMITS.email}
                       placeholder="john@example.com"
                       required
                       type="email"
@@ -385,6 +406,7 @@ export default function RegisterPage() {
                       id="register-phone"
                       inputMode="numeric"
                       name="phone"
+                      maxLength={REGISTRATION_LIMITS.phoneNumber}
                       pattern="[0-9]*"
                       placeholder="0123456789"
                       type="tel"
@@ -409,6 +431,7 @@ export default function RegisterPage() {
                       className="w-full rounded-full border border-transparent bg-cyan-50/70 py-4 pl-12 pr-12 text-slate-900 outline-none transition focus:border-cyan-500 focus:bg-white focus:ring-2 focus:ring-cyan-200"
                       id="register-password"
                       name="password"
+                      maxLength={REGISTRATION_LIMITS.password}
                       placeholder="••••••••"
                       required
                       type={showPassword ? 'text' : 'password'}
@@ -440,6 +463,7 @@ export default function RegisterPage() {
                       className="w-full rounded-full border border-transparent bg-cyan-50/70 py-4 pl-12 pr-12 text-slate-900 outline-none transition focus:border-cyan-500 focus:bg-white focus:ring-2 focus:ring-cyan-200"
                       id="register-confirm-password"
                       name="confirmPassword"
+                      maxLength={REGISTRATION_LIMITS.password}
                       placeholder="••••••••"
                       required
                       type={showConfirmPassword ? 'text' : 'password'}

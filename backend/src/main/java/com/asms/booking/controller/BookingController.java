@@ -1,7 +1,6 @@
 package com.asms.booking.controller;
 
 import com.asms.booking.dto.BookingDtos.BookingResponse;
-import com.asms.booking.dto.BookingDtos.CreateBookingRequest;
 import com.asms.booking.dto.BookingDtos.CreateBookingResponse;
 import com.asms.booking.dto.BookingDtos.DevSampleBookingBatchRequest;
 import com.asms.booking.dto.BookingDtos.DevSampleBookingRequest;
@@ -34,10 +33,15 @@ public class BookingController {
         this.bookingService = bookingService;
     }
 
-    @PostMapping
+    /**
+     * Kept temporarily for source compatibility with internal callers. There is deliberately no
+     * request mapping: production booking creation is only available through
+     * POST /api/checkout/start-payment.
+     */
+    @Deprecated(forRemoval = true)
     public ApiResponse<CreateBookingResponse> createBooking(
             @AuthenticationPrincipal User user,
-            @Valid @RequestBody CreateBookingRequest request
+            com.asms.booking.dto.BookingDtos.CreateBookingRequest request
     ) {
         return ApiResponse.success(
                 "Booking created successfully.",
@@ -49,12 +53,18 @@ public class BookingController {
     public ApiResponse<PageBookingResponse> getMyBookings(
             @AuthenticationPrincipal User user,
             @RequestParam(name = "page", defaultValue = "0") int page,
-            @RequestParam(name = "size", defaultValue = "5") int size
+            @RequestParam(name = "size", defaultValue = "5") int size,
+            @RequestParam(name = "q", required = false) String keyword,
+            @RequestParam(name = "status", required = false) String status
     ) {
         return ApiResponse.success(
                 "Bookings fetched successfully",
-                bookingService.getMyBookings(currentUserEmail(user), page, size)
+                bookingService.getMyBookings(currentUserEmail(user), page, size, keyword, status)
         );
+    }
+
+    public ApiResponse<PageBookingResponse> getMyBookings(User user, int page, int size) {
+        return getMyBookings(user, page, size, null, null);
     }
 
     @GetMapping("/{id}")

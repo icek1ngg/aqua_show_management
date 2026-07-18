@@ -25,6 +25,7 @@ public class RedisTicketHoldServiceImpl implements RedisTicketHoldService {
 
     private static final Logger log = LoggerFactory.getLogger(RedisTicketHoldServiceImpl.class);
     private static final Duration HOLD_TTL = Duration.ofMinutes(15);
+    private static final Duration ACTIVE_HOLDS_INDEX_GRACE = Duration.ofMinutes(5);
     private static final String INVENTORY_PREFIX = "booking:inventory:";
     private static final String HOLD_PREFIX = "booking:hold:";
     private static final String ACTIVE_HOLDS_PREFIX = "booking:active-holds:";
@@ -65,6 +66,10 @@ public class RedisTicketHoldServiceImpl implements RedisTicketHoldService {
               'expiresAt', ARGV[7])
             redis.call('EXPIRE', KEYS[2], tonumber(ARGV[8]))
             redis.call('ZADD', KEYS[3], tonumber(ARGV[11]), ARGV[2])
+            local latest = redis.call('ZRANGE', KEYS[3], -1, -1, 'WITHSCORES')
+            if #latest == 2 then
+              redis.call('EXPIREAT', KEYS[3], tonumber(latest[2]) + tonumber(ARGV[12]))
+            end
             return {'1', ARGV[2], tostring(available - requested), ARGV[7]}
             """,
             List.class
@@ -88,6 +93,12 @@ public class RedisTicketHoldServiceImpl implements RedisTicketHoldService {
                 redis.call('ZREM', KEYS[2], holdId)
               end
             end
+            local latest = redis.call('ZRANGE', KEYS[2], -1, -1, 'WITHSCORES')
+            if #latest == 2 then
+              redis.call('EXPIREAT', KEYS[2], tonumber(latest[2]) + tonumber(ARGV[3]))
+            else
+              redis.call('DEL', KEYS[2])
+            end
             local inventory = tonumber(redis.call('GET', KEYS[1]) or '0')
             return math.max(0, inventory - activeHeld)
             """,
@@ -101,8 +112,15 @@ public class RedisTicketHoldServiceImpl implements RedisTicketHoldService {
             if not scheduleId or not ticketType then
               return 0
             end
-            redis.call('ZREM', ARGV[1] .. scheduleId .. ':' .. ticketType, ARGV[2])
+            local activeKey = ARGV[1] .. scheduleId .. ':' .. ticketType
+            redis.call('ZREM', activeKey, ARGV[2])
             redis.call('DEL', KEYS[1])
+            local latest = redis.call('ZRANGE', activeKey, -1, -1, 'WITHSCORES')
+            if #latest == 2 then
+              redis.call('EXPIREAT', activeKey, tonumber(latest[2]) + tonumber(ARGV[3]))
+            else
+              redis.call('DEL', activeKey)
+            end
             return 1
             """,
             Long.class
@@ -155,7 +173,8 @@ public class RedisTicketHoldServiceImpl implements RedisTicketHoldService {
                     String.valueOf(HOLD_TTL.toSeconds()),
                     String.valueOf(createdAt.getEpochSecond()),
                     holdKeyPrefix(),
-                    String.valueOf(expiresAt.getEpochSecond())
+                    String.valueOf(expiresAt.getEpochSecond()),
+                    String.valueOf(ACTIVE_HOLDS_INDEX_GRACE.toSeconds())
             );
 
             int remaining = parseRemaining(result);
@@ -182,7 +201,8 @@ public class RedisTicketHoldServiceImpl implements RedisTicketHoldService {
                     AVAILABLE_SCRIPT,
                     List.of(inventoryKey(scheduleId, type), activeHoldsKey(scheduleId, type)),
                     String.valueOf(Instant.now().getEpochSecond()),
-                    holdKeyPrefix()
+                    holdKeyPrefix(),
+                    String.valueOf(ACTIVE_HOLDS_INDEX_GRACE.toSeconds())
             );
             return Math.max(0, result == null ? 0 : result.intValue());
         } catch (DataAccessException exception) {
@@ -197,7 +217,8 @@ public class RedisTicketHoldServiceImpl implements RedisTicketHoldService {
                     RELEASE_SCRIPT,
                     List.of(holdKey(holdId)),
                     ACTIVE_HOLDS_PREFIX,
-                    holdId
+                    holdId,
+                    String.valueOf(ACTIVE_HOLDS_INDEX_GRACE.toSeconds())
             );
         } catch (DataAccessException exception) {
             throw unavailable("releaseHold", null, null, holdId, exception);

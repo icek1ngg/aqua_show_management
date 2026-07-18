@@ -39,7 +39,9 @@ services:
       RABBITMQ_DEFAULT_USER: ${RABBITMQ_DEFAULT_USER:-asms_user}
       RABBITMQ_DEFAULT_PASS: ${RABBITMQ_DEFAULT_PASS:-asms_password}
     ports:
-      - "5672:5672"
+      # Windows reserves the default host port 5672 on some Docker Desktop setups.
+      # Keep RabbitMQ's management UI on 15672 and expose AMQP separately on 61672.
+      - "61672:5672"
       - "15672:15672"
     volumes:
       - rabbitmq_data:/var/lib/rabbitmq

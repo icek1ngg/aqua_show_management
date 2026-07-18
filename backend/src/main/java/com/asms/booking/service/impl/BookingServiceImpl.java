@@ -1,5 +1,6 @@
 package com.asms.booking.service.impl;
 
+import com.asms.booking.BookingPolicy;
 import com.asms.booking.dto.BookingDtos.BookingResponse;
 import com.asms.booking.dto.BookingDtos.BookingItemResponse;
 import com.asms.booking.dto.BookingDtos.CreateBookingItemRequest;
@@ -10,6 +11,7 @@ import com.asms.booking.dto.BookingDtos.DevSampleBookingRequest;
 import com.asms.booking.dto.BookingDtos.DevSampleBookingResponse;
 import com.asms.booking.dto.BookingDtos.EmailNotificationSummary;
 import com.asms.booking.dto.BookingDtos.PageBookingResponse;
+import com.asms.booking.dto.BookingDtos.BookingHistorySummary;
 import com.asms.booking.dto.BookingDtos.PaymentSummary;
 import com.asms.booking.dto.BookingDtos.TicketDetail;
 import com.asms.booking.dto.BookingDtos.TicketSummary;
@@ -17,6 +19,7 @@ import com.asms.booking.dto.TicketHoldDtos.HoldResult;
 import com.asms.booking.entity.Booking;
 import com.asms.booking.entity.BookingItem;
 import com.asms.booking.enums.BookingStatus;
+import com.asms.booking.enums.PassengerType;
 import com.asms.booking.enums.TicketType;
 import com.asms.booking.repository.BookingRepository;
 import com.asms.booking.service.BookingService;
@@ -67,8 +70,6 @@ import java.util.concurrent.atomic.AtomicBoolean;
 public class BookingServiceImpl implements BookingService {
 
     private static final Logger log = LoggerFactory.getLogger(BookingServiceImpl.class);
-    private static final int MAX_TICKETS_PER_BOOKING = 10;
-    private static final int MAX_BOOKING_LINES = 20;
     private static final long BOOKING_CUTOFF_MINUTES = 30;
     private static final int DEFAULT_MY_BOOKINGS_PAGE_SIZE = 5;
     private static final int MAX_MY_BOOKINGS_PAGE_SIZE = 5;
@@ -153,6 +154,7 @@ public class BookingServiceImpl implements BookingService {
                         booking,
                         line.schedule(),
                         line.ticketType(),
+                        line.passengerType(),
                         line.quantity(),
                         line.unitPrice(),
                         heldLine.hold().holdId()
@@ -168,11 +170,18 @@ public class BookingServiceImpl implements BookingService {
 
     @Override
     @Transactional
-    public PageBookingResponse getMyBookings(String currentUserEmail, int page, int size) {
+    public PageBookingResponse getMyBookings(String currentUserEmail, int page, int size, String keyword, String status) {
         User user = resolveUser(currentUserEmail);
         int safePage = Math.max(page, 0);
         int safeSize = sanitizeMyBookingsPageSize(size);
-        Page<Booking> bookingPage = bookingRepository.findByUserOrderByCreatedAtDesc(user, PageRequest.of(safePage, safeSize));
+        String normalizedKeyword = keyword == null || keyword.isBlank() ? null : keyword.trim();
+        boolean pendingGroup = status != null && "PENDING".equalsIgnoreCase(status.trim());
+        BookingStatus normalizedStatus = parseHistoryStatus(status);
+        PageRequest pageRequest = PageRequest.of(safePage, safeSize);
+        Page<Booking> bookingPage = normalizedKeyword == null && normalizedStatus == null
+                ? bookingRepository.findByUserOrderByCreatedAtDesc(user, pageRequest)
+                : bookingRepository.searchMyBookings(
+                        user, normalizedKeyword, normalizedStatus, pendingGroup, pageRequest);
         List<BookingResponse> items = bookingPage.getContent()
                 .stream()
                 .map(this::expirePendingBookingIfNeeded)
@@ -186,8 +195,34 @@ public class BookingServiceImpl implements BookingService {
                 bookingPage.getTotalElements(),
                 bookingPage.getTotalPages(),
                 bookingPage.hasNext(),
-                bookingPage.hasPrevious()
+                bookingPage.hasPrevious(),
+                bookingHistorySummary(user)
         );
+    }
+
+    private BookingHistorySummary bookingHistorySummary(User user) {
+        return new BookingHistorySummary(
+                bookingRepository.countByUser(user),
+                bookingRepository.countByUserAndStatusIn(
+                        user, List.of(BookingStatus.PROCESSING, BookingStatus.PENDING_PAYMENT)),
+                bookingRepository.countByUserAndStatus(user, BookingStatus.PAID),
+                bookingRepository.countByUserAndStatusIn(
+                        user, List.of(BookingStatus.EXPIRED, BookingStatus.FAILED))
+        );
+    }
+
+    private BookingStatus parseHistoryStatus(String status) {
+        if (status == null || status.isBlank() || "ALL".equalsIgnoreCase(status)) {
+            return null;
+        }
+        if ("PENDING".equalsIgnoreCase(status)) {
+            return null;
+        }
+        try {
+            return BookingStatus.valueOf(status.trim().toUpperCase(Locale.ROOT));
+        } catch (IllegalArgumentException exception) {
+            throw new BadRequestException("Unknown booking status");
+        }
     }
 
     @Override
@@ -275,31 +310,36 @@ public class BookingServiceImpl implements BookingService {
         if (requestedItems == null || requestedItems.isEmpty()) {
             throw new BadRequestException("At least one booking item is required");
         }
-        if (requestedItems.size() > MAX_BOOKING_LINES) {
+        if (requestedItems.size() > BookingPolicy.MAX_BOOKING_LINES) {
             throw new BadRequestException("Booking must not contain more than 20 items");
         }
 
         Map<LineKey, Integer> quantities = new LinkedHashMap<>();
+        int totalQuantity = 0;
         for (CreateBookingItemRequest item : requestedItems) {
             if (item == null) {
                 throw new BadRequestException("Booking item is required");
             }
             UUID scheduleId = parseUuid(item.scheduleId(), "Schedule ID is invalid");
             TicketType ticketType = TicketType.parse(item.ticketType());
+            PassengerType passengerType = PassengerType.parse(item.passengerType());
             int quantity = validateQuantity(item.quantity());
-            LineKey key = new LineKey(scheduleId, ticketType);
-            int normalizedQuantity = Math.addExact(quantities.getOrDefault(key, 0), quantity);
-            if (normalizedQuantity > MAX_TICKETS_PER_BOOKING) {
-                throw new BadRequestException("Quantity must not exceed 10 per schedule and ticket type");
+            totalQuantity = Math.addExact(totalQuantity, quantity);
+            if (totalQuantity > BookingPolicy.MAX_TICKETS_PER_BOOKING) {
+                throw new BadRequestException("Booking must not contain more than 10 tickets");
             }
+            LineKey key = new LineKey(scheduleId, ticketType, passengerType);
+            int normalizedQuantity = Math.addExact(quantities.getOrDefault(key, 0), quantity);
             quantities.put(key, normalizedQuantity);
         }
         return quantities.entrySet().stream()
                 .sorted(Map.Entry.comparingByKey(Comparator
                         .comparing((LineKey key) -> key.scheduleId().toString())
-                        .thenComparing(key -> key.ticketType().name())))
+                        .thenComparing(key -> key.ticketType().name())
+                        .thenComparing(key -> key.passengerType().name())))
                 .map(entry -> new NormalizedLine(
-                        entry.getKey().scheduleId(), entry.getKey().ticketType(), entry.getValue()))
+                        entry.getKey().scheduleId(), entry.getKey().ticketType(),
+                        entry.getKey().passengerType(), entry.getValue()))
                 .toList();
     }
 
@@ -314,7 +354,7 @@ public class BookingServiceImpl implements BookingService {
             throw new BadRequestException("Bookings must be created at least 30 minutes before show start");
         }
         BigDecimal unitPrice = ticketPricingService.unitPrice(schedule.getStandardPrice(), line.ticketType());
-        return new ResolvedLine(schedule, line.ticketType(), line.quantity(), unitPrice);
+        return new ResolvedLine(schedule, line.ticketType(), line.passengerType(), line.quantity(), unitPrice);
     }
 
     private CreateBookingResponse toCreateBookingResponse(Booking booking) {
@@ -370,6 +410,7 @@ public class BookingServiceImpl implements BookingService {
                 item.getEndTime(),
                 item.getVenueName(),
                 item.getTicketType(),
+                item.getPassengerType(),
                 item.getQuantity(),
                 item.getUnitPrice(),
                 item.getLineTotal()
@@ -380,7 +421,7 @@ public class BookingServiceImpl implements BookingService {
         if (quantity == null || quantity <= 0) {
             throw new BadRequestException("Quantity must be at least 1");
         }
-        if (quantity > MAX_TICKETS_PER_BOOKING) {
+        if (quantity > BookingPolicy.MAX_TICKETS_PER_BOOKING) {
             throw new BadRequestException("Quantity must not exceed 10");
         }
         return quantity;
@@ -468,6 +509,8 @@ public class BookingServiceImpl implements BookingService {
                         payment.getAmount(),
                         payment.getStatus(),
                         payment.getPaidAt(),
+                        payment.getInventoryCommittedAt(),
+                        payment.getReconciliationReason(),
                         payment.getCreatedAt()
                 ))
                 .orElse(null);
@@ -525,15 +568,16 @@ public class BookingServiceImpl implements BookingService {
         return bookingRepository.save(booking);
     }
 
-    private record LineKey(UUID scheduleId, TicketType ticketType) {
+    private record LineKey(UUID scheduleId, TicketType ticketType, PassengerType passengerType) {
     }
 
-    private record NormalizedLine(UUID scheduleId, TicketType ticketType, int quantity) {
+    private record NormalizedLine(UUID scheduleId, TicketType ticketType, PassengerType passengerType, int quantity) {
     }
 
     private record ResolvedLine(
             ShowSchedule schedule,
             TicketType ticketType,
+            PassengerType passengerType,
             int quantity,
             BigDecimal unitPrice
     ) {

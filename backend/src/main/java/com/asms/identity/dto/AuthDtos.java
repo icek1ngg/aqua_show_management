@@ -12,6 +12,8 @@ import java.util.UUID;
 
 public final class AuthDtos {
 
+    public static final String LEGAL_DOCUMENT_VERSION = "2026-07-15";
+
     private AuthDtos() {
     }
 
@@ -37,13 +39,22 @@ public final class AuthDtos {
 
             @NotBlank(message = "Password is required")
             @Size(min = 6, max = 100, message = "Password must be 6 to 100 characters")
-            String password
+            @Pattern(regexp = "^(?=.*[A-Za-z])(?=.*\\d).+$", message = "Password must include at least one letter and one number")
+            String password,
+
+            @jakarta.validation.constraints.AssertTrue(message = "Terms and privacy policy must be accepted")
+            boolean acceptedTerms,
+
+            @NotBlank(message = "Legal document version is required")
+            @Pattern(regexp = "2026-07-15", message = "Unsupported legal document version")
+            String legalDocumentVersion
     ) {
     }
 
     public record RegisterResponse(
             UUID id,
-            String email
+            String email,
+            boolean verificationEmailSent
     ) {
     }
 
@@ -68,6 +79,9 @@ public final class AuthDtos {
             long expiresIn,
             UserProfileResponse user
     ) {
+    }
+
+    public record CsrfTokenResponse(String token) {
     }
 
     public record AuthSession(
@@ -138,10 +152,32 @@ public final class AuthDtos {
 
             @NotBlank(message = "Password is required")
             @Size(min = 6, max = 100, message = "Password must be 6 to 100 characters")
+            @Pattern(regexp = "^(?=.*[A-Za-z])(?=.*\\d).+$", message = "Password must include at least one letter and one number")
             String newPassword,
 
             @NotBlank(message = "Confirm password is required")
             String confirmPassword
+    ) {
+    }
+
+    public record OAuthCompleteRequest(
+            @NotBlank(message = "Code is required")
+            String code,
+
+            @jakarta.validation.constraints.AssertTrue(message = "Terms and privacy policy must be accepted")
+            boolean acceptedTerms,
+
+            @NotBlank(message = "Legal document version is required")
+            @Pattern(regexp = "2026-07-15", message = "Unsupported legal document version")
+            String legalDocumentVersion
+    ) {
+    }
+
+    public record OAuthCompleteResponse(
+            String accessToken,
+            String tokenType,
+            long expiresIn,
+            UserProfileResponse user
     ) {
     }
 }

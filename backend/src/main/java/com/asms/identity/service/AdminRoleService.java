@@ -19,9 +19,11 @@ import java.util.UUID;
 public class AdminRoleService {
 
     private final UserRepository userRepository;
+    private final AuthSessionService authSessionService;
 
-    public AdminRoleService(UserRepository userRepository) {
+    public AdminRoleService(UserRepository userRepository, AuthSessionService authSessionService) {
         this.userRepository = userRepository;
+        this.authSessionService = authSessionService;
     }
 
     public List<RoleResponse> getRoles() {
@@ -47,6 +49,8 @@ public class AdminRoleService {
             throw new BadRequestException("Cannot remove the last active admin");
         }
         user.setRole(role);
+        user.invalidateAuthentication();
+        authSessionService.revokeAll(user);
         return toResponse(user);
     }
 
