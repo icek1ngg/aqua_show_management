@@ -46,6 +46,7 @@ import java.util.UUID;
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.assertThatThrownBy;
 import static org.mockito.ArgumentMatchers.any;
+import static org.mockito.ArgumentMatchers.anyBoolean;
 import static org.mockito.ArgumentMatchers.anyInt;
 import static org.mockito.ArgumentMatchers.eq;
 import static org.mockito.Mockito.doThrow;
@@ -492,6 +493,47 @@ class BookingServiceControllerTest {
         assertThat(response.summary().pending()).isEqualTo(2);
         assertThat(response.summary().paid()).isEqualTo(5);
         assertThat(response.summary().closed()).isEqualTo(1);
+    }
+
+    @Test
+    void getMyBookingsStatusOnlyUsesPagedStatusQueryWithoutNullableKeywordSearch() {
+        User user = user("user@example.com");
+        Booking paid = booking(user, "hold-paid-status-only");
+        paid.setStatus(BookingStatus.PAID);
+        when(userRepository.findByEmailIgnoreCase(user.getEmail())).thenReturn(Optional.of(user));
+        when(bookingRepository.findByUserAndStatusOrderByCreatedAtDesc(
+                eq(user), eq(BookingStatus.PAID), any(Pageable.class)))
+                .thenReturn(new PageImpl<>(List.of(paid), org.springframework.data.domain.PageRequest.of(0, 5), 1));
+
+        PageBookingResponse response = bookingService.getMyBookings(user.getEmail(), 0, 5, null, "PAID");
+
+        assertThat(response.items()).extracting(BookingResponse::status)
+                .containsExactly(BookingStatus.PAID);
+        verify(bookingRepository, never()).searchMyBookings(
+                any(), any(), any(), anyBoolean(), any(Pageable.class));
+    }
+
+    @Test
+    void getMyBookingsPendingUsesPagedPendingStatusGroupQuery() {
+        User user = user("user@example.com");
+        Booking processing = booking(user, "hold-processing");
+        processing.setStatus(BookingStatus.PROCESSING);
+        List<BookingStatus> pendingStatuses = List.of(
+                BookingStatus.PROCESSING,
+                BookingStatus.PENDING_PAYMENT
+        );
+        when(userRepository.findByEmailIgnoreCase(user.getEmail())).thenReturn(Optional.of(user));
+        when(bookingRepository.findByUserAndStatusInOrderByCreatedAtDesc(
+                eq(user), eq(pendingStatuses), any(Pageable.class)))
+                .thenReturn(new PageImpl<>(List.of(processing), org.springframework.data.domain.PageRequest.of(0, 5), 1));
+
+        PageBookingResponse response = bookingService.getMyBookings(user.getEmail(), 0, 5, null, "PENDING");
+
+        assertThat(response.items()).extracting(BookingResponse::status)
+                .containsExactly(BookingStatus.PROCESSING);
+        verify(bookingRepository, never()).findByUserOrderByCreatedAtDesc(eq(user), any(Pageable.class));
+        verify(bookingRepository, never()).searchMyBookings(
+                any(), any(), any(), anyBoolean(), any(Pageable.class));
     }
 
     @Test

@@ -215,7 +215,7 @@ export default function PaymentResultPage() {
 
           {successState && !successPopupDismissed ? (
             <div className="fixed inset-0 z-50 flex items-center justify-center overflow-y-auto bg-black/15 p-4 backdrop-blur-[2px] sm:p-6" role="dialog" aria-modal="true" aria-labelledby="payment-success-title" aria-describedby="payment-success-message">
-              <section className="relative max-h-[92vh] w-full max-w-[30rem] overflow-y-auto rounded-[2rem] border border-white/70 bg-white/95 p-6 text-center shadow-[0_24px_70px_rgba(0,206,209,0.28)] backdrop-blur-xl sm:p-10">
+              <section className="relative max-h-[92vh] w-full max-w-[30rem] overflow-x-hidden overflow-y-auto rounded-[2rem] border border-white/70 bg-white/95 p-6 text-center shadow-[0_24px_70px_rgba(0,206,209,0.28)] backdrop-blur-xl sm:p-10">
                 <span className="pointer-events-none absolute -right-5 -top-6 h-24 w-24 rounded-full bg-primary-container/15" aria-hidden="true" />
                 <span className="pointer-events-none absolute -left-3 top-24 h-10 w-10 rounded-full bg-primary-fixed/30" aria-hidden="true" />
                 <span className="pointer-events-none absolute bottom-28 right-7 h-6 w-6 rounded-full bg-soft-turquoise/45" aria-hidden="true" />

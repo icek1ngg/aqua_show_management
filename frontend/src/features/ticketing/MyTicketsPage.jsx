@@ -306,18 +306,6 @@ function BookingTicketsPage({ bookingId }) {
             </div>
           ) : null}
 
-          {!isLoading ? (
-            <div className="mt-8 flex flex-col justify-center gap-3 sm:flex-row">
-              {bookingId ? (
-                <Link className="rounded-full border border-cyan-200 bg-white px-6 py-3 text-center font-black text-cyan-700 hover:bg-cyan-50" to={`/bookings/${bookingId}`}>
-                  Booking Detail
-                </Link>
-              ) : null}
-              <Link className="rounded-full border border-cyan-200 bg-white px-6 py-3 text-center font-black text-cyan-700 hover:bg-cyan-50" to="/bookings/my">
-                My Bookings
-              </Link>
-            </div>
-          ) : null}
         </div>
       </section>
     </MainLayout>

@@ -1,12 +1,12 @@
-import { useEffect, useMemo, useRef, useState } from 'react';
+import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { Link, useLocation, useNavigate, useParams } from 'react-router-dom';
 
 import { getBookingDetail } from '../../services/bookingService.js';
 import { createPayment, reconcilePayment } from '../../services/paymentService.js';
 import MainLayout from '../../shared/layouts/MainLayout.jsx';
 import { isTerminalBookingStatus, normalizeBookingPaymentStatus } from '../../shared/utils/paymentStatus.js';
-import { formatCurrency, getTicketTypeLabel } from '../../shared/utils/ticketPricing.js';
-import { getRoutedPaymentSession } from './paymentSessionState.js';
+import { formatCurrency, formatTicketCount, getTicketTypeLabel } from '../../shared/utils/ticketPricing.js';
+import { getRoutedPaymentSession, pollPaymentOnce, shouldPollPayment } from './paymentSessionState.js';
 
 const fallbackImageUrl =
   'https://images.unsplash.com/photo-1507525428034-b723cf961d3e?auto=format&fit=crop&w=1400&q=80';
@@ -220,7 +220,7 @@ export default function PaymentPage() {
     setPaymentSession(routedPaymentSession);
   }, [bookingId, routedPaymentSession]);
 
-  async function refreshBooking({ showLoading = false } = {}) {
+  const refreshBooking = useCallback(async ({ showLoading = false } = {}) => {
     if (showLoading) {
       setLoading(true);
     }
@@ -245,7 +245,7 @@ export default function PaymentPage() {
         setLoading(false);
       }
     }
-  }
+  }, [bookingId, location, navigate]);
 
   useEffect(() => {
     let ignore = false;
@@ -263,7 +263,7 @@ export default function PaymentPage() {
     return () => {
       ignore = true;
     };
-  }, [bookingId, location, navigate]);
+  }, [refreshBooking]);
 
   useEffect(() => {
     const statusState = normalizeBookingPaymentStatus(booking, booking?.payment);
@@ -278,22 +278,38 @@ export default function PaymentPage() {
     return () => window.clearInterval(timerId);
   }, [booking, countdownSeconds]);
 
+  const pollingStatus = normalizeBookingPaymentStatus(booking, booking?.payment).status;
+  const pollingEnabled = shouldPollPayment(booking, paymentSession);
+
   useEffect(() => {
-    const statusState = normalizeBookingPaymentStatus(booking, booking?.payment);
-    if (!paymentSession || isTerminalBookingStatus(statusState.status)) {
+    if (!pollingEnabled || isTerminalBookingStatus(pollingStatus)) {
       return undefined;
     }
 
-    const intervalId = window.setInterval(async () => {
-      const latest = await refreshBooking();
-      const latestStatus = normalizeBookingPaymentStatus(latest, latest?.payment);
-      if (isTerminalBookingStatus(latestStatus.status)) {
-        window.clearInterval(intervalId);
+    let cancelled = false;
+    let timeoutId;
+    const poll = async () => {
+      const latest = await pollPaymentOnce({
+        bookingId,
+        reconcile: reconcilePayment,
+        loadBooking: () => refreshBooking(),
+      });
+      if (cancelled) {
+        return;
       }
-    }, 3000);
 
-    return () => window.clearInterval(intervalId);
-  }, [booking, bookingId, paymentSession]);
+      const latestStatus = normalizeBookingPaymentStatus(latest, latest?.payment);
+      if (!isTerminalBookingStatus(latestStatus.status)) {
+        timeoutId = window.setTimeout(poll, 3000);
+      }
+    };
+
+    timeoutId = window.setTimeout(poll, 3000);
+    return () => {
+      cancelled = true;
+      window.clearTimeout(timeoutId);
+    };
+  }, [bookingId, pollingEnabled, pollingStatus, refreshBooking]);
 
   useEffect(() => {
     const statusState = normalizeBookingPaymentStatus(booking, booking?.payment);
@@ -471,7 +487,7 @@ export default function PaymentPage() {
                       </div>
                       <div className="grid grid-cols-1 gap-4 p-6 md:grid-cols-3">
                         <DetailTile icon="event" label="Show date" value={formatDate(booking.showDate)} />
-                        <DetailTile icon="confirmation_number" label="Tickets" value={`${booking.quantity} ${booking.ticketType}`} />
+                        <DetailTile icon="confirmation_number" label="Tickets" value={formatTicketCount(booking.quantity)} />
                         <DetailTile icon="payments" label="Total" value={formatCurrency(booking.totalAmount)} />
                       </div>
                     </article>

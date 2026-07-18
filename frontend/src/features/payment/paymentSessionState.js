@@ -23,3 +23,25 @@ export function getRoutedPaymentSession(routeState, bookingId) {
 
   return candidate;
 }
+
+export function shouldPollPayment(booking, paymentSession) {
+  const hasPaymentContext = Boolean(paymentSession || booking?.payment);
+  if (!hasPaymentContext) {
+    return false;
+  }
+
+  const bookingStatus = String(booking?.status || '').trim().toUpperCase();
+  const paymentStatus = String(paymentSession?.status || booking?.payment?.status || '').trim().toUpperCase();
+  return !['PAID', 'EXPIRED', 'FAILED'].includes(bookingStatus)
+    && !['EXPIRED', 'FAILED'].includes(paymentStatus);
+}
+
+export async function pollPaymentOnce({ bookingId, reconcile, loadBooking }) {
+  try {
+    await reconcile(bookingId);
+  } catch {
+    // Webhook or backend reconciliation may still have updated PostgreSQL.
+  }
+
+  return loadBooking();
+}

@@ -178,10 +178,21 @@ public class BookingServiceImpl implements BookingService {
         boolean pendingGroup = status != null && "PENDING".equalsIgnoreCase(status.trim());
         BookingStatus normalizedStatus = parseHistoryStatus(status);
         PageRequest pageRequest = PageRequest.of(safePage, safeSize);
-        Page<Booking> bookingPage = normalizedKeyword == null && normalizedStatus == null
-                ? bookingRepository.findByUserOrderByCreatedAtDesc(user, pageRequest)
-                : bookingRepository.searchMyBookings(
-                        user, normalizedKeyword, normalizedStatus, pendingGroup, pageRequest);
+        Page<Booking> bookingPage;
+        if (normalizedKeyword != null) {
+            bookingPage = bookingRepository.searchMyBookings(
+                    user, normalizedKeyword, normalizedStatus, pendingGroup, pageRequest);
+        } else if (pendingGroup) {
+            bookingPage = bookingRepository.findByUserAndStatusInOrderByCreatedAtDesc(
+                    user,
+                    List.of(BookingStatus.PROCESSING, BookingStatus.PENDING_PAYMENT),
+                    pageRequest);
+        } else if (normalizedStatus != null) {
+            bookingPage = bookingRepository.findByUserAndStatusOrderByCreatedAtDesc(
+                    user, normalizedStatus, pageRequest);
+        } else {
+            bookingPage = bookingRepository.findByUserOrderByCreatedAtDesc(user, pageRequest);
+        }
         List<BookingResponse> items = bookingPage.getContent()
                 .stream()
                 .map(this::expirePendingBookingIfNeeded)

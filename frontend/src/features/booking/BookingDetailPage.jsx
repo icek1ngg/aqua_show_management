@@ -555,7 +555,7 @@ export default function BookingDetailPage() {
                   <ActionPanel booking={displayBooking} />
                   {displayBooking.status === 'PAID' && Number(displayBooking.tickets?.total || 0) > 0 ? (
                     <Link
-                      className="flex w-full items-center justify-center gap-2 rounded-full bg-emerald-600 px-6 py-4 font-bold text-white shadow-lg shadow-emerald-600/20 transition hover:bg-emerald-700 active:scale-[0.98]"
+                      className="flex w-full items-center justify-center gap-2 rounded-full bg-gradient-to-r from-orange-500 to-orange-600 px-6 py-4 font-bold text-white shadow-lg shadow-orange-200 transition hover:-translate-y-0.5 active:scale-[0.98]"
                       to={`/my-tickets?bookingId=${encodeURIComponent(displayBooking.id)}`}
                     >
                       <span className="material-symbols-outlined text-xl" aria-hidden="true">
@@ -572,15 +572,6 @@ export default function BookingDetailPage() {
                       arrow_back
                     </span>
                     Back to My Bookings
-                  </Link>
-                  <Link
-                    className="flex w-full items-center justify-center gap-2 rounded-full border-2 border-cyan-100 bg-cyan-50 px-6 py-4 font-bold text-cyan-700 transition hover:border-cyan-300 hover:bg-cyan-100 active:scale-[0.98]"
-                    to="/"
-                  >
-                    <span className="material-symbols-outlined text-xl" aria-hidden="true">
-                      home
-                    </span>
-                    Back Home
                   </Link>
                 </div>
               </article>

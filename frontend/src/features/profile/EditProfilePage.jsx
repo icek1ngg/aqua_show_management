@@ -343,15 +343,8 @@ export default function EditProfilePage() {
                   </div>
                 )}
 
-                <div className="flex flex-col items-center justify-between gap-6 border-t border-cyan-100 pt-10 md:flex-row">
-                  <a 
-                    className="order-3 px-4 py-2 font-bold text-slate-400 transition hover:text-cyan-700 md:order-1" 
-                    href="/profile"
-                  >
-                    Back to Profile
-                  </a>
-
-                  <div className="order-1 flex w-full flex-col gap-4 sm:flex-row md:order-2 md:w-auto">
+                <div className="flex flex-col items-center justify-end gap-6 border-t border-cyan-100 pt-10 md:flex-row">
+                  <div className="flex w-full flex-col gap-4 sm:flex-row md:w-auto">
                     <a
                       className="rounded-full border-2 border-cyan-100 px-10 py-4 text-center font-bold text-slate-600 shadow-sm transition hover:bg-cyan-50 active:scale-95"
                       href="/profile"

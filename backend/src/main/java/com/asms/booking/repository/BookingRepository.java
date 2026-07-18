@@ -40,6 +40,12 @@ public interface BookingRepository extends JpaRepository<Booking, UUID>, JpaSpec
 
     Page<Booking> findByUserOrderByCreatedAtDesc(User user, Pageable pageable);
 
+    Page<Booking> findByUserAndStatusOrderByCreatedAtDesc(
+            User user, BookingStatus status, Pageable pageable);
+
+    Page<Booking> findByUserAndStatusInOrderByCreatedAtDesc(
+            User user, Collection<BookingStatus> statuses, Pageable pageable);
+
     @Query(
             value = """
                     select distinct b from Booking b left join b.items i
