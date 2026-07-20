@@ -6,9 +6,6 @@ import com.asms.booking.dto.BookingDtos.BookingItemResponse;
 import com.asms.booking.dto.BookingDtos.CreateBookingItemRequest;
 import com.asms.booking.dto.BookingDtos.CreateBookingRequest;
 import com.asms.booking.dto.BookingDtos.CreateBookingResponse;
-import com.asms.booking.dto.BookingDtos.DevSampleBookingBatchRequest;
-import com.asms.booking.dto.BookingDtos.DevSampleBookingRequest;
-import com.asms.booking.dto.BookingDtos.DevSampleBookingResponse;
 import com.asms.booking.dto.BookingDtos.EmailNotificationSummary;
 import com.asms.booking.dto.BookingDtos.PageBookingResponse;
 import com.asms.booking.dto.BookingDtos.BookingHistorySummary;
@@ -43,7 +40,6 @@ import com.asms.ticketing.enums.TicketStatus;
 import com.asms.ticketing.repository.TicketRepository;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
-import org.springframework.beans.factory.annotation.Value;
 import org.springframework.data.domain.Page;
 import org.springframework.data.domain.PageRequest;
 import org.springframework.stereotype.Service;
@@ -52,7 +48,6 @@ import org.springframework.transaction.support.TransactionSynchronization;
 import org.springframework.transaction.support.TransactionSynchronizationManager;
 
 import java.math.BigDecimal;
-import java.math.RoundingMode;
 import java.time.Instant;
 import java.time.LocalDate;
 import java.time.format.DateTimeFormatter;
@@ -63,7 +58,6 @@ import java.util.List;
 import java.util.Locale;
 import java.util.Map;
 import java.util.UUID;
-import java.util.concurrent.ThreadLocalRandom;
 import java.util.concurrent.atomic.AtomicBoolean;
 
 @Service
@@ -83,7 +77,6 @@ public class BookingServiceImpl implements BookingService {
     private final PaymentRepository paymentRepository;
     private final TicketRepository ticketRepository;
     private final EmailNotificationRepository emailNotificationRepository;
-    private final String frontendBaseUrl;
 
     public BookingServiceImpl(
             BookingRepository bookingRepository,
@@ -93,8 +86,7 @@ public class BookingServiceImpl implements BookingService {
             TicketPricingService ticketPricingService,
             PaymentRepository paymentRepository,
             TicketRepository ticketRepository,
-            EmailNotificationRepository emailNotificationRepository,
-            @Value("${asms.frontend.base-url}") String frontendBaseUrl
+            EmailNotificationRepository emailNotificationRepository
     ) {
         this.bookingRepository = bookingRepository;
         this.userRepository = userRepository;
@@ -104,7 +96,6 @@ public class BookingServiceImpl implements BookingService {
         this.paymentRepository = paymentRepository;
         this.ticketRepository = ticketRepository;
         this.emailNotificationRepository = emailNotificationRepository;
-        this.frontendBaseUrl = frontendBaseUrl;
     }
 
     @Override
@@ -256,57 +247,6 @@ public class BookingServiceImpl implements BookingService {
             throw new NotFoundException("Booking not found");
         }
         return toResponse(expirePendingBookingIfNeeded(booking));
-    }
-
-    @Override
-    public DevSampleBookingResponse createDevSampleBooking(DevSampleBookingRequest request, String currentUserEmail) {
-        User user = resolveUser(currentUserEmail);
-        BigDecimal amount = sanitizeAmount(request.amount());
-        int quantity = request.quantity() == null ? 1 : request.quantity();
-        int expiresInMinutes = request.expiresInMinutes() == null ? 60 : request.expiresInMinutes();
-
-        Booking booking = Booking.create();
-        booking.setUser(user);
-        booking.setBookingCode(generateDevBookingCode());
-        booking.setHoldId("ASMS-DEV-HOLD-" + UUID.randomUUID());
-        booking.setShowId("SHOW-DEMO-AQUA");
-        booking.setScheduleId("SCHEDULE-DEMO-AQUA");
-        booking.setShowName("Midnight Aqua Symphony");
-        booking.setShowDate(java.time.LocalDate.now().plusDays(7));
-        booking.setTicketType("STANDARD");
-        booking.setQuantity(quantity);
-        booking.setTotalAmount(amount);
-        booking.setUnitPrice(amount.divide(BigDecimal.valueOf(quantity), 2, RoundingMode.HALF_UP));
-        booking.setStatus(BookingStatus.PENDING_PAYMENT);
-        booking.setExpiresAt(Instant.now().plusSeconds(expiresInMinutes * 60L));
-
-        return toDevSampleResponse(bookingRepository.save(booking));
-    }
-
-    @Override
-    public List<DevSampleBookingResponse> createDevSampleBookings(DevSampleBookingBatchRequest request, String currentUserEmail) {
-        if (request.amounts() == null || request.amounts().isEmpty()) {
-            throw new BadRequestException("At least one amount is required");
-        }
-        if (request.amounts().size() > 20) {
-            throw new BadRequestException("Cannot create more than 20 sample bookings at once");
-        }
-
-        return request.amounts()
-                .stream()
-                .map((amount) -> createDevSampleBooking(new DevSampleBookingRequest(amount, 1, request.expiresInMinutes()), currentUserEmail))
-                .toList();
-    }
-
-    @Override
-    public List<DevSampleBookingResponse> getMyPendingDevSampleBookings(String currentUserEmail) {
-        User user = resolveUser(currentUserEmail);
-        return bookingRepository.findByUserAndStatusOrderByCreatedAtDesc(user, BookingStatus.PENDING_PAYMENT)
-                .stream()
-                .map(this::expirePendingBookingIfNeeded)
-                .filter((booking) -> booking.getStatus() == BookingStatus.PENDING_PAYMENT)
-                .map(this::toDevSampleResponse)
-                .toList();
     }
 
     private User resolveUser(String currentUserEmail) {
@@ -472,37 +412,10 @@ public class BookingServiceImpl implements BookingService {
         }
     }
 
-    private DevSampleBookingResponse toDevSampleResponse(Booking booking) {
-        String frontendUrl = frontendBaseUrl == null || frontendBaseUrl.isBlank()
-                ? "http://localhost:5173"
-                : frontendBaseUrl.replaceAll("/+$", "");
-
-        return new DevSampleBookingResponse(
-                toResponse(booking),
-                frontendUrl + "/bookings/" + booking.getId() + "/payment",
-                "POST /api/payments/create { \"bookingId\": \"" + booking.getId() + "\" }"
-        );
-    }
-
-    private BigDecimal sanitizeAmount(BigDecimal amount) {
-        if (amount == null || amount.compareTo(BigDecimal.ZERO) <= 0) {
-            throw new BadRequestException("Amount must be positive");
-        }
-        return amount.setScale(2, RoundingMode.HALF_UP);
-    }
-
     private String generateProductionBookingCode() {
         String bookingCode;
         do {
             bookingCode = "AQB" + LocalDate.now().format(BOOKING_CODE_DATE_FORMAT) + randomSuffix();
-        } while (bookingRepository.existsByBookingCode(bookingCode));
-        return bookingCode;
-    }
-
-    private String generateDevBookingCode() {
-        String bookingCode;
-        do {
-            bookingCode = "AQBDEV" + Instant.now().toEpochMilli() + ThreadLocalRandom.current().nextInt(100, 999);
         } while (bookingRepository.existsByBookingCode(bookingCode));
         return bookingCode;
     }
