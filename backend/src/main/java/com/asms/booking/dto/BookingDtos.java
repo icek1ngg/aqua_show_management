@@ -14,7 +14,6 @@ import jakarta.validation.constraints.Min;
 import jakarta.validation.constraints.NotBlank;
 import jakarta.validation.constraints.NotEmpty;
 import jakarta.validation.constraints.NotNull;
-import jakarta.validation.constraints.Positive;
 import jakarta.validation.constraints.Size;
 
 import java.math.BigDecimal;
@@ -249,35 +248,4 @@ public final class BookingDtos {
     ) {
     }
 
-    public record DevSampleBookingRequest(
-            @NotNull(message = "Amount is required")
-            @Positive(message = "Amount must be positive")
-            BigDecimal amount,
-
-            @Min(value = 1, message = "Quantity must be at least 1")
-            @Max(value = 10, message = "Quantity must not exceed 10")
-            Integer quantity,
-
-            @Min(value = 5, message = "Expiration must be at least 5 minutes")
-            @Max(value = 1440, message = "Expiration must not exceed 1440 minutes")
-            Integer expiresInMinutes
-    ) {
-    }
-
-    public record DevSampleBookingBatchRequest(
-            @NotNull(message = "Amounts are required")
-            List<@Positive(message = "Amount must be positive") BigDecimal> amounts,
-
-            @Min(value = 5, message = "Expiration must be at least 5 minutes")
-            @Max(value = 1440, message = "Expiration must not exceed 1440 minutes")
-            Integer expiresInMinutes
-    ) {
-    }
-
-    public record DevSampleBookingResponse(
-            BookingResponse booking,
-            String paymentPageUrl,
-            String createPaymentApi
-    ) {
-    }
 }

@@ -853,12 +853,6 @@ export default function StaffTicketValidationPage() {
                     <span className="material-symbols-outlined">qr_code_scanner</span>
                     {loading ? 'Validating...' : 'Validate'}
                   </button>
-                  {import.meta.env.DEV && import.meta.env.VITE_ENABLE_MOCK_VALIDATION === 'true' ? (
-                    <button className="inline-flex items-center justify-center gap-2 rounded-full border border-cyan-200 bg-white px-6 py-3 font-black text-cyan-700 hover:bg-cyan-50 transition" onClick={() => setQrCode('ASMS:MOCK:VALID')} type="button">
-                      <span className="material-symbols-outlined">science</span>
-                      Fill test code
-                    </button>
-                  ) : null}
                 </div>
               </form>
 
